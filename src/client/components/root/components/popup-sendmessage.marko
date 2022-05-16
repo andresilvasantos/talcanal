@@ -1,0 +1,91 @@
+import appm from 'js/app-manager'
+
+class {
+    onCreate() {
+        this.state = {
+            status: 0
+        }
+
+        this.created = this.created.bind(this)
+        this.createError = this.createError.bind(this)
+    }
+
+    onMount() {
+        this.popupComponent = this.getComponent('popup')
+
+        appm.on('createItemError', this.createError)
+        appm.on('createItemSuccess', this.created)
+    }
+
+    onDestroy() {
+        appm.off('createItemError', this.createError)
+        appm.off('createItemSuccess', this.created)
+    }
+
+    // Functions.
+
+    created(type, idRequest, chat) {
+        if(type != 'chats' || idRequest != this.idRequest) {
+            return
+        }
+
+        this.state.status = 0
+
+        this.hide()
+        appm.openPage('chats', 'chat', true, chat)
+    }
+
+    createError(type, idRequest) {
+        if(idRequest != this.idRequest) {
+            return
+        }
+
+        this.state.status = -1
+    }
+
+    hide() {
+        this.popupComponent.hide()
+    }
+
+    hidden() {
+        this.state.status = 0
+    }
+
+    show(args) {
+        if(this.popupComponent.isVisible()) {
+            return
+        }
+
+        this.message = args[0]
+
+        this.popupComponent.show()
+    }
+
+    submitRequested(user) {
+        if(this.state.status == 1) {
+            return
+        }
+
+        this.state.status = 1
+
+        const data = {
+            message: this.message,
+            user: user.username
+        }
+
+        this.idRequest = appm.createItem('chats', data)
+    }
+}
+
+$ const trSendMessage = appm.tr('generic.sendMessage') || {}
+
+<popup-users
+    key='popup'
+    iconButton='send'
+    purpose='sendMessage'
+    status=state.status
+    title=trSendMessage.title
+    textButton=trSendMessage.buttonSend
+    on-hidden('hidden')
+    on-submitRequested('submitRequested')
+/>

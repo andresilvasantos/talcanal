@@ -1,0 +1,68 @@
+<section-text.section-imagetext
+    class=input.class
+    text=input.text
+    title=input.title
+>
+    <@before>
+        <image.banner.cover lazyload src=input.srcImage />
+    </@before>
+
+    <${data.renderBody} />
+</section-text>
+
+style.less {
+    .section-text.section-imagetext {
+        --banner-height: 280px;
+
+        >.banner {
+            border-radius: var(--app-borderradius2);
+            height: var(--banner-height);
+            overflow: hidden;
+        }
+
+        &.big {
+            --banner-height: 220px;
+            --wrappertext-padding-h: var(--padding);
+
+            padding: 0;
+
+            >.banner {
+                border-bottom: 1px solid var(--color-border1);
+                border-radius: 0;
+                overflow: unset;
+            }
+        }
+
+        // Media Queries.
+
+        .r-max(@break-xl, {
+            &.big {
+                --banner-height: 200px;
+            }
+        });
+
+        .r-max(@break-ms, {
+            --banner-height: 260px;
+
+            &.big {
+                --banner-height: 170px;
+            }
+        });
+
+        .r-max(@break-sm, {
+            --banner-height: 240px;
+
+            &.big {
+                --banner-height: 150px;
+            }
+        });
+
+        .r-max(@break-xs, {
+            --banner-height: 220px;
+
+            &.big {
+                --banner-height: 125px;
+            }
+        });
+    }
+};

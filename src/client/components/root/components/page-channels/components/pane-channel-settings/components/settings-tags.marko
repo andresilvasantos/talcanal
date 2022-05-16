@@ -1,0 +1,284 @@
+import appm from 'js/app-manager'
+import { maxTags } from 'js/default-vars'
+
+class {
+    onCreate(input) {
+        this.state = {
+            indexTagEdit: -1,
+            tags: input.tags || []
+        }
+    }
+
+    // Getters & Setters.
+
+    getTags() {
+        return this.state.tags
+    }
+
+    setTags(tags) {
+        this.state.tags = tags
+    }
+
+    // Functions.
+
+    add() {
+        this.state.tags.push({ color: Math.ceil(Math.random() * 10), name: ''})
+        this.state.indexTagEdit = this.state.tags.length - 1
+
+        this.setStateDirty('tags')
+        appm.addAnalyticsEvent('channelSettings', 'addTag')
+    }
+
+    delete() {
+        if(this.state.indexTagEdit == -1) {
+            return
+        }
+
+        this.state.tags.splice(this.state.indexTagEdit, 1)
+        this.state.indexTagEdit = -1
+
+        this.setStateDirty('tags')
+        appm.addAnalyticsEvent('channelSettings', 'deleteTag')
+    }
+
+    dragEnd(event) {
+        if(!this.dragging) {
+            return
+        }
+
+        this.dragging = false
+
+        // In Chrome dataTransfer is only set on drop, so it won't work here.
+        /* const type = event.dataTransfer.getData('type')
+
+        if(type != 'tag') {
+            return
+        } */
+
+        this.componentsTag[this.indexDragged].getEl().classList.remove('dragging')
+
+        /* if(this.indexDragged == this.indexDragToPosition) {
+            return
+        } */
+
+        for(const tag of this.componentsTag) {
+            tag.getEl().style.order = 'unset'
+        }
+
+        const tagTarget = this.state.tags.splice(this.indexDragged, 1)
+        this.state.tags.splice(this.indexDragToPosition, 0, tagTarget[0])
+
+        this.setStateDirty('tags')
+
+        this.mapTagsOrder = new Map()
+
+        appm.addAnalyticsEvent('channelSettings', 'dragTag')
+    }
+
+    dragOver(index, event) {
+        if(!this.dragging) {
+            return
+        }
+
+        const order = this.mapTagsOrder.has(index) ? this.mapTagsOrder.get(index) : index
+        const orderTagDragged = (
+            this.mapTagsOrder.has(this.indexDragged) ?
+            this.mapTagsOrder.get(this.indexDragged) :
+            this.indexDragged
+        )
+
+        if(this.indexDragged == index) {
+            if(order != orderTagDragged) {
+                return
+            }
+        }
+
+        if(this.indexDragToPosition == order) {
+            return
+        }
+
+        this.indexDragToPosition = order
+
+        for(const [indexTag, tag] of this.componentsTag.entries()) {
+            const orderTag = (
+                this.mapTagsOrder.has(indexTag) ?
+                this.mapTagsOrder.get(indexTag) :
+                indexTag
+            )
+
+            let orderNew
+
+            if(indexTag == this.indexDragged) {
+                orderNew = this.indexDragToPosition
+            }
+            else {
+                orderNew = (
+                    orderTag < orderTagDragged &&
+                    orderTag >= this.indexDragToPosition ? orderTag + 1 :
+                    (
+                        orderTag > orderTagDragged &&
+                        orderTag <= this.indexDragToPosition ?
+                        orderTag - 1 : orderTag
+                    )
+                )
+            }
+
+            tag.getEl().style.order = orderNew
+
+            this.mapTagsOrder.set(indexTag, orderNew)
+        }
+    }
+
+    dragStart(index, event) {
+        //event.dataTransfer.setData('type', 'tag')
+
+        this.componentsTag = this.getComponents('tags')
+        this.dragging = true
+        this.indexDragged = index
+        this.mapTagsOrder = new Map()
+
+        this.componentsTag[index].getEl().classList.add('dragging')
+    }
+
+    edit(index) {
+        this.state.indexTagEdit = index
+    }
+
+    editFinished() {
+        const inputName = this.getComponent('inputName')
+        const name = inputName.getValue().trim()
+
+        if(!name.length) {
+            inputName.setValid(false)
+        }
+        else {
+            const inputColor = this.getComponent('inputColor')
+            const tag = this.state.tags[this.state.indexTagEdit]
+
+            tag.name = name
+            tag.color = inputColor.getColor()
+            this.state.indexTagEdit = -1
+
+            this.setStateDirty('tags')
+        }
+    }
+
+    editKeyPressed(event) {
+        switch(event.keyCode) {
+            case 13: // Enter.
+                this.editFinished()
+                break
+            case 27: // Escape.
+                const tag = this.state.tags[this.state.indexTagEdit]
+
+                if(!tag.name.trim().length) {
+                    const inputName = this.getComponent('inputName')
+
+                    inputName.setValid(false)
+                }
+                else {
+                    this.state.indexTagEdit = -1
+                }
+
+                break
+        }
+    }
+}
+
+$ const trTags = appm.tr('channels.settings.sectionTags') || {}
+
+<section-settings.settings-tags class=input.class title=trTags.title>
+    <if(state.tags.length)>
+        <div.tags>
+            <for|tag, index| of=state.tags>
+                $ const editing = index == state.indexTagEdit
+
+                <tag.big
+                    class=(editing ? 'editing' : '')
+                    key='tags[]'
+                    draggable=(state.indexTagEdit == -1)
+                    tag=tag
+                    on-click('edit', index)
+                    on-dragEnd('dragEnd', index)
+                    on-dragOver('dragOver', index)
+                    on-dragStart('dragStart', index)
+                />
+            </for>
+        </div>
+    </if>
+
+    <if(state.indexTagEdit != -1)>
+        $ const tag = state.tags[state.indexTagEdit]
+
+        <div.tag-edit>
+            <input-color key='inputColor' color=tag.color />
+
+            <input-text.input-name
+                key='inputName'
+                maxlength=30
+                placeholder='Nome da etiqueta'
+                text=tag.name
+                on-keydown('editKeyPressed')
+            />
+
+            <button-icon
+                icon='bin'
+                on-click('delete')
+            />
+
+            <button-icon
+                icon='check'
+                on-click('editFinished')
+            />
+        </div>
+    </if>
+    <else-if(state.tags.length < maxTags)>
+        <button-text
+            icon='plus'
+            text=trTags.buttonAdd
+            on-click('add')
+        />
+    </else-if>
+</section-settings>
+
+style.less {
+    .settings-tags {
+        --tags-spacing: 10px;
+
+        >.contents {
+            >.tags {
+                display: flex;
+                flex-wrap: wrap;
+                gap: var(--tags-spacing);
+
+                >.tag {
+                    &.editing {
+                        outline: 2px dashed var(--color-border3);
+                    }
+
+                    &.dragging {
+                        outline: 2px dashed var(--color-border3);
+                    }
+                }
+            }
+
+            >.tag-edit {
+                align-items: center;
+                border: 1px solid var(--color-border1);
+                border-radius: var(--app-borderradius);
+                display: flex;
+                gap: 10px; // TODO
+                padding: 15px; // TODO
+                width: 100%;
+
+                >.input-name {
+                    flex-grow: 1;
+                }
+            }
+
+            >.button-text {
+                align-self: flex-start;
+            }
+        }
+    }
+};

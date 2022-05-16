@@ -1,0 +1,105 @@
+import appm from 'js/app-manager'
+
+class {
+    onCreate() {
+        this.state = {
+            idPanel: 'signIn'
+        }
+    }
+
+    onMount() {
+        this.popupComponent = this.getComponent('popup')
+    }
+
+    // Getters & Setters.
+
+    setData(signUp = false) {
+        this.state.idPanel = signUp ? 'signup' : 'signin'
+    }
+
+    // Functions.
+
+    hide() {
+        if(!this.visible) {
+            return
+        }
+
+        this.popupComponent.hide()
+    }
+
+    hidden() {
+        this.state.idPanel = 'signIn'
+        this.visible = false
+    }
+
+    keyPressed(event) {
+        if(event.keyCode == 13) {
+
+        }
+    }
+
+    show() {
+        if(this.visible) {
+            return
+        }
+
+        this.visible = true
+
+        this.popupComponent.show()
+    }
+
+    showActivate() {
+        this.state.idPanel = 'activate'
+    }
+
+    showRecoverAccount() {
+        this.state.idPanel = 'recover'
+    }
+
+    showSignIn() {
+        this.state.idPanel = 'signIn'
+    }
+
+    showSignUp() {
+        this.state.idPanel = 'signUp'
+    }
+}
+
+<popup.popup-auth
+    key='popup'
+    class=input.class
+    title=appm.tr(`auth.${state.idPanel}.title`)
+    on-hidden('hidden')
+    on-keyPressed('keyPressed')
+>
+    <if(state.idPanel == 'signIn')>
+        <panel-signin
+            on-closeRequested('hide')
+            on-showRecoverAccount('showRecoverAccount')
+            on-showSignUp('showSignUp')
+        />
+    </if>
+    <else-if(state.idPanel == 'signUp')>
+        <panel-signup
+            on-closeRequested('hide')
+            on-showSignIn('showSignIn')
+            on-showActivate('showActivate')
+        />
+    </else-if>
+    <else-if(state.idPanel == 'activate')>
+        <panel-activate on-closeRequested('hide') />
+    </else-if>
+    <else-if(state.idPanel == 'recover')>
+        <panel-recover on-closeRequested('hide') on-showSignIn('showSignIn') />
+    </else-if>
+</popup>
+
+style.less {
+    .popup-auth {
+        >.wrapper {
+            >.panel {
+                overflow: hidden;
+            }
+        }
+    }
+};

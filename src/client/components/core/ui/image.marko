@@ -1,0 +1,136 @@
+import { timers } from 'js/default-vars'
+
+class {
+    onCreate(input) {
+        this.state = {
+            loaded: false,
+            src: input.src || '',
+            srcSmall: input.srcSmall || ''
+        }
+    }
+
+    onInput(input) {
+        if(this.mounted && input.lazyload && this.state.src != input.src) {
+            this.state.src = input.src
+            this.state.srcSmall = input.srcSmall
+
+            this.state.loaded = false
+        }
+    }
+
+    onMount() {
+        this.mounted = true
+    }
+
+    onDestroy() {
+        clearTimeout(this.timeoutReload)
+    }
+
+    // Functions.
+
+    loaded() {
+        this.state.loaded = true
+        this.emit('loaded')
+        clearTimeout(this.timeoutReload)
+    }
+
+    loadError() {
+        if(this.timeoutReload) {
+            clearTimeout(this.timeoutReload)
+        }
+
+        this.timeoutReload = setTimeout(() => {
+            if(!this.state.loaded) {
+                const elementImage = this.getEl('image')
+
+                if(elementImage.classList.contains('lazyloaded')) {
+                    elementImage.classList.remove('lazyloaded')
+                    elementImage.classList.add('lazyload')
+                }
+            }
+        }, timers.imageReload)
+    }
+}
+
+$ const lazyload = input.lazyload
+
+<div.image class=[input.class, state.loaded ? 'loaded' : '']>
+    <div.placeholder class=(input.noPlaceholder ? 'hidden' : '')>
+        <if(!state.loaded)>
+            <icon name='loading' />
+        </if>
+    </div>
+
+    <img
+        key='image'
+        class=(state.loaded ? 'lazyloaded' : (lazyload ? 'lazyload' : ''))
+        data-src=(lazyload ? state.src : '')
+        src=(lazyload && !state.loaded ? state.srcSmall : state.src)
+        style=input.style
+        on-error('loadError')
+        on-load('loaded')
+    />
+</div>
+
+style.less {
+    .image {
+        --iconloading-size: 20px;
+
+        position: relative;
+
+        >.placeholder {
+            .absolute-fill();
+            .flex-center();
+            .transition(opacity 0.2s ease-out);
+
+            &:not(.hidden) {
+                background-color: var(--color-background3);
+            }
+
+            >.icon {
+                color: var(--color-icon1);
+                display: flex;
+                .size(var(--iconloading-size));
+                .svg-loading();
+            }
+        }
+
+        >img {
+            opacity: 0;
+            pointer-events: none;
+            position: relative;
+            .transition(opacity 0.2s ease-out);
+        }
+
+        &.loaded {
+            >.placeholder {
+                opacity: 0;
+            }
+
+            >img {
+                opacity: 1;
+                .size(100%);
+            }
+        }
+
+        &.fit {
+            >img {
+                object-fit: contain;
+            }
+        }
+
+        &.cover {
+            >img {
+                object-fit: cover;
+            }
+        }
+
+        &.small {
+            --iconloading-size: 12px;
+        }
+
+        &.big {
+            --iconloading-size: 30px;
+        }
+    }
+};

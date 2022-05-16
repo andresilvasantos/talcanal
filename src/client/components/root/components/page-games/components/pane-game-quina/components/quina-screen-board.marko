@@ -1,0 +1,807 @@
+import appm from 'js/app-manager'
+import quinam from 'js/quina-manager'
+import { getCookie, setCookie } from 'js/utils'
+import { gameSettings, urls } from 'js/quina-vars'
+
+static const elapsedTime = (elapsedMS) => {
+    let seconds = Math.floor(elapsedMS / 1000)
+    let minutes = Math.floor(seconds / 60)
+    let hours = Math.floor(minutes / 60)
+
+    seconds %= 60
+    minutes %= 60
+
+    if(hours >= 24) {
+        return '+24h'
+    }
+
+    if(hours < 10) {
+        hours = `0${hours}`
+    }
+
+    if(minutes < 10) {
+        minutes = `0${minutes}`
+    }
+
+    if(seconds < 10) {
+        seconds = `0${seconds}`
+    }
+
+    return `${hours}:${minutes}:${seconds}`
+}
+
+class {
+    onCreate(input) {
+        this.state = {
+            answer: '',
+            easyMode: false,
+            indexTileFocus: 0,
+            lastChallenge: false,
+            lettersDitched: [],
+            numberChallenge: quinam.getLastNumberChallenge(),
+            maxNumberChallenge: quinam.getLastNumberChallenge(),
+            status: 0,
+            timeElapsed: 0,
+            wordCurrent: { 0: '', 1: '', 2: '', 3: '', 4: '' },
+            words: []
+        }
+
+        this.infoLoaded = this.infoLoaded.bind(this)
+        this.keyPressed = this.keyPressed.bind(this)
+        this.loadChallenge = this.loadChallenge.bind(this)
+        this.newChallengeAvailable = this.newChallengeAvailable.bind(this)
+        this.submitAttemptError = this.submitAttemptError.bind(this)
+        this.submitAttemptSuccess = this.submitAttemptSuccess.bind(this)
+        this.userSynced = this.userSynced.bind(this)
+        this.userUpdated = this.userUpdated.bind(this)
+    }
+
+    onMount() {
+        this.board = this.getComponent('board')
+
+        document.addEventListener('keydown', this.keyPressed)
+
+        appm.on('userChanged', this.loadChallenge)
+        appm.on('userUpdated', this.userUpdated)
+        quinam.on('loadInfoSuccess', this.infoLoaded)
+        quinam.on('newChallengeAvailable', this.newChallengeAvailable)
+        quinam.on('resetProgressSuccess', this.loadChallenge)
+        quinam.on('submitAttemptError', this.submitAttemptError)
+        quinam.on('submitAttemptSuccess', this.submitAttemptSuccess)
+        quinam.on('syncAccountSuccess', this.userSynced)
+    }
+
+    onDestroy() {
+        document.removeEventListener('keydown', this.keyPressed)
+
+        appm.off('signedIn', this.signedIn)
+        appm.off('userChanged', this.loadChallenge)
+        appm.off('userUpdated', this.userUpdated)
+        quinam.off('loadInfoSuccess', this.infoLoaded)
+        quinam.off('newChallengeAvailable', this.newChallengeAvailable)
+        quinam.off('resetProgressSuccess', this.loadChallenge)
+        quinam.off('submitAttemptError', this.submitAttemptError)
+        quinam.off('submitAttemptSuccess', this.submitAttemptSuccess)
+        quinam.off('syncAccountSuccess', this.userSynced)
+    }
+
+    // Getters & Setters.
+
+    setLetter(letter) {
+        if(this.state.status != 0) {
+            return
+        }
+
+        const word = this.state.wordCurrent
+        let index = this.state.indexTileFocus
+
+        word[String(index)] = letter
+
+        this.setStateDirty('wordCurrent')
+
+        // Move to next or first empty index.
+        if(index >= 4) {
+            return
+        }
+
+        let firstEmpty = -1
+        let nextEmpty = -1
+
+        for(let i = 0; i < 5; ++i) {
+            if(word[String(i)] == '') {
+                if(firstEmpty == -1) {
+                    firstEmpty = i
+                }
+
+                if(i > index && nextEmpty == -1) {
+                    nextEmpty = i
+                }
+            }
+
+            if(firstEmpty != -1 && nextEmpty != -1) {
+                break
+            }
+        }
+
+        if(nextEmpty != -1) {
+            index = nextEmpty
+        }
+        else if(firstEmpty != -1) {
+            index = firstEmpty
+        }
+        else {
+            index = 4
+        }
+
+        this.state.indexTileFocus = index
+    }
+
+    // Functions.
+
+    deleteLetter(moveBackwards = false) {
+        if(this.state.status != 0) {
+            return
+        }
+
+        const word = this.state.wordCurrent
+        let index = this.state.indexTileFocus
+        let moved = false
+
+        if(moveBackwards && word[String(index)] == '' && index > 0) {
+            this.focusTilePrevious()
+
+            index = this.state.indexTileFocus
+            moved = true
+        }
+
+        word[String(index)] = ''
+
+        this.setStateDirty('wordCurrent')
+    }
+
+    dictionaryClicked() {
+        appm.addAnalyticsEvent('quinaDictionary', 'view', this.state.answer)
+    }
+
+    focusTile(index) {
+        this.state.indexTileFocus = index
+    }
+
+    focusTileNext() {
+        const index = this.state.indexTileFocus
+
+        if(index >= 4) {
+            return
+        }
+
+        ++this.state.indexTileFocus
+    }
+
+    focusTilePrevious() {
+        const index = this.state.indexTileFocus
+
+        if(index <= 0) {
+            return
+        }
+
+        --this.state.indexTileFocus
+    }
+
+    goToChallenge(number) {
+        if(number < 1 || number > this.state.maxNumberChallenge) {
+            return
+        }
+
+        this.state.numberChallenge = number
+
+        this.loadChallenge()
+
+        appm.addAnalyticsEvent('quinaChallenge', 'goTo', this.state.numberChallenge)
+    }
+
+    infoLoaded() {
+        if(!quinam.getPlays().length) {
+            if(!getCookie('quinaSyncId') && !quinam.hasSynced()) {
+                appm.showPopup('quina-sync')
+            }
+            else {
+                appm.showPopup('quina-instructions', true)
+            }
+        }
+
+        this.state.numberChallenge = quinam.getLastNumberChallenge()
+        this.state.maxNumberChallenge = quinam.getLastNumberChallenge()
+
+        this.loadChallenge()
+    }
+
+    keyPressed(event) {
+        switch(event.keyCode) {
+            case 8: // Backspace
+                this.deleteLetter(true)
+                return
+            case 13: // Enter
+                this.submit()
+                return
+            case 32: // Space
+                this.deleteLetter()
+                this.focusTileNext()
+                return
+            case 37: // ArrowLeft
+                this.focusTilePrevious()
+                return
+            case 39: // ArrowRight
+                this.focusTileNext()
+                return
+            case 46: // Delete
+                this.deleteLetter()
+                return
+            case 192: // Ç
+                // Extra validation as accent was triggering the same keyCode.
+                if(event.key.toLowerCase() == 'ç') {
+                    this.setLetter('c')
+                }
+                return
+        }
+
+        const keys = [
+            'q', 'e', 'r', 't', 'u', 'i', 'o', 'p',
+            'a', 's', 'd', 'f', 'g', 'h', 'j', 'l',
+            'z', 'x', 'c', 'v', 'b', 'n', 'm'
+        ]
+
+        const key = event.key.toLowerCase()
+
+        if(!keys.includes(key)) {
+            return
+        }
+
+        this.setLetter(key)
+    }
+
+    loadChallenge() {
+        this.state.indexTileFocus = 0
+        this.state.lettersDitched = []
+        this.state.status = 0
+        this.state.wordCurrent = { 0: '', 1: '', 2: '', 3: '', 4: '' }
+        this.state.words = []
+
+        const play = quinam.getPlay(this.state.numberChallenge)
+
+        this.state.lastChallenge = this.state.numberChallenge == this.state.maxNumberChallenge
+
+        if(play) {
+            this.state.easyMode = play.easyMode
+
+            for(const attempt of play.attempts) {
+                const word = {}
+
+                word.pinsRight = attempt.pinsRight || 0
+                word.pinsWrong = attempt.pinsWrong || 0
+
+                word.lettersRight = attempt.lettersRight || []
+                word.lettersWrong = attempt.lettersWrong || []
+
+                word[0] = attempt.word.charAt(0)
+                word[1] = attempt.word.charAt(1)
+                word[2] = attempt.word.charAt(2)
+                word[3] = attempt.word.charAt(3)
+                word[4] = attempt.word.charAt(4)
+
+                this.state.words.push(word)
+            }
+
+            if(play.completed) {
+                this.state.status = play.victory ? 2 : 3
+                this.state.answer = play.answer
+
+                if(play.victory) {
+                    this.state.timeElapsed = new Date(play.updatedAt) - new Date(play.createdAt)
+                }
+            }
+        }
+        else {
+            const user = appm.getUser()
+            this.state.easyMode = user && user.preferences.games.quina.easyMode
+        }
+    }
+
+    newChallengeAvailable() {
+        ++this.state.maxNumberChallenge
+    }
+
+    nextChallenge(jump = 1) {
+        if(this.state.status == 1) {
+            return
+        }
+
+        if(this.state.numberChallenge >= this.state.maxNumberChallenge) {
+            return
+        }
+
+        this.state.numberChallenge = Math.min(
+            this.state.numberChallenge + jump,
+            this.state.maxNumberChallenge
+        )
+
+        this.loadChallenge()
+
+        appm.addAnalyticsEvent('quinaChallenge', 'next', this.state.numberChallenge)
+    }
+
+    previousChallenge(jump = 1) {
+        if(this.state.status == 1) {
+            return
+        }
+
+        if(this.state.numberChallenge <= 1) {
+            return
+        }
+
+        this.state.numberChallenge = Math.max(
+            this.state.numberChallenge - jump,
+            1
+        )
+
+        this.loadChallenge()
+
+        appm.addAnalyticsEvent('quinaChallenge', 'previous', this.state.numberChallenge)
+    }
+
+    share() {
+        if(this.state.status < 2) {
+            return
+        }
+
+        const user = appm.getUser() || {}
+
+        const attemptsCount = this.state.status == 2 ? this.state.words.length : 'X'
+        const attemptsMax = (
+            this.state.easyMode ?
+            `${gameSettings.maxAttemptsEasyMode} 🍼` :
+            gameSettings.maxAttempts
+        )
+        const number = this.state.numberChallenge
+        let theme = appm.getTheme()
+
+        if(theme == 'auto') {
+            if(window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+                theme = 'dark'
+            }
+            else {
+                theme = 'light'
+            }
+        }
+
+        const tileEmpty = theme == 'dark' ? '⬛️' : '⬜️'
+        const tileMisplaced = '🟥'
+        const tileCorrect = '🟩'
+
+        let text = `${appm.tr('games.quina.shareText')} #${number} ${attemptsCount}/${attemptsMax}\n`
+
+        for(const word of this.state.words) {
+            text += '\n'
+
+            for(let i = 0; i < 5; ++i) {
+                if(word.lettersRight.includes(i)) {
+                    text += tileCorrect
+                }
+                else if(word.lettersWrong.includes(i)) {
+                    text += tileMisplaced
+                }
+                else {
+                    text += tileEmpty
+                }
+            }
+        }
+
+        if(this.state.status == 2) {
+            text += '\n\n'
+            text += `🕐 ${elapsedTime(this.state.timeElapsed)}`
+        }
+
+        appm.copyToClipboard(text)
+        appm.addAnalyticsEvent(
+            'quinaShare',
+            this.state.status == 2 ? 'victory' : 'loss',
+            this.state.easyMode
+        )
+    }
+
+    statsRequested() {
+        appm.showPopup('quina-stats')
+        appm.addAnalyticsEvent('quina', 'stats')
+    }
+
+    submit() {
+        if(this.state.status != 0) {
+            return
+        }
+
+        const word = this.state.wordCurrent
+        let wordString = ''
+
+        for(let i = 0; i < 5; ++i) {
+            const letter = word[String(i)]
+
+            if(letter == '') {
+                this.board.startInvalidAnim()
+                return
+            }
+
+            wordString += letter
+        }
+
+        this.state.status = 1
+
+        quinam.submitAttempt(wordString, this.state.numberChallenge)
+    }
+
+    submitAttemptError(error) {
+        this.state.status = 0
+
+        let message = ''
+
+        switch(error) {
+            case 1:
+                this.board.startInvalidAnim()
+
+                if(quinam.getPlays().length < 3) {
+                    message = `Palavra inválida.<br><span class='bold'>Lê as instruções para saber mais.</span>`
+                }
+                else {
+                    message = 'Palavra inválida.'
+                }
+
+                break
+            case 2:
+                message = 'Já terminaste este desafio.'
+                break
+            case -2:
+                message = 'Desafio não encontrado.'
+                break
+            default:
+                message = 'Problema na comunicação com servidores.'
+                break
+        }
+
+        appm.showNotification(message, -1)
+    }
+
+    submitAttemptSuccess(play) {
+        if(play.completed) {
+            this.state.status = play.victory ? 2 : 3
+            this.state.answer = play.answer
+            this.state.words = []
+
+            if(play.victory) {
+                this.state.timeElapsed = new Date(play.updatedAt) - new Date(play.createdAt)
+            }
+
+            for(const attempt of play.attempts) {
+                const word = {}
+
+                word.pinsRight = attempt.pinsRight || 0
+                word.pinsWrong = attempt.pinsWrong || 0
+
+                word.lettersRight = attempt.lettersRight || []
+                word.lettersWrong = attempt.lettersWrong || []
+
+                word[0] = attempt.word.charAt(0)
+                word[1] = attempt.word.charAt(1)
+                word[2] = attempt.word.charAt(2)
+                word[3] = attempt.word.charAt(3)
+                word[4] = attempt.word.charAt(4)
+
+                this.state.words.push(word)
+            }
+
+            return
+        }
+
+        const attempt = play.attempts[play.attempts.length - 1] || {}
+        const word = this.state.wordCurrent
+        const wordDiactritics = attempt.word || ''
+        word.lettersRight = attempt.lettersRight || []
+        word.lettersWrong = attempt.lettersWrong || []
+        word.pinsRight = attempt.pinsRight || 0
+        word.pinsWrong = attempt.pinsWrong || 0
+
+        word[0] = wordDiactritics.charAt(0)
+        word[1] = wordDiactritics.charAt(1)
+        word[2] = wordDiactritics.charAt(2)
+        word[3] = wordDiactritics.charAt(3)
+        word[4] = wordDiactritics.charAt(4)
+
+        this.state.words.push(word)
+
+        this.setStateDirty('words')
+
+        this.state.status = 0
+        this.state.wordCurrent = { 0: '', 1: '', 2: '', 3: '', 4: '' }
+        this.state.indexTileFocus = 0
+
+        this.setStateDirty('wordCurrent')
+    }
+
+    tileMarkChanged(letter, mark) {
+        const lettersDitched = this.state.lettersDitched
+
+        letter = letter
+                .normalize('NFD')
+                .replace(/\p{Diacritic}/gu, '')
+                .replace(/\s/g, '')
+                .toLowerCase()
+
+        switch(mark) {
+            case 0: // CLEAR DITCH
+                if(lettersDitched.includes(letter)) {
+                    lettersDitched.splice(lettersDitched.indexOf(letter), 1)
+
+                    this.setStateDirty('lettersDitched')
+                }
+                break
+            case 3: // DITCH
+                //if(!lettersDitched.includes(letter)) {
+                    lettersDitched.push(letter)
+
+                    this.setStateDirty('lettersDitched')
+                //}
+                break
+        }
+
+        appm.addAnalyticsEvent('quinaChallenge', 'letterMark')
+    }
+
+    userSynced(user) {
+        this.loadChallenge()
+
+        if(!this.state.words.length && user.preferences.games.quina.easyMode != this.state.easyMode) {
+            this.state.easyMode = user.preferences.games.quina.easyMode
+        }
+    }
+
+    userUpdated(user) {
+        if(!this.state.words.length && user.preferences.games.quina.easyMode != this.state.easyMode) {
+            this.state.easyMode = user.preferences.games.quina.easyMode
+        }
+    }
+}
+
+$ const processLettersDitched = (words, ditched, easyMode) => {
+    const letters = []
+    const lettersValid = []
+
+    if(easyMode) {
+        for(const word of words) {
+            for(let i = 0; i < 5; ++i) {
+                if(!word.lettersWrong.includes(i) && !word.lettersRight.includes(i)) {
+                    continue
+                }
+
+                const letter = word[String(i)]
+                    .normalize('NFD')
+                    .replace(/\p{Diacritic}/gu, '')
+                    .replace(/\s/g, '')
+                    .toLowerCase()
+
+                if(lettersValid.includes(letter)) {
+                    continue
+                }
+
+                lettersValid.push(letter)
+            }
+        }
+    }
+
+    for(const word of words) {
+        for(let i = 0; i < 5; ++i) {
+            const letter = word[String(i)]
+                .normalize('NFD')
+                .replace(/\p{Diacritic}/gu, '')
+                .replace(/\s/g, '')
+                .toLowerCase()
+
+            if(easyMode) {
+                if(lettersValid.includes(letter)) {
+                    continue
+                }
+            }
+            else {
+                if(!ditched.includes(letter)) {
+                    continue
+                }
+            }
+
+            if(letters.includes(letter)) {
+                continue
+            }
+
+            letters.push(letter)
+        }
+    }
+
+    return letters
+}
+
+$ const trBoard = appm.tr('games.quina.board') || {}
+$ const trTooltips = trBoard.tooltips || {}
+
+<div.quina-screen-board class=input.class>
+    <quina-bar
+        disableNavigation=(state.status == 1)
+        easyMode=state.easyMode
+        maxNumberChallenge=state.maxNumberChallenge
+        numberChallenge=state.numberChallenge
+        ready
+        on-challengeRequested('goToChallenge')
+        on-nextChallengeRequested('nextChallenge')
+        on-previousChallengeRequested('previousChallenge')
+    />
+
+    <div.wrapper-board>
+        <quina-board
+            key='board'
+            easyMode=state.easyMode
+            indexTileFocus=state.indexTileFocus
+            numberChallenge=state.numberChallenge
+            status=state.status
+            wordCurrent=state.wordCurrent
+            words=state.words
+            on-focusTileRequested('focusTile')
+            on-tileMarkChanged('tileMarkChanged')
+        />
+
+        <div.answer-details>
+            <if(state.status == 2)>
+                <div.time-elapsed>
+                    <icon name='clock' />
+
+                    <span.time>
+                        ${elapsedTime(state.timeElapsed)}
+                    </span>
+                </div>
+            </if>
+            <else-if(state.status == 3)>
+                <span.text>
+                    ${trBoard.lostAnswer} <span.answer.notranslate>${state.answer}</span>
+                </span>
+            </else-if>
+
+            <if(state.status >= 2)>
+                <div.controls>
+                    <button-text.medium
+                        href=`${urls.priberam}/${state.answer}`
+                        icon='book'
+                        link
+                        newTab
+                        text=trBoard.buttonMeaning
+                        on-click('dictionaryClicked')
+                    />
+
+                    <button-text.special.medium.strong
+                        icon='send'
+                        text=trBoard.buttonShare
+                        on-click('share')
+                    />
+
+                    <button-text.medium
+                        icon='stats'
+                        text=trBoard.buttonStats
+                        on-click('statsRequested')
+                    />
+                </div>
+
+                <if(state.lastChallenge)>
+                    <quina-countdown-nextchallenge on-nextChallengeRequested('nextChallenge') />
+                </if>
+            </if>
+        </div>
+    </div>
+
+    <if(state.status < 2)>
+        <quina-keyboard
+            lettersDitched=processLettersDitched(state.words, state.lettersDitched, state.easyMode)
+            on-deleteRequested('deleteLetter', true)
+            on-setLetterRequested('setLetter')
+            on-submitRequested('submit')
+        />
+    </if>
+</div>
+
+style.less {
+    .quina-screen-board {
+        --answer-fontsize: 28px;
+        --answerdetails-paddingbottom: 30px;
+        --answerdetails-spacing: 30px;
+        --bartop-height: 50px;
+        --bartop-controls-spacing: 10px;
+        --boardnumber-fontsize: 24px;
+        --padding: 0 var(--app-padding) 40px;
+        --spacing: 30px;
+
+        align-items: center;
+        display: flex;
+        flex-direction: column;
+        gap: var(--spacing);
+        padding: var(--padding);
+
+        >.wrapper-board {
+            align-items: center;
+            display: flex;
+            flex-direction: column;
+            flex-grow: 1;
+            gap: var(--spacing);
+            //padding: var(--padding);
+
+            >.answer-details {
+                align-items: center;
+                display: flex;
+                flex-direction: column;
+                gap: var(--answerdetails-spacing);
+                padding-bottom: var(--answerdetails-paddingbottom);
+
+                >.text {
+                    color: var(--color-text4);
+                    font-size: var(--answer-fontsize);
+                    font-family: @font-medium;
+                    text-align: center;
+
+                    >.answer {
+                        font-family: @font-bold;
+                        text-transform: uppercase;
+                    }
+                }
+
+                >.time-elapsed {
+                    align-items: center;
+                    display: flex;
+                    gap: 10px;
+
+                    >.icon {
+                        color: var(--color-icon2);
+                        .size(20px);
+                    }
+
+                    >.time {
+                        font-size: 22px; // TODO
+                        font-family: @font-medium;
+                        color: var(--color-text3);
+                    }
+                }
+
+                >.controls {
+                    align-items: center;
+                    display: flex;
+                    flex-wrap: wrap;
+                    gap: 10px; // TODO
+                    justify-content: center;
+                }
+            }
+        }
+
+        // Media queries.
+
+        .r-max(@break-lg, {
+            --answer-fontsize: 22px;
+        });
+
+        .r-max(@break-md, {
+            >.quina-keyboard {
+                background-color: var(--color-background2);
+                bottom: 0;
+                position: sticky;
+                padding: 20px 0;
+            }
+        });
+
+        .r-max(@break-sm, {
+            --padding: 0 var(--app-padding) 20px;
+            --spacing: 20px;
+        });
+
+        .r-max(@break-xs, {
+            --padding: 0 var(--app-padding) 10px;
+        });
+    }
+};

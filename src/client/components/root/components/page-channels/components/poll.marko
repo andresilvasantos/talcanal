@@ -1,0 +1,211 @@
+import appm from 'js/app-manager'
+import { elapsedDateToString } from 'js/utils'
+
+class {
+    onCreate(input) {
+        this.state = {
+            post: input.post || {},
+            selection: []
+        }
+
+        this.pollVoted = this.pollVoted.bind(this)
+    }
+
+    onInput(input) {
+        this.state.post = input.post || {}
+    }
+
+    onMount() {
+        appm.on('votePollSuccess', this.pollVoted)
+    }
+
+    onDestroy() {
+        appm.off('votePollSuccess', this.pollVoted)
+    }
+
+    // Functions.
+
+    pollVoted(idPost, selection) {
+        if(idPost != this.state.post.id) {
+            return
+        }
+
+        const poll = this.state.post.poll || {}
+        const options = poll.options
+
+        for(const index of selection) {
+            const option = options[index]
+
+            if(!option.hasUserVoted) {
+                option.hasUserVoted = true
+                ++option.countVotes
+            }
+        }
+
+        this.state.selection = []
+
+        this.setStateDirty('post')
+    }
+
+    selectOption(index) {
+        const poll = this.state.post.poll || {}
+
+        if(poll.multipleChoice) {
+            if(this.state.selection.includes(index)) {
+                this.state.selection.splice(this.state.selection.indexOf(index), 1)
+            }
+            else {
+                this.state.selection.push(index)
+            }
+
+            this.setStateDirty('selection')
+        }
+        else {
+            this.state.selection = [index]
+        }
+    }
+
+    vote() {
+        if(!this.state.selection.length) {
+            return
+        }
+
+        appm.votePoll(this.state.post.id, this.state.selection)
+    }
+}
+
+$ const dayMs = 1000 * 60 * 60 * 24
+
+$ const isClosed = (poll, createdAt) => {
+    return Date.now() - new Date(createdAt).getTime() > poll.duration * dayMs
+}
+
+$ const isVoted = (poll) => {
+    for(const option of options) {
+        if(option.hasUserVoted) {
+            return true
+        }
+    }
+
+    return false
+}
+
+$ const getCountMaxVotes = (options) => {
+    let countMax = 0
+
+    for(const option of options) {
+        if(option.countVotes > countMax) {
+            countMax = option.countVotes
+        }
+    }
+
+    return countMax
+}
+
+$ const getCountTotalVotes = (options) => {
+    let countTotal = 0
+
+    for(const option of options) {
+        countTotal += option.countVotes
+    }
+
+    return countTotal
+}
+
+$ const getTimeString = (poll, createdAt) => {
+    return elapsedDateToString(new Date(createdAt).getTime() + poll.duration * dayMs, true)
+}
+
+$ const post = state.post || {}
+$ const poll = post.poll || {}
+$ const options = poll.options || []
+$ const closed = isClosed(poll, post.createdAt)
+$ const countMaxVotes = getCountMaxVotes(options)
+$ const countTotalVotes = getCountTotalVotes(options)
+$ const timeString = getTimeString(poll, post.createdAt)
+$ const voted = isVoted(options)
+
+<div.poll class=[
+    input.class,
+    closed ? 'closed' : '',
+    voted ? 'voted' : ''
+]>
+    <div.options>
+        <for|option, index| of=options>
+            $ const selected = (state.selection.includes(index) && !voted)
+            $ const percentage = countTotalVotes > 0 ? option.countVotes / countMaxVotes * 100 : 0
+            $ const isWinner = closed && option.countVotes == countMaxVotes
+
+            <button-optionpoll
+                disabled=(closed || voted)
+                isWinner=isWinner
+                option=option
+                percentage=percentage
+                selected=selected
+                on-selectRequested('selectOption', index)
+            />
+        </for>
+    </div>
+
+    <div.bar>
+        <span.status>
+            ${countTotalVotes} ${countTotalVotes == 1 ? 'voto' : 'votos'} · ${closed ? 'Terminou há' : 'Faltam'} ${timeString}
+        </span>
+
+        <if(!closed && !voted)>
+            <button-text.small
+                disabled=(!state.selection.length)
+                text='Votar'
+                on-click('vote')
+            />
+        </if>
+    </div>
+</div>
+
+style.less {
+    .poll {
+        --options-spacing: 5px;
+        --spacing: 20px;
+        --status-fontsize: 14px;
+        --width: 400px;
+
+        display: flex;
+        flex-direction: column;
+        gap: var(--spacing);
+        width: var(--width);
+
+        >.options {
+            display: flex;
+            flex-direction: column;
+            gap: var(--options-spacing);
+        }
+
+        >.bar {
+            align-items: center;
+            display: flex;
+            justify-content: space-between;
+
+            >.status {
+                color: var(--color-text1);
+                font-size: var(--status-fontsize);
+            }
+        }
+
+        &.closed,
+        &.voted {
+            >.bar {
+                justify-content: center;
+            }
+        }
+
+        // Media queries.
+
+        .r-max(@break-sm, {
+            --width: 80%;
+        });
+
+        .r-max(@break-xs, {
+            --width: 90%;
+        });
+    }
+};

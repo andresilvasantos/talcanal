@@ -1,0 +1,186 @@
+import appm from 'js/app-manager'
+
+class {
+    onCreate() {
+        this.state = {
+            indexImageSlider: 0,
+            showLightbox: false
+        }
+    }
+
+    onDestroy() {
+        if(this.state.showLightbox) {
+            appm.emit('popupHiding')
+        }
+    }
+
+    // Functions.
+
+    hideLightbox() {
+        appm.emit('popupHiding')
+
+        this.state.showLightbox = false
+        this.emit('lightboxToggled', false)
+    }
+
+    imageSliderChanged(index) {
+        this.state.indexImageSlider = index
+        this.emit('imageSliderChanged', index)
+    }
+
+    imageSliderRequested(index) {
+        this.getComponent('sliderImages').setIndex(index)
+        this.emit('listImagesClick')
+    }
+
+    keyPressed(event) {
+        // This are just key events for lightbox.
+
+        switch(event.keyCode) {
+            case 27: // Escape.
+                this.hideLightbox()
+                break
+            case 37: // Left.
+                this.sliderLightbox.previous()
+                break
+            case 39: // Right.
+                this.sliderLightbox.next()
+                break
+        }
+    }
+
+    lightboxPanelClick(event) {
+        event.stopPropagation()
+    }
+
+    showLightbox() {
+        this.state.showLightbox = true
+
+        appm.emit('popupVisible')
+
+        this.update()
+        this.getEl('lightbox').focus()
+
+        this.sliderLightbox = this.getComponent('sliderLightbox')
+        this.emit('lightboxToggled', true)
+    }
+}
+
+$ const images = input.images || []
+
+<div.gallery class=input.class>
+    <slider-images
+        key='sliderImages'
+        pathBaseUrl=appm.getUrlCdn()
+        images=images
+        noExternalUpdate=input.noExternalUpdate
+        tagSize='md'
+        tagSizeSmall='sm-nocrop'
+        on-indexChanged('imageSliderChanged')
+        on-openRequested('showLightbox')
+    />
+
+    <if(images.length > 1)>
+        <list-images
+            pathBaseUrl=appm.getUrlCdn()
+            index=state.indexImageSlider
+            images=images
+            on-imageRequested('imageSliderRequested')
+        />
+    </if>
+
+    <if(state.showLightbox)>
+        <div.lightbox key='lightbox' tabindex=-1 on-click('hideLightbox') on-keydown('keyPressed')>
+            <div.panel on-click('lightboxPanelClick')>
+                <slider-images
+                    key='sliderLightbox'
+                    pathBaseUrl=appm.getUrlCdn()
+                    big
+                    images=images
+                    index=state.indexImageSlider
+                    noExternalUpdate=input.noExternalUpdate
+                    tagSizeSmall='md'
+                    on-indexChanged('emit', 'imageSliderChanged')
+                />
+
+                <button-icon.button-close.big icon='close' on-click('hideLightbox') />
+            </div>
+        </div>
+    </if>
+</div>
+
+style.less {
+    .gallery {
+        --lightbox-padding: 50px;
+        --lightboxpanel-padding: 10px;
+        --lightboxbuttonclose-margin: 40px;
+        --slider-height: 500px;
+        --spacing: 10px;
+
+        display: flex;
+        flex-direction: column;
+        gap: var(--spacing);
+
+        >.slider-images {
+            border: 1px solid var(--color-border1);
+            flex-shrink: 0;
+            height: var(--slider-height);
+        }
+
+        >.lightbox {
+            background-color: rgba(var(--color-background1-rgb), 0.7);
+            padding: var(--lightbox-padding);
+            .fixed-fill(4);
+
+            >.panel {
+                background-color: var(--color-background4);
+                border: 1px solid var(--color-border1);
+                border-radius: var(--app-borderradius3);
+                height: 100%;
+                padding: var(--lightboxpanel-padding);
+                position: relative;
+
+                >.slider-images {
+                    height: 100%;
+                    touch-action: pinch-zoom;
+                }
+
+                >.button-close {
+                    position: absolute;
+                    right: var(--lightboxbuttonclose-margin);
+                    top: var(--lightboxbuttonclose-margin);
+                }
+            }
+        }
+
+        // Media queries
+
+        .r-max(@break-xl, {
+            --lightbox-padding: 40px;
+            --lightboxbuttonclose-margin: 35px;
+        });
+
+        .r-max(@break-lg, {
+            --lightbox-padding: 35px;
+            --lightboxbuttonclose-margin: 30px;
+        });
+
+        .r-max(@break-md, {
+            --lightbox-padding: 30px;
+            --lightboxbuttonclose-margin: 20px;
+            --slider-height: 400px;
+        });
+
+        .r-max(@break-sm, {
+            --lightbox-padding: 20px;
+            --lightboxbuttonclose-margin: 15px;
+            --slider-height: 350px;
+        });
+
+        .r-max(@break-xs, {
+            --lightbox-padding: 10px;
+            --lightboxbuttonclose-margin: 10px;
+            --slider-height: 300px;
+        });
+    }
+};

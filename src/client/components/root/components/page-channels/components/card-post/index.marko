@@ -1,0 +1,260 @@
+import appm from 'js/app-manager'
+import { urls } from 'js/default-vars'
+
+class {
+    onCreate(input) {
+        this.state = {
+            post: input.post || {},
+            user: appm.getUser()
+        }
+
+        this.approved = this.approved.bind(this)
+        this.favorited = this.favorited.bind(this)
+        this.locked = this.locked.bind(this)
+        this.rejected = this.rejected.bind(this)
+        this.updated = this.updated.bind(this)
+        this.userUpdated = this.userUpdated.bind(this)
+        this.voted = this.voted.bind(this)
+    }
+
+    onInput(input) {
+        this.state.post = input.post || {}
+    }
+
+    onMount() {
+        appm.on('approveItemsSuccess', this.approved)
+        appm.on('favoriteItemSuccess', this.favorited)
+        appm.on('lockPostsSuccess', this.locked)
+        appm.on('rejectItemsSuccess', this.rejected)
+        appm.on('updateItemSuccess', this.updated)
+        appm.on('userUpdated', this.userUpdated)
+        appm.on('votePostSuccess', this.voted)
+    }
+
+    onDestroy() {
+        appm.off('approveItemsSuccess', this.approved)
+        appm.off('favoriteItemSuccess', this.favorited)
+        appm.off('lockPostsSuccess', this.locked)
+        appm.off('rejectItemsSuccess', this.rejected)
+        appm.off('updateItemSuccess', this.updated)
+        appm.off('userUpdated', this.userUpdated)
+        appm.off('votePostSuccess', this.voted)
+    }
+
+    // Functions.
+
+    approved(type, ids) {
+        if(type != 'posts' || !ids.includes(this.state.post.id)) {
+            return
+        }
+
+        this.state.post.status = 'approved'
+
+        this.setStateDirty('post')
+    }
+
+    approveRequested() {
+        appm.approveItems('posts', [this.state.post.id])
+    }
+
+    channelRequested(newTab = false) {
+        appm.openPage('channels', 'channel', { allowBack: true, newTab }, this.state.post.channel)
+    }
+
+    creatorRequested(newTab = false) {
+        appm.openPage('channels', 'user', { allowBack: true, newTab }, this.state.post.creator)
+    }
+
+    favorited(type, id, favorited) {
+        if(type != 'posts' || id != this.state.post.id) {
+            return
+        }
+
+        this.state.post.hasUserFavorited = favorited
+
+        this.setStateDirty('post')
+    }
+
+    favoriteRequested() {
+        appm.favoriteItem('posts', this.state.post.id)
+    }
+
+    locked(ids, lock) {
+        if(!ids.includes(this.state.post.id)) {
+            return
+        }
+
+        this.state.post.locked = lock
+
+        this.setStateDirty('post')
+    }
+
+    lockRequested() {
+        appm.lockPosts([this.state.post.id])
+    }
+
+    markAdultContentRequested(mark) {
+        appm.updateItem('posts', this.state.post.id, { adultContent: mark })
+        appm.addAnalyticsEvent('cardPost', 'markAdultContent', mark)
+    }
+
+    openRequested(newTab) {
+        this.state.post.hasUserSeen = true
+        this.setStateDirty('post')
+
+        this.emit('openRequested', newTab)
+    }
+
+    rejected(type, ids) {
+        if(type != 'posts' || !ids.includes(this.state.post.id)) {
+            return
+        }
+
+        this.state.post.status = 'rejected'
+
+        this.setStateDirty('post')
+    }
+
+    rejectRequested() {
+        appm.rejectItems('posts', [this.state.post.id])
+    }
+
+    reportRequested() {
+        appm.showPopup('report', 'posts', this.state.post.id)
+    }
+
+    share(type) {
+        const post = this.state.post || {}
+        const channel = post.channel || {}
+        const url = `${urls.domain}/c/${channel.id}/p/${post.id}`
+
+        switch(type) {
+            case 'copyUrl':
+                appm.copyToClipboard(url)
+                appm.addAnalyticsEvent('cardPost', 'share', channel.id)
+                break
+            case 'message':
+                appm.showPopup('sendMessage', `<a href='${url}'>${this.state.post.title}</a>`)
+                break
+        }
+
+        appm.addAnalyticsEvent('cardPost', 'share', channel.id)
+    }
+
+    sliderImagesIndexChanged() {
+        appm.addAnalyticsEvent('cardPost', 'slideImage')
+    }
+
+    tagRequested(idTag) {
+        const channel = this.state.post.channel || {}
+
+        appm.updateItem('posts', this.state.post.id, { tag: idTag })
+        appm.addAnalyticsEvent('cardPost', 'setTag', `${channel.id} #${idTag}`)
+    }
+
+    updated(type, id, post) {
+        if(type != 'posts' || id != this.state.post.id) {
+            return
+        }
+
+        Object.assign(this.state.post, post)
+
+        this.setStateDirty('post')
+    }
+
+    voted(idPost, vote, voteIncrement) {
+        if(idPost != this.state.post.id) {
+            return
+        }
+
+        this.state.post.countVotes += voteIncrement
+        this.state.post.hasUserUpvoted = vote == 1
+        this.state.post.hasUserDownvoted = vote == -1
+
+        this.setStateDirty('post')
+    }
+
+    voteRequested(up) {
+        appm.votePost(this.state.post.id, up)
+    }
+
+    userUpdated(user) {
+        this.state.user = user
+
+        this.setStateDirty('user')
+    }
+}
+
+$ const post = state.post || {}
+$ const channel = post.channel || {}
+$ const creator = post.creator || {}
+$ const user = state.user
+
+$ const isMod = user && (
+    (channel.admins && channel.admins.includes(appm.getUser()._id)) ||
+    (channel.moderators && channel.moderators.includes(appm.getUser()._id)) ||
+    (user.super && user.superActive)
+)
+$ const isCreator = user && user._id == creator._id
+
+<if(input.viewMode == 'list')>
+    <card-post-list.card-post
+        allowPin=input.allowPin
+        class=input.class
+        hideChannelInfo=input.hideChannelInfo
+        hideCreatorInfo=input.hideCreatorInfo
+        isCreator=isCreator
+        isMod=isMod
+        isPinned=input.isPinned
+        post=post
+        selectable=input.selectable
+        selected=input.selected
+        on-approveRequested('approveRequested')
+        on-channelRequested('channelRequested')
+        on-creatorRequested('creatorRequested')
+        on-deleteRequested('emit', 'deleteRequested')
+        on-favoriteRequested('favoriteRequested')
+        on-lockRequested('lockRequested')
+        on-markAdultContentRequested('markAdultContentRequested')
+        on-openRequested('openRequested')
+        on-pinRequested('emit', 'pinRequested')
+        on-rejectRequested('rejectRequested')
+        on-reportRequested('reportRequested')
+        on-searchTagRequested('emit', 'searchTagRequested')
+        on-selectRequested('emit', 'selectRequested')
+        on-shareRequested('share')
+        on-tagRequested('tagRequested')
+        on-voteRequested('voteRequested')
+    />
+</if>
+<else-if(input.viewMode == 'expanded')>
+    <card-post-expanded.card-post
+        allowPin=input.allowPin
+        class=input.class
+        hideChannelInfo=input.hideChannelInfo
+        hideCreatorInfo=input.hideCreatorInfo
+        isCreator=isCreator
+        isMod=isMod
+        isPinned=input.isPinned
+        post=post
+        selectable=input.selectable
+        selected=input.selected
+        on-approveRequested('approveRequested')
+        on-channelRequested('channelRequested')
+        on-creatorRequested('creatorRequested')
+        on-deleteRequested('emit', 'deleteRequested')
+        on-favoriteRequested('favoriteRequested')
+        on-lockRequested('lockRequested')
+        on-markAdultContentRequested('markAdultContentRequested')
+        on-openRequested('openRequested')
+        on-pinRequested('emit', 'pinRequested')
+        on-rejectRequested('rejectRequested')
+        on-reportRequested('reportRequested')
+        on-searchTagRequested('emit', 'searchTagRequested')
+        on-selectRequested('emit', 'selectRequested')
+        on-shareRequested('share')
+        on-sliderImagesIndexChanged('sliderImagesIndexChanged')
+        on-tagRequested('tagRequested')
+        on-voteRequested('voteRequested')
+    />
+</else-if>

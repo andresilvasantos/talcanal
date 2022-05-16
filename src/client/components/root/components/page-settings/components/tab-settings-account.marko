@@ -1,0 +1,392 @@
+import appm from 'js/app-manager'
+import { viewModes } from 'js/default-vars'
+import { processObjectsTr, validateEmail, validatePassword } from 'js/utils'
+
+class {
+    onCreate() {
+        this.state = {
+            passwordVisible: false,
+            status: 0
+        }
+
+        this.updateAccountError = this.updateAccountError.bind(this)
+    }
+
+    onMount() {
+        this.errorMessages = appm.tr('status')
+
+        appm.on('updateAccountError', this.updateAccountError)
+    }
+
+    onDestroy() {
+        appm.off('updateAccountError', this.updateAccountError)
+    }
+
+    // Getters & Setters.
+
+    setStatus(status) {
+        this.state.status = status
+    }
+
+    // Functions.
+
+    deleteAccountRequested() {
+        appm.showPopup('deleteAccount')
+    }
+
+    imageUploaded(idImage) {
+        if(this.state.status != 1) {
+            return
+        }
+
+        this.data.image = idImage
+
+        appm.updateAccount(this.data)
+    }
+
+    saveRequested() {
+        if(this.state.status == 1) {
+            return
+        }
+
+        this.emailComponent = this.getComponent('inputEmail')
+        this.passwordComponent = this.getComponent('inputPassword')
+        this.passwordRetypeComponent = this.getComponent('inputPasswordRetype')
+        this.imageComponent = this.getComponent('inputImage')
+        this.bioComponent = this.getComponent('inputBio')
+
+        this.themeComponent = this.getComponent('dropdownTheme')
+        this.viewModeComponent = this.getComponent('dropdownViewMode')
+        this.adultContentComponent = this.getComponent('checkboxAdultContent')
+        this.privateProfileComponent = this.getComponent('checkboxPrivateProfile')
+        this.disableChatRequestsComponent = this.getComponent('checkboxDisableChatRequests')
+
+        this.sectionUsersBlocked = this.getComponent('sectionUsersBlocked')
+
+        const email = this.emailComponent.getValue()
+        const password = this.passwordComponent.getValue()
+        const passwordRetype = this.passwordRetypeComponent.getValue()
+        const passwordHasText = password.length > 0
+        const bio = this.bioComponent.getValue().replace(new RegExp('\r?\n','g'), '<br>')
+
+        const theme = this.themeComponent.getOption().id
+        const viewMode = this.viewModeComponent.getOption().id
+        const adultContent = this.adultContentComponent.isChecked()
+        const privateProfile = this.privateProfileComponent.isChecked()
+        const disableChatRequests = this.disableChatRequestsComponent.isChecked()
+
+        const usersBlocked = this.sectionUsersBlocked.getUsers()
+
+        let validData = true
+
+        if(!validateEmail(email)) {
+            this.nameComponent.setValid(false, this.errorMessages.invalidEmail)
+            validData = false
+        }
+
+        if(passwordHasText) {
+            if(!validatePassword(password)) {
+                this.passwordComponent.setValid(false, this.errorMessages.invalidPassword)
+                validData = false
+            }
+
+            if(password != passwordRetype) {
+                this.passwordRetypeComponent.setValid(false, this.errorMessages.passwordConfirmationMismatch)
+                validData = false
+            }
+        }
+
+        if(!validData) {
+            return
+        }
+
+        this.state.status = 1
+
+        this.data = {
+            bio,
+            email,
+            preferences: {
+                viewMode,
+                theme,
+                allowAdultContent: adultContent,
+                privateProfile,
+                disableChatRequests
+            },
+            usersBlocked
+        }
+
+        if(password.length) {
+            this.data.password = password
+        }
+
+        if(this.imageComponent.needsUpload()) {
+            this.imageComponent.upload('square')
+        }
+        else {
+            // Image was removed.
+            if(this.imageComponent.isChanged()) {
+                this.data.image = ''
+            }
+
+            appm.updateAccount(this.data)
+        }
+
+        this.emit('statusChanged', this.state.status)
+    }
+
+    togglePasswordVisibility() {
+        this.state.passwordVisible = !this.state.passwordVisible
+    }
+
+    updateAccountError(error) {
+        switch(error) {
+        case 1:
+            this.emailComponent.setValid(false, this.errorMessages.invalidEmail)
+            break
+        case 2:
+            this.emailComponent.setValid(false, this.errorMessages.emailAlreadyLinked)
+            break
+        }
+
+        this.state.status = -1
+    }
+
+    uploadImageError(error) {
+        if(this.state.status != 1) {
+            return
+        }
+
+        this.state.status = -1
+    }
+}
+
+$ const findIndex = (id, list) => {
+    for(const [index, entry] of list.entries()) {
+        if(entry.id == id) {
+            return index
+        }
+    }
+
+    return 0
+}
+
+$ const trSettings = appm.tr('settings') || {}
+$ const trAccount = appm.tr('settings.tabs.account') || {}
+$ const trInputs = trAccount.inputs || {}
+$ const trThemes = trInputs.themes || {}
+$ const user = input.user || {}
+$ const image = user.image
+$ const preferences = user.preferences || {}
+$ const viewModesFinal = [{ id: 'none' }, ...viewModes]
+
+$ const themes = [{
+    id: 'auto',
+    icon: 'adjust'
+}, {
+    id: 'light',
+    icon: 'sun'
+}, {
+    id: 'dark',
+    icon: 'moon'
+}]
+
+<!-- <div.tab-settings-account class=input.class> -->
+<section-settings.account title=trAccount.sectionAccount>
+    <input-text.input-email
+        key='inputEmail'
+        icon='envelope'
+        maxlength=320
+        noExternalUpdate
+        placeholder=trInputs.email
+        text=user.email
+    />
+
+    <input-password
+        key='inputPassword'
+        charsVisible=state.passwordVisible
+        placeholder=trInputs.passwordNew
+        on-toggleVisibility('togglePasswordVisibility')
+    />
+
+    <input-password
+        key='inputPasswordRetype'
+        charsVisible=state.passwordVisible
+        placeholder=trInputs.passwordConfirm
+        on-toggleVisibility('togglePasswordVisibility')
+    />
+</section-settings>
+
+<section-settings.profile title=trAccount.sectionProfile>
+    <input-image.small
+        key='inputImage'
+        icon='camera'
+        image=image
+        noExternalUpdate
+        sufix='sm'
+        text=trInputs.image
+        on-uploaded('imageUploaded')
+        on-uploadError('uploadImageError')
+    />
+
+    <input-textmulti.input-bio
+        key='inputBio'
+        icon='details'
+        maxlength=300
+        noExternalUpdate
+        placeholder=trInputs.bio
+        text=(user.bio || '').replace(/<br ?\/?>/g, '\n')
+    />
+</section-settings>
+
+<section-settings.preferences title=trAccount.sectionPreferences>
+    <dropdown.dropdown-theme
+        key='dropdownTheme'
+        index=findIndex(preferences.theme, themes)
+        noExternalUpdate
+        options=processObjectsTr(themes, trThemes)
+        text='Tema'
+    />
+
+    <dropdown.dropdown-viewmode
+        key='dropdownViewMode'
+        index=findIndex(preferences.viewMode, viewModesFinal)
+        noExternalUpdate
+        options=processObjectsTr(viewModesFinal, appm.tr('generic.viewModes'))
+        text=trInputs.viewMode
+    />
+
+    <checkbox.checkbox-adultcontent
+        key='checkboxAdultContent'
+        checked=preferences.allowAdultContent
+        noExternalUpdate
+        text=trInputs.adultContent
+    >
+        <icon.icon-adults name='circle' />
+    </checkbox>
+
+    <checkbox
+        key='checkboxPrivateProfile'
+        checked=preferences.privateProfile
+        noExternalUpdate
+        text=trInputs.privateProfile
+    />
+
+    <checkbox
+        key='checkboxDisableChatRequests'
+        checked=preferences.disableChatRequests
+        noExternalUpdate
+        text=trInputs.disableChatRequests
+    />
+</section-settings>
+
+<section-usersblocked
+    key='sectionUsersBlocked'
+    noExternalUpdate
+    trSettings=trAccount.usersBlocked
+    users=user.usersBlocked
+/>
+
+<button-submit.button-save.big
+    loading=(state.status == 1)
+    text=trSettings.buttonSave
+    on-click('saveRequested')
+/>
+
+<div.separator />
+
+<button-text.button-deleteaccount.danger
+    icon='bin'
+    text=trAccount.buttonDeleteAccount
+    on-click('deleteAccountRequested')
+/>
+<!-- </div> -->
+
+style.less {
+    .pane-settings>.contents {
+        --inputimage-size: 120px;
+        --settings-gridcount: 2;
+
+        >.section-settings {
+            &.account {
+                >.contents {
+                    .grid(var(--settings-gridcount), var(--contents-spacing), var(--contents-spacing));
+
+                    >.input-email {
+                        grid-column: span var(--settings-gridcount);
+                    }
+                }
+            }
+
+            &.profile {
+                >.contents {
+                    flex-direction: row;
+
+                    >.input-image {
+                        .size(var(--inputimage-size));
+                    }
+
+                    >.input-bio {
+                        flex-grow: 1;
+                    }
+                }
+            }
+
+            &.preferences {
+                >.contents {
+                    >.dropdown {
+                        align-self: flex-start;
+                    }
+
+                    >.checkbox-adultcontent {
+                        >.wrapper>.icon-adults {
+                            color: var(--color-warning);
+                            display: flex;
+                            flex-shrink: 0;
+                            .size(20px);
+                        }
+                    }
+                }
+            }
+
+            &.users-blocked {
+                >.contents {
+                    >.no-users {
+                        color: var(--color-text2);
+                        font-size: 15px;
+                    }
+                }
+            }
+        }
+
+        >.button-save {
+            align-self: center;
+        }
+
+        >.separator {
+            background-color: var(--color-border1);
+            .size(100%, 1px);
+        }
+
+        >.button-deleteaccount {
+            align-self: flex-start;
+        }
+
+        // Media queries
+
+        .r-max(@break-sm, {
+            --settings-gridcount: 1;
+
+            >.section-settings {
+                &.profile {
+                    >.contents {
+                        flex-direction: column;
+
+                        >.input-bio {
+                            --minheight: 150px;
+                        }
+                    }
+                }
+            }
+        });
+    }
+};

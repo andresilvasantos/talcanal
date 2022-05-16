@@ -1,0 +1,211 @@
+import appm from 'js/app-manager'
+
+class {
+    onCreate() {
+        this.state = {
+            searching: false
+        }
+
+        this.pinged = this.pinged.bind(this)
+        this.pingStopped = this.pingStopped.bind(this)
+    }
+
+    onMount() {
+        appm.on('pingRandomChatSuccess', this.pinged)
+        appm.on('stopRandomChatSuccess', this.pingStopped)
+    }
+
+    onDestroy() {
+        if(this.state.searching) {
+            this.cancel()
+        }
+
+        appm.off('pingRandomChatSuccess', this.pinged)
+        appm.off('stopRandomChatSuccess', this.pingStopped)
+    }
+
+    // Getters & Setters.
+
+    setData(start) {
+        if(start) {
+            this.start()
+        }
+    }
+
+    // Functions.
+
+    cancel() {
+        this.state.searching = false
+
+        appm.stopRandomChat()
+        appm.addAnalyticsEvent('randomChat', 'cancelSearch')
+    }
+
+    pinged(data) {
+        if(!this.state.searching) {
+            return
+        }
+
+        if(data.status == 'started') {
+            this.state.searching = false
+
+            appm.openPage('randomChat', 'chat', true, data.idChat)
+        }
+    }
+
+    pingStopped() {
+        this.state.searching = false
+    }
+
+    start() {
+        if(this.state.searching) {
+            return
+        }
+
+        if(!appm.isUserSignedIn()) {
+            return appm.showPopup('auth')
+        }
+
+        this.state.searching = true
+
+        appm.startRandomChat()
+        appm.addAnalyticsEvent('randomChat', 'startSearch')
+    }
+}
+
+$ const trIntro = appm.tr('randomChat.intro') || {}
+
+<pane-default.pane-randomchat-intro class=input.class noBar>
+    <@contents>
+        <image.banner.cover lazyload src='/assets/images/randomchat/banner.jpg' />
+
+        <div.wrapper>
+            <div.heading>
+                <text-title.title.big>
+                    ${trIntro.title}
+                </text-title>
+
+                <text-title.subtitle.medium>
+                    ${trIntro.subTitle}
+                </text-title>
+            </div>
+
+            <if(state.searching)>
+                <div.circle>
+                    <icon name='loading' />
+
+                    <div.filler />
+                </div>
+
+                <text-title.status.medium>
+                    ${trIntro.textSearching}
+                </text-title>
+
+                <button-text.round.big
+                    text=trIntro.buttonCancel
+                    on-click('cancel')
+                />
+            </if>
+            <else>
+                <text-p.text>
+                    $!{trIntro.text}
+                </text-p>
+
+                <button-text.round.big
+                    text=trIntro.buttonStart
+                    on-click('start')
+                />
+            </else>
+        </div>
+    </@contents>
+</pane-default>
+
+style.less {
+    .pane-default.pane-randomchat-intro {
+        --banner-height: 240px;
+        --circle-bordersize: 5px;
+        --circle-margintop: var(--spacing);
+        --circle-size: 150px;
+        --heading-spacing: 20px;
+        --padding: var(--app-padding-bigger);
+        --spacing: 40px;
+
+        >.contents {
+            >.banner {
+                height: var(--banner-height);
+            }
+
+            >.wrapper {
+                align-items: center;
+                display: flex;
+                flex-direction: column;
+                gap: var(--spacing);
+                justify-content: center;
+                padding: var(--padding);
+
+                >.heading {
+                    display: flex;
+                    flex-direction: column;
+                    gap: var(--heading-spacing);
+                    text-align: center;
+
+                    >.title {
+                        color: var(--color-text4);
+                    }
+
+                    >.subtitle {
+                        color: var(--color-text2);
+                    }
+                }
+
+                >.circle {
+                    margin-top: var(--circle-margintop);
+                    position: relative;
+                    .size(var(--circle-size));
+
+                    >.icon {
+                        color: var(--color-border3);
+                        .size(100%);
+                        .svg-loading();
+                    }
+
+                    >.filler {
+                        background-color: var(--color-background2);
+                        border-radius: 50%;
+                        .absolute-fill(var(--circle-bordersize));
+                    }
+                }
+
+                >.text {
+                    color: var(--color-text2);
+                }
+
+                >.status {
+                    color: var(--color-text2);
+                }
+            }
+        }
+
+        // Media Queries.
+
+        .r-max(@break-xl, {
+            --banner-height: 200px;
+        });
+
+        .r-max(@break-ms, {
+            --banner-height: 170px;
+            --heading-spacing: 15px;
+            --spacing: 30px;
+        });
+
+        .r-max(@break-sm, {
+            --banner-height: 150px;
+            --heading-spacing: 10px;
+            --spacing: 25px;
+        });
+
+        .r-max(@break-xs, {
+            --banner-height: 125px;
+        });
+    }
+};

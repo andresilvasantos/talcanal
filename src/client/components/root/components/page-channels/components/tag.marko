@@ -1,0 +1,74 @@
+$ const tag = input.tag || {}
+
+<button-default.tag
+    class=input.class
+    draggable=input.draggable
+    style=`background-color: var(--color-tags-${tag.color})`
+    on-click('emit', 'click')
+    on-middleClick('emit', 'middleClick')
+    on-dragend('emit', 'dragEnd')
+    on-dragover('emit', 'dragOver')
+    on-dragstart('emit', 'dragStart')
+>
+    ${tag.name || 'Nova etiqueta'}
+
+    <${data.renderBody} />
+</button-default>
+
+style.less {
+    .tag {
+        --borderradius: 4px;
+        --font-size: 13px;
+        --height: 20px;
+        --padding: 2px 5px;
+        --spacing: 10px;
+
+        align-items: center;
+        border-radius: var(--borderradius);
+        color: @color-darkcontrast;
+        display: flex;
+        font-family: @font-medium;
+        font-size: var(--font-size);
+        gap: var(--spacing);
+        min-height: var(--height);
+        padding: var(--padding);
+        .flex-center();
+
+        &.big {
+            --borderradius: var(--app-borderradius);
+            --font-size: 16px;
+            --height: 36px;
+            --padding: 8px 15px;
+        }
+
+        // Media queries.
+
+        .r-max(@break-lg, {
+            --font-size: 12px;
+            --height: 18px;
+
+            &.big {
+                --font-size: 15px;
+                --height: 32px;
+                --padding: 6px 12px;
+            }
+        });
+
+        .r-max(@break-sm, {
+            &.big {
+                --font-size: 14px;
+                --height: 28px;
+                --padding: 5px 10px;
+            }
+        });
+
+        .r-max(@break-xs, {
+            --font-size: 11px;
+            --height: 16px;
+
+            &.big {
+                --font-size: 13px;
+            }
+        });
+    }
+};

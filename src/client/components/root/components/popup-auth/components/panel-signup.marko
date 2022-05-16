@@ -1,0 +1,218 @@
+import appm from 'js/app-manager'
+import { validateEmail, validatePassword, validateUsername } from 'js/utils'
+
+class {
+    onCreate() {
+        this.state = {
+            passwordVisible: false,
+            status: 2
+        }
+
+        this.signedUp = this.signedUp.bind(this)
+        this.signUpError = this.signUpError.bind(this)
+    }
+
+    onMount() {
+        this.emailComponent = this.getComponent('inputEmail')
+        this.errorMessages = appm.tr('status')
+        this.passwordComponent = this.getComponent('inputPassword')
+        this.passwordRetypeComponent = this.getComponent('inputPasswordRetype')
+        this.statusMessage = this.getComponent('statusMessage')
+        this.usernameComponent = this.getComponent('inputUsername')
+
+        appm.on('signedUp', this.signedUp)
+        appm.on('signUpError', this.signUpError)
+    }
+
+    onDestroy() {
+        appm.off('signedUp', this.signedUp)
+        appm.off('signUpError', this.signUpError)
+    }
+
+    // Functions
+
+    keyPressed(event) {
+        switch(event.keyCode) {
+            case 27: // Escape
+                this.emit('closeRequested')
+                break
+            case 13:
+                this.submitRequested()
+                break
+        }
+    }
+
+    signedUp() {
+        this.emit('showActivate')
+    }
+
+    signUpError(error) {
+        switch(error) {
+        case 1:
+            this.usernameComponent.setValid(false)
+            this.statusMessage.setMessage(this.errorMessages.usernameAlreadyLinked)
+            break
+        case 2:
+            this.emailComponent.setValid(false)
+            this.statusMessage.setMessage(this.errorMessages.emailAlreadyLinked)
+            break
+        case -100:
+            this.statusMessage.setMessage(this.errorMessages.problemReachingServers)
+            break
+        default:
+            this.statusMessage.setMessage(this.errorMessages.problemUnknown)
+            break
+        }
+
+        this.state.status = -1
+    }
+
+    submitRequested() {
+        if(this.state.status == 1) {
+            return
+        }
+
+        this.usernameComponent.setValid(true)
+        this.emailComponent.setValid(true)
+        this.passwordComponent.setValid(true)
+        this.passwordRetypeComponent.setValid(true)
+
+        const email = this.emailComponent.getValue().trim()
+        const password = this.passwordComponent.getValue()
+        const passwordRetype = this.passwordRetypeComponent.getValue()
+        const username = this.usernameComponent.getValue().trim()
+
+        this.statusMessage.hide()
+
+        let validData = true
+
+        if(!validateUsername(username)) {
+            this.usernameComponent.setValid(false, this.errorMessages.invalidUsername)
+            validData = false
+        }
+
+        if(!validateEmail(email)) {
+            this.emailComponent.setValid(false, this.errorMessages.invalidEmail)
+            validData = false
+        }
+
+        if(!validatePassword(password)) {
+            this.passwordComponent.setValid(false, this.errorMessages.invalidPassword)
+            validData = false
+        }
+        else if(password != passwordRetype) {
+            this.passwordRetypeComponent.setValid(false, this.errorMessages.passwordConfirmationMismatch)
+            validData = false
+        }
+
+        if(!validData) {
+            return
+        }
+
+        this.state.status = 1
+
+        appm.signUp(username, email, password)
+    }
+
+    togglePasswordVisibility() {
+        this.state.passwordVisible = !this.state.passwordVisible
+    }
+}
+
+$ const trGeneric = appm.tr('generic')
+$ const trSignUp = appm.tr('auth.signUp')
+$ const signedUp = state.status == 2
+
+<panel-auth.panel-signup
+    class=input.class
+    idImageBanner='signup'
+    text=trSignUp.text
+>
+    <div.inputs>
+        <input-text.big
+            key='inputUsername'
+            icon='userId'
+            maxlength=20
+            noExternalUpdate
+            placeholder=trGeneric.username
+            on-keyup('keyPressed')
+        />
+
+        <input-text.big
+            key='inputEmail'
+            icon='envelope'
+            maxlength=320
+            noExternalUpdate
+            placeholder=trGeneric.email
+            on-keyup('keyPressed')
+        />
+
+        <input-password.big
+            key='inputPassword'
+            charsVisible=state.passwordVisible
+            placeholder=trGeneric.password
+            on-keyPressed('keyPressed')
+            on-toggleVisibility('togglePasswordVisibility')
+        />
+
+        <input-password.big
+            key='inputPasswordRetype'
+            charsVisible=state.passwordVisible
+            placeholder=trGeneric.passwordRetype
+            on-keyPressed('keyPressed')
+            on-toggleVisibility('togglePasswordVisibility')
+        />
+    </div>
+
+    <div.wrapper-submit>
+        <text-agreement on-closeRequested('emit', 'closeRequested') />
+
+        <status-message key='statusMessage' />
+
+        <button-submit.button-signup.big
+            loading=(state.status == 1)
+            text=trSignUp.buttonSignUp
+            on-click('submitRequested')
+        />
+    </div>
+
+    <div.other>
+        <button-text
+            icon='user'
+            text='Iniciar sessão'
+            on-click('emit', 'showSignIn')
+        />
+    </div>
+</panel-auth>
+
+style.less {
+    .panel-signup {
+        >.wrapper {
+            >.inputs {
+                display: flex;
+                flex-direction: column;
+                gap: var(--inputs-spacing);
+                width: 100%;
+            }
+
+            >.wrapper-submit {
+                align-items: flex-start;
+                display: flex;
+                flex-direction: column;
+                gap: 20px;
+            }
+        }
+
+        // Media queries
+
+        .r-max(@break-ms, {
+            >.wrapper-image {
+                >.banner {
+                    >img {
+                        object-position: 50% 72%;
+                    }
+                }
+            }
+        });
+    }
+};

@@ -1,0 +1,54 @@
+class {
+    // Getters & Setters.
+
+    setData(args, allowBack = false) {
+        const pane = this.getComponent('pane')
+
+        if(!pane) {
+            return
+        }
+
+        const paneDefault = pane.getComponent('root')
+
+        if(pane.setData) {
+            pane.setData(...args)
+        }
+
+        if(paneDefault) {
+            paneDefault.setAllowBack(allowBack)
+        }
+    }
+
+    // Functions.
+
+    handleScroll() {
+        const pane = this.getComponent('pane')
+
+        if(!pane) {
+            return
+        }
+
+        const paneDefault = pane.getComponent('root')
+
+        if(paneDefault) {
+            paneDefault.handleScroll()
+        }
+
+        if(pane.checkLoadMore) {
+            pane.checkLoadMore()
+        }
+    }
+}
+
+<if(input.id == 'terms')>
+    <pane-terms key='pane' />
+</if>
+<else-if(input.id == 'privacy')>
+    <pane-privacy key='pane' />
+</else-if>
+<else-if(input.id == 'transparency')>
+    <pane-transparency key='pane' />
+</else-if>
+<else>
+    <pane-about key='pane' />
+</else>

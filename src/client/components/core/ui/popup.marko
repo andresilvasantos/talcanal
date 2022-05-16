@@ -1,0 +1,241 @@
+import animm from 'js/anim-manager.js'
+import appm from 'js/app-manager'
+
+class {
+    onCreate() {
+        this.state = {
+            visible: false
+        }
+    }
+
+    onMount() {
+        this.root = this.getEl()
+    }
+
+    onDestroy() {
+        animm.remove(this.root)
+    }
+
+    // Functions.
+
+    backgroundClick(event) {
+        event.stopPropagation()
+
+        // This validation was needed due to wrong behavior in chrome.
+        // Background click was being triggered when only mouse released.
+        if(!this.backgroundPressed) {
+            return
+        }
+
+        this.backgroundPressed = false
+
+        if(this.allowedToHide) {
+            this.hide()
+        }
+        else {
+            return this.emit('hideRequested')
+        }
+    }
+
+    backgroundMousePressed() {
+        this.backgroundPressed = true
+    }
+
+    closeButtonPressed() {
+        if(this.allowedToHide) {
+            this.hide()
+        }
+        else {
+            return this.emit('hideRequested')
+        }
+    }
+
+    hide() {
+        appm.emit('popupHiding')
+
+        animm.remove(this.root)
+        animm.add(this.root, { opacity: 0, duration: 0.4, easeOut: 'quart' }, () => {
+            this.state.visible = false
+            this.root.style.display = 'none'
+            this.root.firstChild.removeEventListener('scroll', appm.scrolling)
+
+            this.emit('hidden')
+            appm.emit('popupHidden')
+        })
+    }
+
+    keyPressed(event) {
+        if(event.keyCode == 27) { // Escape.
+            this.hide()
+            return
+        }
+
+        this.emit('keyPressed', event)
+    }
+
+    panelClick(event) {
+        this.backgroundPressed = false
+        event.stopPropagation()
+    }
+
+    panelMousePressed(event) {
+        this.backgroundPressed = false
+        event.stopPropagation()
+    }
+
+    show(allowedToHide = true) {
+        this.state.visible = true
+        this.allowedToHide = allowedToHide
+
+        appm.emit('popupVisible')
+
+        this.update()
+        this.root.style.display = 'unset'
+        this.root.focus()
+        this.root.firstChild.scroll(0, 0)
+
+        animm.remove(this.root)
+        animm.add(this.root, { opacity: 1, duration: 0.4, easeOut: 'quart' })
+
+        this.root.firstChild.addEventListener('scroll', appm.scrolling)
+    }
+}
+
+<div.popup class=input.class tabindex=-1 on-keyup('keyPressed')>
+    <if(state.visible)>
+        <div.wrapper on-click('backgroundClick') on-mousedown('backgroundMousePressed')>
+            <div.panel on-click('panelClick') on-mousedown('panelMousePressed')>
+                <div.bar-title>
+                    <text-title.title>
+                        ${input.title}
+                    </text-title>
+
+                    <div.controls>
+                        <${data.controls} />
+
+                        <button-icon.button-close icon='close' on-click('closeButtonPressed') />
+                    </div>
+                </div>
+
+                <${data.renderBody} />
+
+                <if(input.form)>
+                    <div.form key='form'>
+                        <${input.form} />
+                    </div>
+                </if>
+            </div>
+        </div>
+    </if>
+</div>
+
+style.less {
+    .popup {
+        --bartitle-height: 100px;
+        --bartitle-spacing: 20px;
+        --form-spacing: 30px;
+        --padding-h: 30px;
+        --panel-margin-v: 50px;
+        --panel-minheight: 90px;
+        --panel-width: 840px;
+
+        display: none;
+        .fixed-fill(7);
+
+        >.wrapper {
+            align-items: center;
+            background-color: rgba(var(--color-background1-rgb), 0.7);
+            display: flex;
+            justify-content: center;
+            overflow-y: auto;
+            .absolute-fill();
+
+            >.panel {
+                background-color: var(--color-background2);
+                border: 1px solid var(--color-border1);
+                border-radius: var(--app-borderradius3);
+                display: flex;
+                flex-direction: column;
+                margin: var(--panel-margin-v) 0;
+                min-height: var(--panel-minheight);
+                //overflow: hidden;
+                position: relative;
+                width: var(--panel-width);
+                .box-shadow(0 4px 10px 0 fade(@color-black, 25));
+
+                >.bar-title {
+                    align-items: center;
+                    background-color: var(--color-background2);
+                    border-bottom: 1px solid var(--color-border1);
+                    border-top-left-radius: var(--app-borderradius3);
+                    border-top-right-radius: var(--app-borderradius3);
+                    display: flex;
+                    gap: var(--bartitle-spacing);
+                    justify-content: space-between;
+                    min-height: var(--bartitle-height);
+                    padding: 15px var(--padding-h); // TODO
+                    position: sticky;
+                    top: 0;
+                    z-index: 5;
+
+                    >.title {
+                        color: var(--color-text4);
+                    }
+
+                    >.controls {
+                        display: flex;
+                        gap: var(--controls-spacing);
+                    }
+                }
+
+                >.form {
+                    display: flex;
+                    flex-direction: column;
+                    gap: var(--form-spacing);
+                    padding: var(--app-padding-bigger);
+                }
+            }
+        }
+
+        &.align-top {
+            >.wrapper {
+                align-items: flex-start;
+            }
+        }
+
+        // Media queries.
+
+        .r-max(@break-md, {
+            --bartitle-height: 80px;
+            --borderradius: 25px;
+            --padding-h: 35px;
+            --panel-width: 750px;
+
+            >.wrapper {
+                align-items: flex-start;
+            }
+        });
+
+        .r-max(@break-ms, {
+            --bartitle-height: 70px;
+            --borderradius: 20px;
+            --padding-h: 30px;
+            --panel-margin-v: 40px;
+            --panel-width: 85%;
+        });
+
+        .r-max(@break-sm, {
+            --bartitle-height: 60px;
+            --borderradius: 15px;
+            --form-spacing: 20px;
+            --padding-h: 20px;
+            --panel-margin-v: 30px;
+            --panel-width: calc(100% - 20px);
+        });
+
+        .r-max(@break-xs, {
+            --panel-width: calc(100% - 15px);
+            --panel-margin-v: 15px;
+        });
+    }
+};

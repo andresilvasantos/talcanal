@@ -1,0 +1,258 @@
+import appm from 'js/app-manager'
+import { abbreviateNumber, dateToTime, processObjectsTr } from 'js/utils'
+
+class {
+    onCreate(input) {
+        this.state = {
+            user: input.user || {}
+        }
+    }
+
+    onInput(input) {
+        this.state.user = input.user || {}
+
+        if(this.mounted) {
+            this.setStateDirty('user')
+        }
+    }
+
+    onMount() {
+        this.mounted = true
+    }
+}
+
+$ const processOptions = (user, isBlocked, isSelf, isSuper, trOptions) => {
+    const options = []
+
+    options.push({
+        id: 'share',
+        icon: 'send',
+        children: [{
+            id: 'copyUrl',
+            icon: 'link'
+        }, {
+            id: 'message',
+            icon: 'envelope'
+        }]
+    })
+
+    if(!isSelf) {
+        if(appm.isUserSignedIn()) {
+            options.push({
+                id: isBlocked ? 'unblock' : 'block',
+                danger: !isBlocked,
+                icon: isBlocked ? 'check' : 'block',
+                special: isBlocked
+            })
+        }
+
+        options.push({
+            id: 'report',
+            danger: true,
+            icon: 'flag'
+        })
+
+        if(isSuper) {
+            const isBanned = user.status == 'banned'
+
+            options.push({
+                id: isBanned ? 'unban' : 'ban',
+                danger: !isBanned,
+                icon: isBanned ? 'check' : 'skull',
+                special: isBanned
+            })
+        }
+    }
+
+    return processObjectsTr(options, trOptions)
+}
+
+$ const user = state.user || {}
+$ const trUser = appm.tr('channels.user') || {}
+$ const trTooltips = trUser || {}
+
+<button-default.card-user
+    class=input.class
+    on-click('emit', 'openRequested', false)
+    on-middleClick('emit', 'openRequested', true)
+>
+    <image-circle.big icon='user' image=user.image />
+
+    <div.info>
+        <div.bar>
+            <div.wrapper-username>
+                <if(input.isSuper && user.flags && user.flags.length)>
+                    <div.wrapper-flag class=input.class>
+                        <span.reports-count>
+                            ${user.flags.length}
+                        </span>
+
+                        <icon.icon-statuspost.danger class=input.class name='flag' />
+                    </div>
+                </if>
+
+                <span.username>
+                    ${user.username}
+                </span>
+            </div>
+
+            <div.controls>
+                <if(!input.isSelf && !user.chatRequestsDisabled)>
+                    <button-icon
+                        icon='chat'
+                        tooltip=trTooltips.chat
+                        on-click('emit', 'chatRequested')
+                    />
+                </if>
+
+                <button-icon-menu.open-left
+                    icon='ellipsis'
+                    iconRotation=90
+                    options=processOptions(
+                        user,
+                        input.isBlocked,
+                        input.isSelf,
+                        input.isSuper,
+                        trUser.controls
+                    )
+                    tooltip=trTooltips.more
+                    on-optionRequested('emit', 'controlRequested')
+                />
+            </div>
+        </div>
+
+        <div.details>
+            <icon-text.fill icon='karma' text=user.karma />
+
+            <icon-text.fill icon='cake' text=dateToTime(user.createdAt, false) />
+
+            <icon-text.fill icon='post' text=abbreviateNumber(user.countPosts) />
+
+            <icon-text.fill icon='comment' text=abbreviateNumber(user.countComments) />
+
+            <if(user.channelsModerator && user.channelsModerator.length)>
+                <icon-text.fill icon='shield' text=abbreviateNumber(user.channelsModerator.length) />
+            </if>
+        </div>
+
+        <if(user.bio)>
+            <span.bio>
+                ${user.bio.replace(/<(.|\n)*?>/g, '')}
+            </span>
+        </if>
+    </div>
+
+</button-default>
+
+style.less {
+    .card-user {
+        --bio-fontsize: 15px;
+        --details-spacing: 10px;
+        --height: 130px;
+        --info-spacing: 15px;
+        --name-fontsize: 22px;
+        --padding: 15px;
+        --spacing: 20px;
+
+        border-bottom: 1px solid var(--color-border1);
+        display: flex;
+        gap: var(--spacing);
+        min-height: var(--height);
+        padding: var(--padding);
+        .transition(background-color 0.2s ease-out);
+
+        >.image-circle {
+            flex-shrink: 0;
+        }
+
+        >.info {
+            display: flex;
+            flex-direction: column;
+            flex-grow: 1;
+            gap: var(--info-spacing);
+            height: 100%;
+            justify-content: space-between;
+
+            >.bar {
+                align-items: center;
+                display: flex;
+                justify-content: space-between;
+
+                >.wrapper-username {
+                    align-items: center;
+                    display: flex;
+                    gap: 10px;
+
+                    >.username {
+                        color: var(--color-text3);
+                        font-family: @font-medium;
+                        font-size: var(--name-fontsize);
+                        .transition(color 0.2s ease-out);
+                    }
+                }
+
+                >.controls {
+                    align-items: center;
+                    display: flex;
+                    gap: var(--controls-spacing);
+                }
+            }
+
+            >.details {
+                align-items: center;
+                display: flex;
+                flex-wrap: wrap;
+                gap: var(--details-spacing);
+            }
+
+            >.bio {
+                color: var(--color-text2);
+                font-size: var(--bio-fontsize);
+                .transition(color 0.2s ease-out);
+            }
+        }
+
+        &:hover,
+        &.selected {
+            background-color: var(--color-button1);
+
+            >.thumbnail {
+                border-color: var(--color-border2);
+                opacity: 1;
+            }
+
+            >.info {
+                >.bar {
+                    >.wrapper-username {
+                        >.username {
+                            color: var(--color-text4);
+                        }
+                    }
+                }
+
+                >.details {
+                    >.icon-text {
+                        background-color: var(--color-background2);
+                    }
+                }
+
+                >.description {
+                    color: var(--color-text3);
+                    word-wrap: anywhere;
+                }
+            }
+        }
+
+        // Media queries.
+
+        .r-max(@break-xs, {
+            --bio-fontsize: 13px;
+            --details-spacing: 5px;
+            --height: unset;
+            --info-spacing: 10px;
+            --name-fontsize: 16px;
+            --padding: 10px;
+            --spacing: 10px;
+        });
+    }
+};

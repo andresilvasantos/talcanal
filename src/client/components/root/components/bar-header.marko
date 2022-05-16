@@ -1,0 +1,291 @@
+import appm from 'js/app-manager'
+import { abbreviateNumber, getCookie, setCookie } from 'js/utils'
+
+class {
+    onCreate() {
+        this.state = {
+            countModNotifications: 0,
+            countMessagesNew: 0,
+            sidebarVisible: appm.isSidebarVisible(),
+            theme: appm.getTheme(),
+            user: appm.getUser()
+        }
+
+        this.sidebarVisibilityChanged = this.sidebarVisibilityChanged.bind(this)
+        this.userChanged = this.userChanged.bind(this)
+        this.userUpdated = this.userUpdated.bind(this)
+    }
+
+    onMount() {
+        if(this.state.user) {
+            this.updateCountMessagesNew()
+
+            if(appm.getChannelsMod()) {
+                this.updateCountModNotifications()
+            }
+        }
+
+        this.state.sidebarVisible = appm.isSidebarVisible()
+
+        appm.on('pingAccountSuccess', this.userUpdated)
+        appm.on('sidebarVisibilityChanged', this.sidebarVisibilityChanged)
+        appm.on('userChanged', this.userChanged)
+        appm.on('userUpdated', this.userUpdated)
+    }
+
+    onDestroy() {
+        appm.off('pingAccountSuccess', this.userUpdated)
+        appm.off('sidebarVisibilityChanged', this.sidebarVisibilityChanged)
+        appm.off('userChanged', this.userChanged)
+        appm.off('userUpdated', this.userUpdated)
+    }
+
+    // Getters & Setters.
+
+    setTheme(theme) {
+        this.state.theme = theme
+
+        appm.setTheme(theme)
+        // This is only for unregistered users.
+        setCookie('theme', theme)
+        appm.addAnalyticsEvent('theme', 'change', theme)
+    }
+
+    // Functions.
+
+    authRequested() {
+        appm.showPopup('auth')
+    }
+
+    channelsRequested(newTab = false) {
+        appm.openPage('channels', '', { allowBack: true, newTab })
+        appm.addAnalyticsEvent('barHeader', 'openChannels')
+    }
+
+    chatsRequested(newTab = false) {
+        appm.openPage('chats', '', { allowBack: true, newTab })
+        appm.addAnalyticsEvent('barHeader', 'openChats')
+        //this.emit('closeRequested')
+    }
+
+    notificationsRequested(newTab = false) {
+        appm.openPage('notifications', '', { allowBack: true, newTab })
+        appm.addAnalyticsEvent('barHeader', 'openNotifications')
+    }
+
+    sidebarVisibilityChanged(visible) {
+        this.state.sidebarVisible = visible
+    }
+
+    toggleSidebarRequested() {
+        appm.emit('toggleSidebar')
+    }
+
+    updateCountMessagesNew() {
+        if(!this.state.user) {
+            return
+        }
+
+        let countMessagesNew = 0
+        const chatCounters = this.state.user.messagesNew || []
+
+        for(const chatCounter of chatCounters) {
+            countMessagesNew += chatCounter.count
+        }
+
+        this.state.countMessagesNew = countMessagesNew
+    }
+
+    updateCountModNotifications() {
+        this.state.countModNotifications = 0
+
+        const infoChannels = appm.getDataChannelsMod()
+
+        if(infoChannels) {
+            for(const idChannel of Object.keys(infoChannels)) {
+                const info = infoChannels[idChannel]
+
+                this.state.countModNotifications += (
+                    (info.countCommentsQueue || 0) +
+                    (info.countMemberRequests || 0) +
+                    (info.countPostsQueue || 0)
+                )
+            }
+        }
+    }
+
+    userChanged(user) {
+        this.state.user = user
+        this.state.theme = appm.getTheme()
+
+        this.setStateDirty('user')
+    }
+
+    userUpdated(user) {
+        this.state.user = user
+
+        if(this.state.user) {
+            this.updateCountMessagesNew()
+
+            if(appm.getChannelsMod()) {
+                this.updateCountModNotifications()
+            }
+        }
+
+        this.setStateDirty('user')
+    }
+}
+
+$ const trTooltips = appm.tr('generic.tooltips') || {}
+
+<div.bar-header class=input.class>
+    <div.controls>
+        <button-icon
+            class=(state.sidebarVisible ? 'selected' : '')
+            icon='menu'
+            tooltip=(state.sidebarVisible ? trTooltips.sidebarHide : trTooltips.sidebarShow)
+            on-click('toggleSidebarRequested')
+        />
+
+        <if(state.user && appm.getChannelsMod())>
+            <button-channelsmod
+                count=state.countModNotifications
+                icon='shield'
+                tooltip=trTooltips.channelsMod
+            />
+        </if>
+
+        <if(input.disableRefresh)>
+            <button-icon
+                icon='channel'
+                tooltip=trTooltips.channels
+                on-click('channelsRequested', false)
+                on-middleClick('channelsRequested', true)
+            />
+        </if>
+        <else>
+            <button-icon
+                icon='sync'
+                tooltip=trTooltips.refresh
+                on-click('emit', 'refreshRequested')
+            />
+        </else>
+    </div>
+
+    <button-default.button-logo
+            on-click('channelsRequested', false)
+            on-middleClick('channelsRequested', true)
+        >
+        <icon.logo name='logoSymbol' />
+    </button-default>
+
+    <div.controls>
+        <if(state.user)>
+            <button-icon
+                class=(input.idPage == 'notifications' ? 'selected' : '')
+                icon='bell'
+                tooltip=trTooltips.notifications
+                on-click('notificationsRequested', false)
+                on-middleClick('notificationsRequested', true)
+            >
+                <counter-button count=abbreviateNumber(state.user.countNotificationsNew) />
+            </button-icon>
+
+            <button-icon
+                class=(input.idPage == 'chats' ? 'selected' : '')
+                icon='chat'
+                tooltip=trTooltips.chats
+                on-click('chatsRequested', false)
+                on-middleClick('chatsRequested', true)
+            >
+                <counter-button count=abbreviateNumber(state.countMessagesNew) />
+            </button-icon>
+
+            $ const isSuper = state.user.super && state.user.superActive
+
+            <button-profile
+                class=[isSuper ? 'special' : '', input.idPage == 'profile' ? 'selected' : '']
+                icon=(isSuper ? 'key' : 'user')
+                user=state.user
+                tooltip=trTooltips.profile
+            />
+        </if>
+        <else>
+            <if(state.theme == 'light')>
+                <button-icon
+                    icon='moon'
+                    tooltip='Tema Escuro'
+                    on-click('setTheme', 'dark')
+                />
+            </if>
+            <else>
+                <button-icon
+                    icon='sun'
+                    tooltip='Tema Claro'
+                    on-click('setTheme', 'light')
+                />
+            </else>
+
+            <button-icon
+                icon='user'
+                tooltip=trTooltips.auth
+                on-click('authRequested')
+            />
+        </else>
+    </div>
+</div>
+
+style.less {
+    .bar-header {
+        --logo-height: 35px;
+        --spacing: 15px;
+
+        align-items: center;
+        border-bottom: 1px solid var(--color-border1);
+        display: flex;
+        gap: var(--spacing);
+        justify-content: space-between;
+        position: relative;
+        padding: 0 var(--app-padding);
+
+        .logo() {
+            >.logo {
+                color: var(--color-text3);
+                display: flex;
+                height: var(--logo-height);
+                .transition(color 0.2s ease-out);
+            }
+
+            &:hover {
+                >.logo {
+                    color: var(--color-text5);
+                }
+            }
+        }
+
+        >.controls {
+            align-items: center;
+            display: flex;
+            gap: var(--controls-spacing);
+        }
+
+        >.button-logo {
+            .absolute-center();
+            .logo();
+        }
+
+        // Media queries
+
+        .r-max(@break-md, {
+            --logo-height: 32px;
+        });
+
+        .r-max(@break-sm, {
+            --logo-height: 30px;
+        });
+
+        .r-max(@break-xs, {
+            --logo-height: 26px;
+        });
+    }
+};

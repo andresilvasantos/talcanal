@@ -1,0 +1,185 @@
+import { abbreviateNumber } from 'js/utils'
+
+class {
+    click(event) {
+        event.stopPropagation()
+    }
+}
+
+<div.vote
+    class=[
+        input.class,
+        input.vertical ? 'vertical' : '',
+        input.upvoted ? 'upvoted' : (input.downvoted ? 'downvoted' : '')
+    ]
+    on-click('click')
+>
+    <button-icon.button-up.bg-transparent
+        class=input.class
+        disabled=input.disabled
+        icon='arrow'
+        iconRotation=-90
+        on-click('emit', 'voteRequested', true)
+    />
+
+    <span.count class=(input.disabled ? 'disabled' : '')>
+        ${abbreviateNumber(input.count)}
+    </span>
+
+    <button-icon.button-down.bg-transparent
+        class=input.class
+        disabled=input.disabled
+        icon='arrow'
+        iconRotation=90
+        on-click('emit', 'voteRequested', false)
+    />
+</div>
+
+style.less {
+    .vote {
+        --count-fontsize: 18px;
+        --flat-padding-side: 8px;
+        --flat-padding-vert: 5px;
+        --spacing: 5px;
+
+        // HORIZONTAL
+        align-items: center;
+        display: flex;
+        gap: var(--spacing);
+
+        >.button-icon {
+            --color: var(--color-icon3);
+
+            &:hover {
+                &.button-up {
+                    --color: var(--color-voteup);
+                }
+
+                &.button-down {
+                    --color: var(--color-votedown);
+                }
+            }
+        }
+
+        >.count {
+            color: var(--color-text4);
+            font-family: @font-medium;
+            font-size: var(--count-fontsize);
+            .transition(color 0.2s ease-out);
+
+            &.disabled {
+                opacity: 0.6;
+            }
+        }
+
+        &.vertical {
+            --minheight: 50px;
+            --spacing: 5px;
+
+            flex-direction: column;
+            flex-shrink: 0;
+            //justify-content: center;
+
+            >.button-icon {
+                background-color: transparent;
+                border-color: transparent;
+                flex-direction: column;
+                flex-grow: 1;
+                height: unset;
+                min-height: var(--minheight);
+                padding: 0;
+                width: 100%;
+
+                &.button-up {
+                    justify-content: flex-end;
+                    padding-bottom: var(--spacing);
+
+                    &:hover {
+                        --color: var(--color-voteup);
+                    }
+                }
+
+                &.button-down {
+                    justify-content: flex-start;
+                    padding-top: var(--spacing);
+
+                    &:hover {
+                        --color: var(--color-votedown);
+                    }
+                }
+            }
+
+            >.count {
+                color: var(--color-text3);
+                font-family: @font-medium;
+            }
+        }
+
+        &.small {
+            --count-fontsize: 15px;
+            --spacing: 0;
+        }
+
+        &.medium {
+            --count-fontsize: 16px;
+            --spacing: 8px;
+        }
+
+        &.flat {
+            >.button-icon {
+                padding-bottom: var(--flat-padding-vert);
+                padding-top: var(--flat-padding-vert);
+
+                --size: unset;
+            }
+
+            >.button-up {
+                padding-right: var(--flat-padding-side);
+            }
+
+            >.button-down {
+                padding-left: var(--flat-padding-side);
+            }
+        }
+
+        &.upvoted {
+            >.count {
+                color: var(--color-voteup);
+            }
+
+            >.button-up {
+                --color: var(--color-voteup);
+            }
+        }
+
+        &.downvoted {
+            >.count {
+                color: var(--color-votedown);
+            }
+
+            >.button-down {
+                --color: var(--color-votedown);
+            }
+        }
+
+        // Media queries
+
+        .r-max(@break-xl, {
+            &.vertical {
+                --minheight: 45px;
+            }
+        });
+
+        .r-max(@break-md, {
+            &.vertical {
+                --minheight: 40px;
+            }
+        });
+
+        .r-max(@break-sm, {
+            &.vertical {
+                --minheight: 30px;
+            }
+        });
+    }
+};

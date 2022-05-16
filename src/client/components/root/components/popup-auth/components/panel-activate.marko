@@ -1,0 +1,17 @@
+import appm from 'js/app-manager'
+
+$ const trActivate = appm.tr('auth.activate')
+
+<panel-auth.panel-activate
+    class=input.class
+    idImageBanner='activate'
+    text=trActivate.text
+>
+    <button-text.big.strong text='Fechar' on-click('emit', 'closeRequested') />
+</panel-auth>
+
+style.less {
+    .panel-auth.panel-activate {
+        --heading-fontsize: 20px;
+    }
+};

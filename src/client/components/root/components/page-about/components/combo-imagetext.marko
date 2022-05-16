@@ -1,0 +1,60 @@
+<div.combo-imagetext class=(input.flipped ? 'flipped' : '')>
+    <div.frame>
+        <image.cover
+            lazyload
+            src=input.srcImage
+        />
+    </div>
+
+    <combo-titletextlink
+        hasLink=input.hasLink
+        link=input.link
+        text=input.text
+        textLink=input.textLink
+        title=input.title
+        on-linkRequested('emit', 'linkRequested')
+    />
+</div>
+
+style.less {
+    .combo-imagetext {
+        --frame-paddingtop: 100%;
+        --grid-count: 2;
+        --spacing: 40px;
+
+        align-items: center;
+        .grid(var(--grid-count), var(--spacing), var(--spacing));
+
+        >.frame {
+            border-radius: var(--app-borderradius2);
+            outline: 2px solid var(--color-border1);
+            overflow: hidden;
+            padding-top: var(--frame-paddingtop);
+            position: relative;
+
+            >.image {
+                .absolute-fill();
+            }
+        }
+
+        &.flipped {
+            >.frame {
+                order: 1;
+            }
+        }
+
+        // Media Queries.
+
+        .r-max(@break-xs, {
+            --frame-paddingtop: 80%;
+            --grid-count: 1;
+            --spacing: 20px;
+
+            &.flipped {
+                >.frame {
+                    order: unset;
+                }
+            }
+        });
+    }
+}

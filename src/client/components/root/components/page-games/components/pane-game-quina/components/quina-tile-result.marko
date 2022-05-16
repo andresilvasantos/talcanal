@@ -1,0 +1,69 @@
+<div.quina-tile-result class=[input.class, input.waiting ? 'waiting' : '']>
+    <for|index| from=0 to=4>
+        $ const right = index < input.pinsRight
+        $ const wrong = !right && index < input.pinsRight + input.pinsWrong
+
+        <div.pin class=(right ? 'right' : (wrong ? 'wrong' : '')) />
+    </for>
+</div>
+
+style.less {
+    .quina-tile-result {
+        background-color: var(--color-background3);
+        border-radius: var(--app-borderradius2);
+        position: relative;
+        .size(var(--tile-size));
+
+        >.pin {
+            border: none;
+            background-color: var(--color-background4);
+            border-radius: 50%;
+            position: absolute;
+            .size(var(--pin-size));
+
+            &.right {
+                background-color: var(--color-accent1);
+            }
+
+            &.wrong {
+                background-color: var(--color-accent2);
+            }
+
+            &:nth-child(1) {
+                left: var(--pin-margin);
+                top: var(--pin-margin);
+            }
+
+            &:nth-child(2) {
+                right: var(--pin-margin);
+                top: var(--pin-margin);
+            }
+
+            &:nth-child(3) {
+                left: 50%;
+                top: 50%;
+                .translate(-50%, -50%);
+            }
+
+            &:nth-child(4) {
+                left: var(--pin-margin);
+                bottom: var(--pin-margin);
+            }
+
+            &:nth-child(5) {
+                right: var(--pin-margin);
+                bottom: var(--pin-margin);
+            }
+        }
+
+        &.waiting {
+            background-color: transparent;
+            border: 1px solid var(--color-border1);
+
+            >.pin {
+                background-color: transparent;
+                border: 1px solid var(--color-border4);
+            }
+        }
+    }
+};

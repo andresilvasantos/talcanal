@@ -1,0 +1,1020 @@
+import appm from 'js/app-manager'
+import { commentsSettings, timers, urls } from 'js/default-vars'
+import { abbreviateNumber, dateToTime, elapsedDateToShortString, setCookie } from 'js/utils'
+
+static const sortOptions = ['top', 'new', 'trending']
+
+class {
+    onCreate() {
+        this.state = {
+            channel: {},
+            commenting: false,
+            comments: [],
+            countComments: 0,
+            editing: false,
+            editMode: false,
+            fetchingComments: true,
+            fetchingPost: false,
+            highlightComment: false,
+            indexSort: 0,
+            moderators: [],
+            post: {},
+            showOriginal: false,
+            user: appm.getUser()
+        }
+
+        this.approved = this.approved.bind(this)
+        this.commentCreated = this.commentCreated.bind(this)
+        this.createCommentError = this.createCommentError.bind(this)
+        this.favorited = this.favorited.bind(this)
+        this.itemDeleted = this.itemDeleted.bind(this)
+        this.itemsFetched = this.itemsFetched.bind(this)
+        this.locked = this.locked.bind(this)
+        this.rejected = this.rejected.bind(this)
+        this.updateError = this.updateError.bind(this)
+        this.updated = this.updated.bind(this)
+        this.userChanged = this.userChanged.bind(this)
+        this.userUpdated = this.userUpdated.bind(this)
+        this.voted = this.voted.bind(this)
+    }
+
+    onMount() {
+        appm.on('approveItemsSuccess', this.approved)
+        appm.on('createItemError', this.createCommentError)
+        appm.on('createItemSuccess', this.commentCreated)
+        appm.on('deleteItemSuccess', this.itemDeleted)
+        appm.on('favoriteItemSuccess', this.favorited)
+        appm.on('fetchItemsSuccess', this.itemsFetched)
+        appm.on('lockPostsSuccess', this.locked)
+        appm.on('rejectItemsSuccess', this.rejected)
+        appm.on('updateItemSuccess', this.updated)
+        appm.on('userChanged', this.userChanged)
+        appm.on('updateItemError', this.updateError)
+        appm.on('userUpdated', this.userUpdated)
+        appm.on('votePostSuccess', this.voted)
+    }
+
+    onDestroy() {
+        clearTimeout(this.timeoutBetweenCommentsFetches)
+
+        appm.off('approveItemsSuccess', this.approved)
+        appm.off('createItemError', this.createCommentError)
+        appm.off('createItemSuccess', this.commentCreated)
+        appm.off('deleteItemSuccess', this.itemDeleted)
+        appm.off('favoriteItemSuccess', this.favorited)
+        appm.off('fetchItemsSuccess', this.itemsFetched)
+        appm.off('lockPostsSuccess', this.locked)
+        appm.off('rejectItemsSuccess', this.rejected)
+        appm.off('updateItemError', this.updateError)
+        appm.off('updateItemSuccess', this.updated)
+        appm.off('userChanged', this.userChanged)
+        appm.off('userUpdated', this.userUpdated)
+        appm.off('votePostSuccess', this.voted)
+    }
+
+    // Getters & Setters.
+
+    setData(post, idCommentHighlight) {
+        // Specific comment highlight.
+        // "idCommentHighlight" is set to post on server.
+        if(post.idCommentHighlight) {
+            this.idCommentHighlight = post.idCommentHighlight
+            this.state.highlightComment = true
+
+            delete post.idCommentHighlight
+        }
+        else if(idCommentHighlight) {
+            this.idCommentHighlight = idCommentHighlight
+            this.state.highlightComment = true
+        }
+        else {
+            this.state.highlightComment = false
+        }
+
+        this.setPost(post)
+        this.fetchComments()
+    }
+
+    setPost(post) {
+        this.state.post = Object.assign({}, post)
+
+        // Post data might be incomplete coming from page returns for example.
+        if(!this.state.post.type) {
+            this.fetchPost()
+        }
+        else {
+            this.state.channel = this.state.post.channel || {}
+            this.state.moderators = this.state.channel.admins.concat(this.state.channel.moderators)
+        }
+    }
+
+    // Functions
+
+    approved(type, ids) {
+        if(type != 'posts' || !ids.includes(this.state.post.id)) {
+            return
+        }
+
+        this.state.post.status = 'approved'
+
+        this.setStateDirty('post')
+    }
+
+    approveRequested() {
+        appm.approveItems('posts', [this.state.post.id])
+    }
+
+    calculateCommentCollapsed(comment) {
+        comment.collapsed = (
+            (comment.parent && comment.parent.pinned) ||
+            comment.countVotes < commentsSettings.collapseIfVotesBelow ||
+            (comment.status != 'published' && comment.status != 'approved') ||
+            comment.depth > commentsSettings.collapseIfDepthAbove
+        )
+    }
+
+    cancelEditMode() {
+        this.state.editMode = false
+    }
+
+    channelRequested(newTab = false) {
+        appm.openPage('channels', 'channel', { allowBack: true, newTab }, this.state.channel)
+        appm.addAnalyticsEvent('post', 'viewChannel', this.state.channel.id)
+    }
+
+    comment() {
+        const commentComponent = this.getComponent('inputComment')
+
+        if(!commentComponent) {
+            return
+        }
+
+        const comment = commentComponent.getValue()
+
+        if(!comment.length) {
+            commentComponent.setValid(false)
+
+            return
+        }
+
+        const data = {
+            idPost: this.state.post.id,
+            text: comment
+        }
+
+        this.idRequest = appm.createItem('comments', data)
+
+        if(this.idRequest) {
+            this.state.commenting = true
+        }
+    }
+
+    commentCollapsed(idComment, collapsed) {
+        const comment = this.mapComments.get(idComment)
+
+        comment.collapsedManual = collapsed
+
+        if(!comment.collapsedManual) {
+            comment.collapsed = false
+        }
+
+        this.setStateDirty('comments')
+    }
+
+    commentCreated(type, idRequest, comment) {
+        if(type != 'comments') {
+            return
+        }
+
+        const post = (comment || {}).post || {}
+
+        if(post.id != this.state.post.id) {
+            return
+        }
+
+        ++this.state.countComments
+
+        this.mapComments.set(comment.id, comment)
+
+        // Is it a reply?
+        if(comment.parent) {
+            const commentParent = this.mapComments.get(comment.parent.id)
+
+            if(commentParent) {
+                comment.depth = commentParent.depth + 1
+                comment.replies = []
+                commentParent.replies.splice(0, 0, comment)
+
+                this.setStateDirty('commments')
+            }
+        }
+
+        // If this fails, it means it was a reply and not a top level comment.
+        if(idRequest != this.idRequest) {
+            return
+        }
+
+        comment.depth = 1
+        comment.replies = []
+
+        this.state.commenting = false
+        this.state.comments.splice(0, 0, comment)
+
+        const commentComponent = this.getComponent('inputComment')
+        commentComponent.setValue('')
+
+        this.setStateDirty('commments')
+    }
+
+    createCommentError(type, idRequest) {
+        if(type != 'comments' || idRequest != this.idRequest) {
+            return
+        }
+
+        this.state.commenting = false
+    }
+
+    creatorRequested(newTab = false) {
+        const post = this.state.post || {}
+        const creator = post.creator || {}
+        const removed = post.status == 'removed'
+
+        if(removed) {
+            return
+        }
+
+        appm.openPage('channels', 'user', { allowBack: true, newTab }, creator)
+        appm.addAnalyticsEvent('post', 'viewCreator')
+    }
+
+    deleteRequested() {
+        appm.showPopup('deleteItem', 'posts', this.state.post.id)
+    }
+
+    edit() {
+        const user = this.state.user
+
+        if(!user) {
+            return
+        }
+
+        const inputText = this.getComponent('inputText')
+        const text = inputText.getValue()
+        const data = { text: text }
+
+        if(user.super && user.superActive) {
+            const inputTitle = this.getComponent('inputTitle')
+            const title = inputTitle.getValue()
+            data.title = title
+        }
+
+        this.state.editing = true
+
+        appm.updateItem('posts', this.state.post.id, data)
+    }
+
+    editRequested() {
+        this.state.editMode = true
+    }
+
+    favorited(type, id, favorited) {
+        if(type != 'posts' || id != this.state.post.id) {
+            return
+        }
+
+        this.state.post.hasUserFavorited = favorited
+
+        this.setStateDirty('post')
+    }
+
+    favoriteRequested() {
+        appm.favoriteItem('posts', this.state.post.id)
+    }
+
+    fetchComments() {
+        this.state.fetchingComments = true
+        this.state.comments = []
+        //this.state.highlightComment = false
+
+        // TODO Only if no load more.
+        this.mapComments = new Map()
+
+        if(this.timeoutBetweenCommentsFetches) {
+            clearTimeout(this.timeoutBetweenCommentsFetches)
+        }
+
+        this.timeoutBetweenCommentsFetches = setTimeout(() => {
+            this.idFetchComments = appm.fetchItems(
+                'comments', '', { post: this.state.post.id }, 0, sortOptions[this.state.indexSort]
+            )
+        }, timers.betweenFetches)
+    }
+
+    fetchPost() {
+        this.state.fetchingPost = true
+
+        this.idFetchPost = appm.fetchItems('posts', '', { id: this.state.post.id })
+    }
+
+    focusComment() {
+        if(this.state.highlightComment) {
+            this.removeHighlightComment()
+            this.update()
+        }
+
+        const commentComponent = this.getComponent('inputComment')
+
+        if(!commentComponent) {
+            return
+        }
+
+        const inputComment = commentComponent.getEl()
+        const posY = inputComment.getBoundingClientRect().y
+        const barHeight = parseInt(getComputedStyle(inputComment).getPropertyValue('--barpane-height'))
+
+        window.scrollTo({ top: posY + window.scrollY - (barHeight * 2 + 30), behavior: 'smooth' })
+        commentComponent.focusInput()
+
+        appm.addAnalyticsEvent('post', 'focusComment')
+    }
+
+    highlightComment(idComment) {
+        const commentHighlight = this.mapComments.get(idComment)
+
+        if(!commentHighlight) {
+            return
+        }
+
+        const post = this.state.post
+
+        commentHighlight.collapsed = false
+        commentHighlight.collapsedManual = false
+        this.state.comments = [commentHighlight]
+        this.state.highlightComment = true
+        this.idCommentHighlight = commentHighlight.id
+
+        const depthAdjust = commentHighlight.depth
+
+        // Update depth to -commentHighlight.depth + 1
+        for(const comment of this.mapComments.values()) {
+            comment.depth -= (depthAdjust - 1)
+
+            if(comment.id == commentHighlight.id) {
+                continue
+            }
+
+            this.calculateCommentCollapsed(comment)
+        }
+
+        appm.addBrowserHistory(`/c/${post.channel.id}/p/${post.id}/${idComment}`, post.title, true)
+        appm.addAnalyticsEvent('post', 'highlightComment')
+    }
+
+    highlightContextComment() {
+        const commentCurrent = this.mapComments.get(this.idCommentHighlight)
+
+        if(!commentCurrent || !commentCurrent.parent) {
+            appm.openPage('channels', 'post', true, this.state.post)
+            return
+        }
+
+        const post = this.state.post
+        const commentHighlight = commentCurrent.parent
+
+        commentHighlight.collapsed = false
+        commentHighlight.collapsedManual = false
+        this.state.comments = [commentHighlight]
+        this.state.highlightComment = true
+        this.idCommentHighlight = commentHighlight.id
+
+        for(const comment of this.mapComments.values()) {
+            comment.depth += 1
+
+            if(comment.id == commentHighlight.id) {
+                continue
+            }
+
+            this.calculateCommentCollapsed(comment)
+        }
+
+        appm.addBrowserHistory(
+            `/c/${post.channel.id}/p/${post.id}/${commentHighlight.id}`,
+            post.title,
+            true
+        )
+        appm.addAnalyticsEvent('post', 'highlightContext')
+    }
+
+    itemDeleted(type, id) {
+        if(type == 'posts') {
+            if(id != this.state.post.id) {
+                return
+            }
+
+            appm.openPage('channels', 'channel', false, this.state.channel)
+        }
+        else if(type == 'comments') {
+            const comment = this.mapComments.get(id)
+
+            if(!comment) {
+                return
+            }
+
+            comment.status = 'removed'
+
+            this.setStateDirty('comments')
+        }
+    }
+
+    itemsFetched(idFetch, items, count) {
+        if(idFetch != this.idFetchPost && idFetch != this.idFetchComments) {
+            return
+        }
+
+        if(idFetch == this.idFetchPost) {
+            this.state.fetchingPost = false
+
+            if(items.length) {
+                this.setPost(items[0])
+            }
+            else {
+                appm.openPage('error')
+            }
+        }
+        else if(idFetch == this.idFetchComments) {
+            this.state.fetchingComments = false
+            this.state.countComments = count
+
+            this.setupComments(items)
+        }
+    }
+
+    locked(ids, lock) {
+        if(!ids.includes(this.state.post.id)) {
+            return
+        }
+
+        this.state.post.locked = lock
+
+        this.setStateDirty('post')
+    }
+
+    lockRequested() {
+        appm.lockPosts([this.state.post.id])
+    }
+
+    markAdultContentRequested(mark) {
+        appm.updateItem('posts', this.state.post.id, { adultContent: mark })
+        appm.addAnalyticsEvent('post', 'markAdultContent', mark)
+    }
+
+    refresh() {
+        this.fetchPost()
+        this.fetchComments()
+        appm.addAnalyticsEvent('post', 'refresh')
+    }
+
+    rejected(type, ids) {
+        if(type != 'posts' || !ids.includes(this.state.post.id)) {
+            return
+        }
+
+        this.state.post.status = 'rejected'
+
+        this.setStateDirty('post')
+    }
+
+    rejectRequested() {
+        appm.rejectItems('posts', [this.state.post.id])
+    }
+
+    removeHighlightComment() {
+        const post = this.state.post
+
+        let depthAdjust = 1
+
+        // Check the current depth.
+        for(const comment of this.mapComments.values()) {
+            if(comment.depth < depthAdjust) {
+                depthAdjust = comment.depth
+            }
+        }
+
+        // Reset all depth and auto collapsed.
+        for(const comment of this.mapComments.values()) {
+            comment.depth -= (depthAdjust - 1)
+
+            this.calculateCommentCollapsed(comment)
+        }
+
+        this.state.comments = this.commentsFetched
+        this.state.highlightComment = false
+        this.idCommentHighlight = null
+
+        appm.addBrowserHistory(`/c/${post.channel.id}/p/${post.id}`, post.title, true)
+        appm.addAnalyticsEvent('post', 'removeHighlightedComment')
+    }
+
+    reportRequested() {
+        appm.showPopup('report', 'posts', this.state.post.id)
+    }
+
+    searchTag(idTag, channel, newTab) {
+        appm.openPage('channels', 'channel', { allowBack: true, newTab }, channel, idTag)
+        appm.addAnalyticsEvent('post', 'searchTag', `${channel.id} #${idTag}`)
+    }
+
+    setupComments(comments) {
+        const incrementDepthCommentTree = (comment, depth) => {
+            comment.depth = depth
+
+            for(const reply of comment.replies) {
+                incrementDepthCommentTree(reply, depth + 1)
+            }
+        }
+
+        const commentsSorted = []
+
+        // Map every comment.
+        for(const comment of comments) {
+            // Clean replies. We'll build replies from parents.
+            // This way, it will be sorted.
+            comment.replies = []
+            comment.depth = 1
+
+            if(!comment.parent) {
+                commentsSorted.push(comment)
+            }
+
+            this.mapComments.set(comment.id, comment)
+        }
+
+        // Setup replies with parents and update depth.
+        for(const comment of comments) {
+            const parent = comment.parent
+
+            if(!parent) {
+                continue
+            }
+
+            const commentParent = this.mapComments.get(parent.id)
+
+            if(!commentParent) {
+                continue
+            }
+
+            comment.parent = commentParent
+            commentParent.replies.push(comment)
+            incrementDepthCommentTree(comment, commentParent.depth + 1)
+        }
+
+        this.commentsFetched = commentsSorted
+
+        if(this.state.highlightComment) {
+            const commentHighlight = this.mapComments.get(this.idCommentHighlight)
+
+            if(!commentHighlight) {
+                this.removeHighlightComment()
+                return
+            }
+
+            const depthAdjust = commentHighlight.depth
+
+            commentHighlight.depth = 1
+            commentHighlight.collapsed = false
+            commentHighlight.collapsedManual = false
+
+            // Adjust depth and collapsed for all comments.
+            for(const comment of comments) {
+                if(comment.id == commentHighlight.id) {
+                    continue
+                }
+
+                comment.depth -= (depthAdjust - 1)
+                this.calculateCommentCollapsed(comment)
+            }
+
+            this.state.comments = [commentHighlight]
+        }
+        else {
+            // Adjust collapsed for all comments.
+            for(const comment of comments) {
+                this.calculateCommentCollapsed(comment)
+            }
+
+            this.state.comments = commentsSorted
+        }
+    }
+
+    share(type) {
+        if(this.state.highlightComment) {
+            return this.shareComment(this.idCommentHighlight, type)
+        }
+
+        const url = `${urls.domain}/c/${this.state.channel.id}/p/${this.state.post.id}`
+
+        switch(type) {
+            case 'copyUrl':
+                appm.copyToClipboard(url)
+                break
+            case 'message':
+                appm.showPopup('sendMessage', `<a href='${url}'>${this.state.post.title}</a>`)
+                break
+        }
+
+        appm.addAnalyticsEvent('post', 'share', this.state.channel.id)
+    }
+
+    shareComment(idComment, type) {
+        const url = `${urls.domain}/c/${this.state.channel.id}/p/${this.state.post.id}/${idComment}`
+
+        switch(type) {
+            case 'copyUrl':
+                appm.copyToClipboard(url)
+                break
+            case 'message':
+                appm.showPopup('sendMessage', `<a href='${url}'>${url}</a>`)
+                break
+        }
+
+        appm.addAnalyticsEvent('comment', 'share', this.state.channel.id)
+    }
+
+    sortChanged(index) {
+        this.state.indexSort = index
+
+        const idSort = sortOptions[this.state.indexSort]
+
+        setCookie('sortComments', idSort)
+
+        this.fetchComments()
+        appm.addAnalyticsEvent('comments', 'sort', `${this.state.channel.id} - ${idSort}`)
+    }
+
+    tagRequested(idTag) {
+        appm.updateItem('posts', this.state.post.id, { tag: idTag })
+        appm.addAnalyticsEvent('post', 'setTag', `${this.state.channel.id} #${idTag}`)
+    }
+
+    toggleEditView() {
+        if(!this.state.post.edited) {
+            return
+        }
+
+        this.state.showOriginal = !this.state.showOriginal
+    }
+
+    updateError(type, id) {
+        if(type != 'posts' || id != this.state.post.id) {
+            return
+        }
+
+        this.state.editing = false
+    }
+
+    updated(type, id, post) {
+        if(type != 'posts' || id != this.state.post.id) {
+            return
+        }
+
+        this.state.editing = false
+        this.state.editMode = false
+
+        this.state.post.editedAt = post.editedAt
+        this.state.post.edited = post.edited
+        this.state.post.adultContent = post.adultContent
+        this.state.post.tag = post.tag
+        this.state.post.text = post.text
+        this.state.post.title = post.title
+        this.state.post.textOriginal = post.textOriginal
+
+        this.setStateDirty('post')
+    }
+
+    userChanged(user) {
+        this.state.user = user
+
+        this.refresh()
+    }
+
+    userUpdated(user) {
+        this.state.user = user
+
+        this.setStateDirty('user')
+    }
+
+    voted(idPost, vote, voteIncrement) {
+        if(idPost != this.state.post.id) {
+            return
+        }
+
+        this.state.post.countVotes += voteIncrement
+        this.state.post.hasUserUpvoted = vote == 1
+        this.state.post.hasUserDownvoted = vote == -1
+
+        this.setStateDirty('post')
+    }
+
+    voteRequested(up) {
+        appm.votePost(this.state.post.id, up)
+    }
+}
+
+$ const post = state.post || {}
+$ const channel = state.channel || {}
+$ const preferencesChannel = channel.preferences || {}
+$ const comments = state.comments || []
+$ const creator = post.creator || {}
+$ const creatorRemoved = creator.status == 'removed'
+$ const user = appm.isUserSignedIn() ? state.user : null
+$ const isSuper = user.super && user.superActive
+$ const isMod = user && (
+    (channel.admins && channel.admins.includes(appm.getUser()._id)) ||
+    (channel.moderators && channel.moderators.includes(appm.getUser()._id)) ||
+    isSuper
+)
+$ const isCreator = user && user._id == creator._id
+$ const archived = post.status == 'archived'
+$ const removed = post.status == 'removed'
+$ const trPost = appm.tr('channels.post') || {}
+$ const trTooltips = trPost.tooltips || {}
+
+<pane-default.pane-post
+    key='root'
+    allowBack
+    class=[input.class, removed ? 'removed' : '']
+    title=trPost.title
+    on-refreshRequested('refresh')
+>
+    <@barControls>
+        <controls-post
+            archived=archived
+            isCreator=isCreator
+            isMod=isMod
+            isSuper=isSuper
+            post=post
+            removed=removed
+            on-approveRequested('approveRequested')
+            on-commentRequested('focusComment')
+            on-deleteRequested('deleteRequested')
+            on-editRequested('editRequested')
+            on-favoriteRequested('favoriteRequested')
+            on-markAdultContentRequested('markAdultContentRequested')
+            on-lockRequested('lockRequested')
+            on-rejectRequested('rejectRequested')
+            on-reportRequested('reportRequested')
+            on-shareRequested('share')
+            on-tagRequested('tagRequested')
+            on-voteRequested('voteRequested')
+        />
+    </@barControls>
+
+    <@contents>
+        <div.info>
+            <div.details>
+                <button-imagetext.big
+                    icon='channel'
+                    idImage=channel.image
+                    text=channel.id
+                    on-click('channelRequested', false)
+                    on-middleClick('channelRequested', true)
+                />
+
+                <span.separator>
+                    /
+                </span>
+
+                <button-imagetext.big
+                    disabled=(removed || creatorRemoved)
+                    icon='user'
+                    idImage=(removed || creatorRemoved ? '' : creator.image)
+                    text=(removed || creatorRemoved ? '[Removido]' : creator.username)
+                    on-click('creatorRequested', false)
+                    on-middleClick('creatorRequested', true)
+                />
+
+                <if(!removed && !creatorRemoved)>
+                    <if(state.moderators.includes(creator._id))>
+                        <button-default.mod tooltip='Moderador'>
+                            M
+                        </button-default>
+                    </if>
+
+                    <if(creator.super)>
+                        <button-default.super tooltip='Super'>
+                            S
+                        </button-default>
+                    </if>
+                </if>
+
+                <breakpoint-condition break='sm' min>
+                    <icon-text.light.small icon='clock' text=dateToTime(post.createdAt) />
+
+                    <@else>
+                        <icon-text.light.small icon='clock' text=elapsedDateToShortString(post.createdAt) />
+                    </@else>
+                </breakpoint-condition>
+
+                <if(post.edited)>
+                    <icon-text.light.small.fill
+                        class=(state.showOriginal ? 'selected' : '')
+                        icon=(state.showOriginal ? 'close' : 'pencil')
+                        interactive
+                        text=(state.showOriginal ? 'Original' : elapsedDateToShortString(post.editedAt))
+                        on-click('toggleEditView')
+                    />
+                </if>
+            </div>
+
+            <if(!state.editMode || !isSuper)>
+                <title-post.big
+                    isMod=isMod
+                    post=post
+                    removed=removed
+                    on-searchTagRequested('searchTag')
+                />
+            </if>
+        </div>
+
+        <if(!removed)>
+            <if(state.editMode)>
+                <if(isSuper)>
+                    <input-text.big
+                        key='inputTitle'
+                        icon='title'
+                        maxlength=200
+                        noExternalUpdate
+                        placeholder=trPost.inputTitle
+                        text=post.title
+                    />
+                </if>
+
+                <input-textrich.input-text
+                    key='inputText'
+                    buttonCloseEnabled
+                    noExternalUpdate
+                    placeholder=trPost.inputText
+                    text=post.text
+                    on-closeRequested('cancelEditMode')
+                >
+                    <@submit>
+                        <button-submit.small
+                            loading=state.editing
+                            text=trPost.buttonEdit
+                            on-click('edit')
+                        />
+                    </@submit>
+                </input-textrich>
+            </if>
+
+            <content-post
+                editMode=state.editMode
+                post=post
+                showOriginal=state.showOriginal
+            />
+        </if>
+
+        <if(isMod && post.flags && post.flags.length)>
+            <reports flags=post.flags />
+        </if>
+
+        <if(!state.highlightComment && !post.locked && post.status != 'archived')>
+            <input-textrich.input-comment
+                key='inputComment'
+                noExternalUpdate
+                placeholder=trPost.inputComment
+            >
+                <@submit>
+                    <button-submit.small
+                        loading=state.commenting
+                        text=trPost.buttonComment
+                        on-click('comment')
+                    />
+                </@submit>
+            </input-textrich>
+        </if>
+
+        <comments-post
+            class=(state.highlightComment ? 'highlight' : '')
+            comments=comments
+            count=state.countComments
+            creatorPost=post.creator
+            highlightComment=state.highlightComment
+            idPost=post.id
+            isMod=isMod
+            loading=state.fetchingComments
+            locked=(post.locked || archived)
+            moderators=state.moderators
+            sortOptions=sortOptions
+            on-commentCollapsed('commentCollapsed')
+            on-continueThreadRequested('highlightComment')
+            on-shareCommentRequested('shareComment')
+            on-sortChanged('sortChanged')
+            on-viewContextRequested('highlightContextComment')
+            on-viewAllRequested('removeHighlightComment')
+        />
+    </@contents>
+</pane-default>
+
+style.less {
+    .pane-default.pane-post {
+        --author-fontsize: 12px;
+        //--controls-spacing: 0;
+        --contents-spacing: 20px;
+        --details-spacing: 10px;
+        --info-spacing: 15px;
+        --inputcomment-margintop: 15px;
+        --username-fontsize: 15px;
+        --vote-marginright: 10px;
+
+        >.contents {
+            display: flex;
+            flex-direction: column;
+            gap: var(--contents-spacing);
+            padding: var(--app-padding-bigger);
+
+            >.info {
+                display: flex;
+                flex-direction: column;
+                gap: var(--info-spacing);
+
+                >.details {
+                    align-items: center;
+                    display: flex;
+                    flex-wrap: wrap;
+                    gap: var(--details-spacing);
+
+                    >.separator {
+                        color: var(--color-text1);
+                        font-size: 15px;
+                    }
+
+                    >.mod,
+                    >.super {
+                        color: var(--color-accent1);
+                        font-size: var(--author-fontsize);
+                        font-family: @font-semibold;
+                        text-transform: uppercase;
+                    }
+                }
+            }
+
+            >.input-comment {
+                margin-top: var(--inputcomment-margintop);
+            }
+
+            >.comments-post {
+                position: relative;
+
+                &.highlight {
+                    margin-top: 20px; // TODO
+                }
+
+                &.highlight::before {
+                    @padding-v: calc(-1 * var(--app-padding));
+                    @padding-h: calc(-2 * var(--app-padding));
+
+                    background-color: var(--color-background4);
+                    border-radius: var(--app-borderradius);
+                    bottom: @padding-v;
+                    content: '';
+                    left: @padding-h;
+                    position: absolute;
+                    right: @padding-h;
+                    top: @padding-v;
+                }
+            }
+        }
+
+        &.removed {
+            >.contents {
+                >.info {
+                    >.title {
+                        color: var(--color-text3);
+                    }
+                }
+            }
+        }
+
+        // Media queries.
+
+        .r-max(@break-ms, {
+            --contents-spacing: 15px;
+
+            >.contents {
+                >.comments-post {
+                    &.highlight::before {
+                        @padding-h: calc(-1 * var(--app-padding));
+
+                        left: @padding-h;
+                        right: @padding-h;
+                    }
+                }
+            }
+        });
+
+        .r-max(@break-xs, {
+            --details-spacing: 8px;
+        });
+    }
+};

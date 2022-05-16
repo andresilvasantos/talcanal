@@ -1,0 +1,297 @@
+import appm from 'js/app-manager'
+
+class {
+    onCreate() {
+        this.state = {
+            idChat: -1,
+            messages: [],
+            status: 0
+        }
+
+        this.messageSent = this.messageSent.bind(this)
+        this.pinged = this.pinged.bind(this)
+        this.sendMessageError = this.sendMessageError.bind(this)
+        this.stopped = this.stopped.bind(this)
+    }
+
+    onMount() {
+        appm.on('messageSentRandomChat', this.messageSent)
+        appm.on('sendMessageRandomChatError', this.sendMessageError)
+        appm.on('pingRandomChatSuccess', this.pinged)
+        appm.on('stopRandomChatSuccess', this.stopped)
+    }
+
+    onDestroy() {
+        appm.stopRandomChat()
+
+        appm.off('messageSentRandomChat', this.messageSent)
+        appm.off('sendMessageRandomChatError', this.sendMessageError)
+        appm.off('pingRandomChatSuccess', this.pinged)
+        appm.off('stopRandomChatSuccess', this.stopped)
+    }
+
+    // Getters & Setters.
+
+    setData(idChat) {
+        this.state.idChat = idChat
+        this.mapMessages = new Map()
+        this.mapRequests = new Map()
+    }
+
+    // Functions.
+
+    keyPressed(event) {
+        switch(event.keyCode) {
+            case 13:
+                this.sendMessage()
+                break
+        }
+    }
+
+    messageSent(idSend, id) {
+        if(!this.mapRequests.has(idSend)) {
+            return
+        }
+
+        const message = this.mapRequests.get(idSend)
+
+        message.id = id
+        message.delivered = true
+        message.problem = false
+
+        this.mapRequests.delete(idSend)
+        this.mapMessages.set(id, message)
+        this.setStateDirty('messages')
+    }
+
+    newRandomChatRequested() {
+        appm.openPage('randomChat', '', false, true)
+    }
+
+    pinged(data) {
+        if(data.idChat != this.state.idChat) {
+            return
+        }
+
+        if(data.status == 'stopped') {
+            this.state.status = 1
+        }
+        else if(data.message) {
+            const message = data.message
+            const scrollY = window.scrollY
+            const scrollHeight = document.body.scrollHeight
+            const threshold = 50
+            const atBottom = (scrollHeight - window.innerHeight) - scrollY < threshold
+
+            this.mapMessages.set(message.id, message)
+            this.state.messages.push(message)
+
+            this.setStateDirty('messages')
+
+            if(atBottom) {
+                this.update()
+                window.scrollTo(0, document.body.scrollHeight)
+            }
+        }
+    }
+
+    sendMessage() {
+        const inputMessage = this.getComponent('inputMessage')
+        const message = inputMessage.getValue().trim()
+
+        if(!message.length) {
+            inputMessage.setValid(false)
+            return
+        }
+
+        inputMessage.setValue('')
+
+        const idSend = appm.sendMessageRandomChat(this.state.idChat, message)
+        const dataMessage = { text: message, time: Date.now(), self: true }
+
+        this.mapRequests.set(idSend, dataMessage)
+
+        // Update messages locally with message (not delivered).
+        this.state.messages.push(dataMessage)
+        this.setStateDirty('messages')
+
+        // Scroll to bottom.
+        this.update()
+        window.scrollTo(0, document.body.scrollHeight)
+    }
+
+    sendMessageError(idSend, error) {
+        if(!this.mapRequests.has(idSend)) {
+            return
+        }
+
+        const message = this.mapRequests.get(idSend)
+
+        message.problem = true
+
+        this.mapRequests.delete(idSend)
+        this.setStateDirty('messages')
+    }
+
+    stopped() {
+        this.state.status = 1
+
+        // Scroll to bottom.
+        window.scrollTo(0, document.body.scrollHeight)
+    }
+
+    stopRandomChat() {
+        appm.stopRandomChat(this.state.idChat)
+        appm.addAnalyticsEvent('randomChat', 'stop')
+    }
+}
+
+$ const trChat = appm.tr('randomChat.chat') || {}
+$ const ended = state.status == 1
+
+<pane-default.pane-randomchat
+    allowBack
+    class=input.class
+    title=trChat.title
+>
+    <@barControls>
+        <if(!ended)>
+            <button-text.round icon='close' text=trChat.buttonStop on-click('stopRandomChat') />
+        </if>
+    </@barControls>
+
+    <@contents>
+        <div.messages>
+            <text-p.message-intro>
+                $!{trChat.messageStart}
+            </text-p>
+
+            <for|message, index| of=state.messages>
+                <balloon-message message=message />
+            </for>
+
+            <if(ended)>
+                <div.spacer />
+
+                <div.message-end>
+                    <text-title.text.medium>
+                        $!{trChat.messageEnd}
+                    </text-title>
+
+                    <button-text.round.big
+                        icon='plus'
+                        text=trChat.buttonNew
+                        on-click('newRandomChatRequested')
+                    />
+                </div>
+            </if>
+        </div>
+
+        <div.typer>
+            <input-textrich.input-message.big
+                key='inputMessage'
+                disabled=ended
+                lineBreakWithShift
+                mini
+                noExternalUpdate
+                placeholder=trChat.inputMessage
+                on-keydown('keyPressed')
+            />
+
+            <button-icon.button-send.big
+                disabled=ended
+                icon='send2'
+                on-click('sendMessage')
+            />
+        </div>
+    </@contents>
+</pane-default>
+
+style.less {
+    .pane-default.pane-randomchat {
+        --balloon-maxwidth: 80%;
+        --loading-size: 20px;
+        --messageintro-marginbottom: 40px;
+        --messageend-margin-v: 40px;
+        --messageend-spacing: 30px;
+        --messages-spacing: 5px;
+        --padding-bottom: 20px;
+        --typer-spacing: var(--app-padding);
+
+        padding-bottom: var(--padding-bottom);
+
+        >.contents {
+            display: flex;
+            flex-direction: column;
+
+            >.messages {
+                display: flex;
+                flex-direction: column;
+                flex-grow: 1;
+                gap: var(--messages-spacing);
+                padding: 30px var(--app-padding);
+
+                >.message-intro {
+                    color: var(--color-text2);
+                    margin-bottom: var(--messageintro-marginbottom);
+                    text-align: center;
+                }
+
+                >.balloon-message {
+                    align-self: flex-start;
+                    max-width: var(--balloon-maxwidth);
+
+                    &.self {
+                        align-self: flex-end;
+                    }
+                }
+
+                >.spacer {
+                    flex-grow: 1;
+                }
+
+                >.message-end {
+                    align-items: center;
+                    display: flex;
+                    flex-direction: column;
+                    margin: var(--messageend-margin-v) 0;
+                    gap: var(--messageend-spacing);
+
+                    >.text {
+                        color: var(--color-text2);
+                        text-align: center;
+                    }
+                }
+            }
+
+            >.typer {
+                align-items: center;
+                background-color: var(--color-background2);
+                border-top: 1px solid var(--color-border1);
+                bottom: 0;
+                display: flex;
+                gap: var(--typer-spacing);
+                padding: var(--app-padding);
+                position: sticky;
+
+                >.input-message {
+                    flex-grow: 1;
+                    height: 100%;
+                }
+            }
+        }
+
+        // Media queries.
+
+        .r-max(@break-ms, {
+            --messageend-margin-v: 30px;
+            --messageend-spacing: 25px;
+        });
+
+        .r-max(@break-sm, {
+            --messageend-margin-v: 20px;
+            --messageend-spacing: 20px;
+            --padding-bottom: 10px;
+        });
+    }
+};

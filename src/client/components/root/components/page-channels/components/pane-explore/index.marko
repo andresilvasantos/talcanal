@@ -1,0 +1,386 @@
+import appm from 'js/app-manager'
+import { getCookie, processObjectsTr, scrollReachBottom, setCookie } from 'js/utils'
+import { timers, urls } from 'js/default-vars'
+
+static const sortOptions = ['top', 'new']
+
+class {
+    onCreate() {
+        this.state = {
+            countItems: 0,
+            fetchingItems: true,
+            indexSort: 0,
+            items: [],
+            typeData: 'channels',
+            user: appm.getUser()
+        }
+
+        this.filter = ''
+        this.pageCurrent = 0
+
+        this.chatCreated = this.chatCreated.bind(this)
+        this.itemsFetched = this.itemsFetched.bind(this)
+        this.channelSubscribed = this.channelSubscribed.bind(this)
+        this.itemUpdated = this.itemUpdated.bind(this)
+        this.userChanged = this.userChanged.bind(this)
+        this.userUpdated = this.userUpdated.bind(this)
+    }
+
+    onMount() {
+        appm.on('createItemSuccess', this.chatCreated)
+        appm.on('fetchItemsSuccess', this.itemsFetched)
+        appm.on('subscribeChannelSuccess', this.channelSubscribed)
+        appm.on('updateItemSuccess', this.itemUpdated)
+        appm.on('userChanged', this.userChanged)
+        appm.on('userUpdated', this.userUpdated)
+    }
+
+    onDestroy() {
+        clearTimeout(this.timeoutBetweenFetches)
+
+        appm.off('createItemSuccess', this.chatCreated)
+        appm.off('fetchItemsSuccess', this.itemsFetched)
+        appm.off('subscribeChannelSuccess', this.channelSubscribed)
+        appm.off('updateItemSuccess', this.itemUpdated)
+        appm.off('userChanged', this.userChanged)
+        appm.off('userUpdated', this.userUpdated)
+    }
+
+    // Getters & Setters
+
+    setData() {
+        this.state.typeData = 'channels'
+        this.pageCurrent = 0
+
+        // Set sort if it was saved in cookies.
+        const indexSort = sortOptions.indexOf(getCookie('sortExplore'))
+
+        if(indexSort >= 0) {
+            this.state.indexSort = indexSort
+        }
+
+        this.getComponent('searchSort').clearSearch()
+        this.fetchItems()
+        this.getComponent('tabs').setIndex(0)
+    }
+
+    // Functions.
+
+    channelRequested(channel, newTab = false) {
+        appm.openPage('channels', 'channel', { allowBack: true, newTab }, channel)
+        appm.addAnalyticsEvent('explore', 'openChannel', channel.id)
+    }
+
+    channelSubscribed(idChannel, subscribed) {
+        if(this.state.typeData != 'channels') {
+            return
+        }
+
+        for(const channel of this.state.items) {
+            if(channel.id == idChannel) {
+                channel.countSubscribers += subscribed ? 1 : -1
+                channel.isUserSubscribed = subscribed
+
+                this.setStateDirty('items')
+                break
+            }
+        }
+    }
+
+    chatCreated(type, idRequest, chat) {
+        if(type != 'chats' || idRequest != this.idRequestChat) {
+            return
+        }
+
+        appm.openPage('chats', 'chat', true, chat)
+    }
+
+    checkLoadMore() {
+        if(
+            this.state.fetchingItems ||
+            !this.state.items.length ||
+            this.state.items.length >= this.state.countItems ||
+            !scrollReachBottom(this.getEl())
+        ) {
+            return
+        }
+
+        ++this.pageCurrent
+
+        this.fetchItems()
+        appm.addAnalyticsEvent('explore', 'loadMore')
+    }
+
+    createChannelRequested() {
+        appm.showPopup('createChannel')
+        appm.addAnalyticsEvent('explore', 'createChannel')
+    }
+
+    fetchItems() {
+        this.state.fetchingItems = true
+
+        if(!this.pageCurrent) {
+            this.state.countItems = 0
+            this.state.items = []
+        }
+
+        if(this.timeoutBetweenFetches) {
+            clearTimeout(this.timeoutBetweenFetches)
+        }
+
+        this.timeoutBetweenFetches = setTimeout(() => {
+            this.idFetchItems = appm.fetchItems(this.state.typeData, this.filter,
+            { }, this.pageCurrent, sortOptions[this.state.indexSort])
+        }, timers.betweenFetches)
+    }
+
+    itemsFetched(idFetch, items, count) {
+        if(idFetch != this.idFetchItems) {
+            return
+        }
+
+        this.state.fetchingItems = false
+        this.state.countItems = count
+
+        if(this.pageCurrent > 0) {
+            const itemsUnique = items.filter(item => !this.idsItems.includes(item._id))
+
+            this.state.items = this.state.items.concat(itemsUnique)
+            this.idsItems = this.idsItems.concat(itemsUnique.map(item => item._id ))
+        }
+        else {
+            this.state.items = items
+            this.idsItems = items.map(item => item._id )
+        }
+    }
+
+    itemUpdated(type, id, item) {
+        if(type != 'channels') {
+            return
+        }
+
+        for(const channelOfList of this.state.items) {
+            if(channelOfList.id == id) {
+                Object.assign(channelOfList, item)
+                break
+            }
+        }
+
+        this.setStateDirty('channels')
+    }
+
+    refresh() {
+        this.pageCurrent = 0
+
+        this.fetchItems()
+        appm.addAnalyticsEvent('explore', 'refresh')
+    }
+
+    searchChanged(search) {
+        this.pageCurrent = 0
+        this.filter = search
+
+        this.fetchItems()
+        appm.addAnalyticsEvent('explore', 'search', `${this.state.typeData} - ${this.filter}`)
+    }
+
+    sortChanged(index) {
+        this.pageCurrent = 0
+        this.state.indexSort = index
+
+        const idSort = sortOptions[this.state.indexSort]
+
+        setCookie('sortExplore', idSort)
+
+        this.fetchItems()
+        appm.addAnalyticsEvent('explore', 'sort', `${this.state.typeData} - ${idSort}`)
+    }
+
+    tabChanged(index, id) {
+        this.filter = ''
+        this.pageCurrent = 0
+        this.state.typeData = id
+
+        this.getComponent('searchSort').clearSearch()
+        this.fetchItems()
+        appm.addAnalyticsEvent('channel', 'tabChange', id)
+    }
+
+    toggleDefault(channel) {
+        appm.updateItem('channels', channel.id, { default: !channel.default })
+    }
+
+    toggleSubscription(channel) {
+        appm.subscribeChannel(channel.id)
+        appm.addAnalyticsEvent('explore', `
+            channel${channel.isUserSubscribed ? 'Unsubscribe' : 'Subscribe'}
+        `, channel.id)
+    }
+
+    userChanged(user) {
+        this.state.user = user
+
+        this.setStateDirty('user')
+        this.refresh()
+    }
+
+    userChatRequested(user) {
+        this.idRequestChat = appm.createItem('chats', { user: user.username })
+        appm.addAnalyticsEvent('explore', 'userChat')
+    }
+
+    userControlRequested(user, idControl) {
+        switch(idControl) {
+            case 'ban':
+            case 'unban':
+                appm.banUser(user.username)
+                break
+            case 'block':
+                this.state.user.usersBlocked.push({ _id: user._id })
+
+                appm.updateAccount({ usersBlocked: this.state.user.usersBlocked })
+                appm.addAnalyticsEvent('explore', 'blockUser')
+                break
+            case 'unblock':
+                for(const [index, userBlocked] of this.state.user.usersBlocked.entries()) {
+                    if(userBlocked.username == user.username) {
+                        this.state.user.usersBlocked.splice(index, 1)
+                        break
+                    }
+                }
+
+                appm.updateAccount({ usersBlocked: this.state.user.usersBlocked })
+                appm.addAnalyticsEvent('explore', 'unblockUser')
+                break
+            case 'report':
+                appm.showPopup('report', 'users', user.username)
+                appm.addAnalyticsEvent('explore', 'reportUser')
+                break
+            case 'copyUrl':
+            case 'message':
+                const url = `${urls.domain}/u/${user.username}`
+
+                if(idControl == 'copyUrl') {
+                    appm.copyToClipboard(url)
+                }
+                else {
+                    appm.showPopup('sendMessage', `<a href='${url}'>${url}</a>`)
+                }
+
+                appm.addAnalyticsEvent('explore', 'shareProfile')
+                break
+        }
+    }
+
+    userRequested(user, newTab = false) {
+        appm.openPage('channels', 'user', { allowBack: true, newTab }, user)
+    }
+
+    userUpdated(user) {
+        this.state.user = user
+
+        this.setStateDirty('user')
+    }
+}
+
+$ const tabs = [{
+    id: 'channels',
+    icon: 'channel'
+}, {
+    id: 'users',
+    icon: 'user'
+}]
+
+$ const items = state.items || []
+$ const trExplore = appm.tr('channels.explore') || {}
+$ const isSuper = state.user && state.user.super && state.user.superActive
+
+<pane-default.pane-explore
+    key='root'
+    class=[
+        input.class,
+        items.length ? '' : 'no-items'
+    ]
+    icon='search'
+    title=trExplore.title
+    on-refreshRequested('refresh')
+>
+    <@barExtension>
+        <tabs.full-height.hidetext-whensmall
+            key='tabs'
+            tabs=processObjectsTr(tabs, trExplore.tabs)
+            on-tabChanged('tabChanged')
+        />
+
+        <combo-searchsort
+            key='searchSort'
+            countItems=state.countItems
+            indexSort=state.indexSort
+            loading=state.fetchingItems
+            sortOptions=sortOptions
+            on-searchChanged('searchChanged')
+            on-sortChanged('sortChanged')
+        />
+    </@barExtension>
+
+    <@contents class=(!items.length ? 'center' : 'list')>
+        <if(items.length || state.fetchingItems)>
+            <if(state.typeData == 'channels')>
+                <for|channel| of=items>
+                    <card-channel
+                        channel=channel
+                        isSuper=isSuper
+                        on-openRequested('channelRequested', channel)
+                        on-toggleDefaultRequested('toggleDefault', channel)
+                        on-toggleSubscriptionRequested('toggleSubscription', channel)
+                    />
+                </for>
+            </if>
+            <else-if(state.typeData == 'users')>
+                $ const usersBlocked = state.user ? state.user.usersBlocked.map(user => user.username) : []
+
+                <for|user| of=items>
+                    $ const isSelf = state.user && state.user._id == user._id
+
+                    <card-user
+                        user=user
+                        isBlocked=usersBlocked.includes(user.username)
+                        isSelf=isSelf
+                        isSuper=isSuper
+                        on-chatRequested('userChatRequested', user)
+                        on-controlRequested('userControlRequested', user)
+                        on-openRequested('userRequested', user)
+                    />
+                </for>
+            </else-if>
+        </if>
+        <else>
+            <if(state.typeData == 'channels')>
+                $ const trNoChannels = trExplore.noChannels || {}
+
+                <contents-empty
+                    icon='search'
+                    iconButton='plus'
+                    textButton=trNoChannels.button
+                    text=trNoChannels.text
+                    title=trNoChannels.title
+                    on-click('createChannelRequested')
+                />
+            </if>
+            <else-if(state.typeData == 'users')>
+                $ const trNoUsers = trExplore.noUsers || {}
+
+                <contents-empty
+                    icon='search'
+                    noButton
+                    text=trNoUsers.text
+                    title=trNoUsers.title
+                />
+            </else-if>
+        </else>
+    </@contents>
+
+    <@footer>
+        <loading-finder show=state.fetchingItems />
+    </@footer>
+</pane-default>

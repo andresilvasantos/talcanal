@@ -1,0 +1,213 @@
+import animm from 'js/anim-manager'
+
+class {
+    onCreate(input) {
+        this.state = {
+            editable: input.editable,
+            letter: input.letter,
+            mark: 0
+        }
+    }
+
+    onInput(input) {
+        const letterOld = this.state.letter
+
+        this.state.letter = input.letter
+        this.state.editable = input.editable
+
+        if(this.mounted && this.state.letter != '' && letterOld != this.state.letter) {
+            animm.set(this.letterEl, { opacity: 0 })
+            animm.add(this.root, { '--scale': 1.1, duration: 0.05, easeOut: 'quart' }, () => {
+                animm.set(this.letterEl, { opacity: 1 })
+                animm.add(this.root, { '--scale': 1, duration: 0.1, easeOut: 'back' })
+            })
+        }
+    }
+
+    onMount() {
+        this.root = this.getEl('root')
+        this.letterEl = this.getEl('letter')
+        this.mounted = true
+    }
+
+    // Functions.
+
+    clearMark() {
+        this.state.mark = 0
+    }
+
+    click() {
+        if(this.state.editable) {
+            this.emit('focusRequested')
+        }
+        else {
+            ++this.state.mark
+
+            if(this.state.mark > 3) {
+                this.state.mark = 0
+            }
+
+            this.emit('markChanged', this.state.mark)
+        }
+    }
+}
+
+<button-default.quina-button-tile
+    key='root'
+    class=[
+        input.class,
+        state.editable ? 'editable' : '',
+        input.noTouch ? 'no-touch' : '',
+        input.marksValidated ? 'marks-validated' : '',
+        input.mark ? `mark-${input.mark}` : (state.mark ? `mark-${state.mark}` : '')
+    ]
+    on-click('click')
+>
+    <span.letter.notranslate key='letter'>
+        ${state.letter}
+    </span>
+
+    <if(state.editable)>
+        <div.highlight class=(input.inFocus ? 'visible' : '') />
+    </if>
+</button-default>
+
+style.less {
+    .quina-button-tile {
+        --highlight-height: 7px;
+        --scale: 1;
+
+        background-color: var(--color-button2);
+        border: 2px solid var(--color-border2);
+        border-radius: var(--app-borderradius2);
+        overflow: hidden;
+        position: relative;
+        .flex-center();
+        .scale(var(--scale));
+        .size(var(--tile-size));
+        .transition(
+            background-color 0.2s ease-out,
+            border-color 0.2s ease-out,
+            opacity 0.2s ease-out;
+        );
+
+        >.letter {
+            color: var(--color-text2);
+            font-family: @font-bold;
+            font-size: var(--tile-letter-fontsize);
+            text-transform: uppercase;
+            .transition(color 0.2s ease-out);
+        }
+
+        &:hover {
+            background-color: var(--color-button3);
+            border-color: var(--color-border3);
+
+            >.letter {
+                color: var(--color-text3);
+            }
+        }
+
+        &.editable {
+            background-color: transparent;
+            border-color: var(--color-border3);
+
+            >.letter {
+                color: var(--color-text4);
+            }
+
+            >.highlight {
+                background-color: var(--color-border3);
+                border-bottom-left-radius: var(--app-borderradius2);
+                border-bottom-right-radius: var(--app-borderradius2);
+                position: absolute;
+                bottom: -1px;
+                .size(100%, 0px);
+                .transition(background-color 0.2s ease-out, height 0.2s ease-out;);
+
+                &.visible {
+                    height: var(--highlight-height);
+                }
+            }
+
+            &:hover {
+                background-color: var(--color-button2);
+                border-color: var(--color-border4);
+
+                >.highlight {
+                    background-color: var(--color-border4);
+                }
+            }
+        }
+
+        &:not(.marks-validated) {
+            &.mark-1 {
+                border-color: var(--color-accent2);
+
+                >.letter {
+                    color: var(--color-accent2);
+                }
+            }
+
+            &.mark-2 {
+                border-color: var(--color-accent1);
+
+                >.letter {
+                    color: var(--color-accent1);
+                }
+            }
+
+            &.mark-3 {
+                background-color: var(--color-background3);
+                border-color: transparent;
+
+                >.letter {
+                    color: var(--color-text1);
+                }
+            }
+        }
+
+        &.marks-validated {
+            &.mark-1 {
+                background-color: var(--color-accent2);
+                border-color: var(--color-accent2);
+
+                >.letter {
+                    color: var(--color-accentinvert);
+                }
+            }
+
+            &.mark-2 {
+                background-color: var(--color-accent1);
+                border-color: var(--color-accent1);
+
+                >.letter {
+                    color: var(--color-accentinvert);
+                }
+            }
+
+            &.mark-3 {
+                background-color: var(--color-background3);
+                border-color: transparent;
+
+                >.letter {
+                    color: var(--color-text1);
+                }
+            }
+        }
+
+        &.no-touch {
+            pointer-events: none;
+        }
+
+        // Media queries.
+
+        .r-max(@break-sm, {
+            --highlight-height: 6px;
+        });
+
+        .r-max(@break-xs, {
+            --highlight-height: 5px;
+        });
+    }
+};

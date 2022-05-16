@@ -1,0 +1,250 @@
+import { abbreviateNumber, elapsedDateToShortString } from 'js/utils'
+
+class {
+    onCreate(input) {
+        this.state = {
+            post: input.post || {}
+        }
+    }
+
+    onInput(input) {
+        this.state.post = input.post || {}
+
+        if(this.mounted) {
+            this.setStateDirty('post')
+        }
+    }
+
+    onMount() {
+        this.mounted = true
+    }
+}
+
+$ const post = state.post || {}
+$ const channel = post.channel || {}
+$ const creator = post.creator || {}
+
+<macro|{ smallBottom, smallTop }| name='rowControls'>
+    <div.row>
+        <if(smallBottom)>
+            <vote.medium.flat
+                count=post.countVotes
+                downvoted=post.hasUserDownvoted
+                upvoted=post.hasUserUpvoted
+                on-voteRequested('emit', 'voteRequested')
+            />
+        </if>
+
+        <controls-card-post
+            allowPin=input.allowPin
+            hideChannelInfo=input.hideChannelInfo
+            hideCreatorInfo=input.hideCreatorInfo
+            isCreator=input.isCreator
+            isMod=input.isMod
+            isPinned=input.isPinned
+            post=post
+            smallBottom=smallBottom
+            smallTop=smallTop
+            on-approveRequested('emit', 'approveRequested')
+            on-channelRequested('emit', 'channelRequested')
+            on-commentRequested('emit', 'openRequested')
+            on-creatorRequested('emit', 'creatorRequested')
+            on-deleteRequested('emit', 'deleteRequested')
+            on-favoriteRequested('emit', 'favoriteRequested')
+            on-lockRequested('emit', 'lockRequested')
+            on-pinRequested('emit', 'pinRequested')
+            on-markAdultContentRequested('emit', 'markAdultContentRequested')
+            on-rejectRequested('emit', 'rejectRequested')
+            on-reportRequested('emit', 'reportRequested')
+            on-shareRequested('emit', 'shareRequested')
+            on-tagRequested('emit', 'tagRequested')
+        />
+
+        <if(!smallBottom)>
+            <div.column>
+                <icon-text.small.light
+                    icon='clock'
+                    text=elapsedDateToShortString(post.createdAt)
+                />
+
+                <if(input.selectable)>
+                    <checkbox checked=input.selected on-checked('emit', 'selectRequested') />
+                </if>
+            </div>
+        </if>
+    </div>
+</macro>
+
+<button-default.card-post-expanded
+    class=[input.class, post.hasUserSeen ? 'seen' : '']
+    on-click('emit', 'openRequested', false)
+    on-middleClick('emit', 'openRequested', true)
+>
+    <breakpoint-condition break='ms' min>
+        <vote
+            count=post.countVotes
+            downvoted=post.hasUserDownvoted
+            upvoted=post.hasUserUpvoted
+            vertical
+            on-voteRequested('emit', 'voteRequested')
+        />
+    </breakpoint-condition>
+
+    <div.wrapper>
+        <breakpoint-condition break='ms'>
+            <rowControls smallTop=true />
+        </breakpoint-condition>
+
+        <div.info>
+            <breakpoint-condition break='ms' min>
+                <rowControls />
+            </breakpoint-condition>
+
+            <title-post
+                isMod=input.isMod
+                isPinned=input.isPinned
+                post=post
+                on-searchTagRequested('emit', 'searchTagRequested')
+            />
+        </div>
+
+        <thumbnail-post
+            expanded
+            post=post
+            on-openRequested('emit', 'openRequested', false)
+            on-sliderImagesIndexChanged('emit', 'sliderImagesIndexChanged')
+        />
+
+        <breakpoint-condition break='ms'>
+            <rowControls smallBottom=true />
+        </breakpoint-condition>
+    </div>
+</button-default>
+
+style.less {
+    .card-post-expanded {
+        --info-spacing: 10px;
+        --padding: 15px 0 15px;
+        --spacing: 5px;
+        --vote-width: 60px;
+        --wrapper-padding: 10px var(--app-padding) 20px 0;
+        --wrapper-spacing: 15px;
+
+        border-bottom: 1px solid var(--color-border1);
+        display: flex;
+        gap: var(--spacing);
+        .transition(background-color 0.2s ease-out);
+
+        >.vote {
+            align-self: flex-start;
+            width: var(--vote-width);
+        }
+
+        >.wrapper {
+            display: flex;
+            flex-direction: column;
+            flex-grow: 1;
+            gap: var(--wrapper-spacing);
+            padding: var(--wrapper-padding);
+
+            >.info {
+                display: flex;
+                flex-direction: column;
+                gap: var(--info-spacing);
+                justify-content: space-between;
+
+                >.row {
+                    align-items: flex-start;
+                    display: flex;
+                    justify-content: space-between;
+
+                    >.column {
+                        align-items: center;
+                        display: flex;
+                        gap: var(--controls-spacing);
+                    }
+                }
+            }
+
+            >.thumbnail-post {
+                border-radius: var(--app-borderradius2);
+                flex-grow: 1;
+                flex-shrink: 0;
+                opacity: 0.9;
+                overflow: hidden;
+                width: 100%;
+                .transition(border-color 0.2s ease-out, opacity 0.2s ease-out;);
+
+                &.type-image,
+                &.type-link {
+                    border: 1px solid var(--color-border1);
+                }
+            }
+
+            >.row {
+                align-items: center;
+                display: flex;
+                justify-content: space-between;
+
+                >.column {
+                    align-items: center;
+                    display: flex;
+                    gap: var(--controls-spacing);
+                }
+            }
+        }
+
+        &.seen {
+            >.wrapper {
+                >.info {
+                    >.title-post {
+                        >.title {
+                            color: var(--color-text1);
+                        }
+                    }
+                }
+            }
+        }
+
+        &:hover,
+        &.selected {
+            background-color: var(--color-button1);
+
+            >.wrapper {
+                >.info {
+                    >.title-post {
+                        >.title {
+                            color: var(--color-text4);
+                        }
+                    }
+                }
+
+                >.thumbnail-post {
+                    --color-gradient-rgb: var(--color-button1-rgb);
+
+                    border-color: var(--color-border2);
+                    opacity: 1;
+                }
+            }
+        }
+
+        // Media queries
+
+        .r-max(@break-xl, {
+            --vote-width: 50px;
+        });
+
+        .r-max(@break-md, {
+            >.wrapper {
+                >.thumbnail-post {
+                    opacity: 1;
+                }
+            }
+        });
+
+        .r-max(@break-ms, {
+            --wrapper-padding: var(--app-padding);
+            --wrapper-spacing: 10px;
+        });
+    }
+};

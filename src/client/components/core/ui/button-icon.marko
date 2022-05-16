@@ -1,0 +1,278 @@
+class {
+    onCreate(input) {
+        this.draggable = input.draggable
+
+        this.dragEnd = this.dragEnd.bind(this)
+        this.dragLeave = this.dragLeave.bind(this)
+        this.dragOver = this.dragOver.bind(this)
+        this.dragStart = this.dragStart.bind(this)
+        this.drop = this.drop.bind(this)
+    }
+
+    onInput(input) {
+        const draggableOld = this.draggable
+
+        this.draggable = input.draggable
+
+        if(this.mounted && this.draggable != draggableOld) {
+            this.updateDragListeners()
+        }
+    }
+
+    onMount() {
+        if(this.draggable) {
+            this.updateDragListeners()
+        }
+
+        this.mounted = true
+    }
+
+    dragEnd(event) {
+        this.emit('dragend', event)
+    }
+
+    dragLeave(event) {
+        this.emit('dragleave', event)
+    }
+
+    dragOver(event) {
+        this.emit('dragover', event)
+    }
+
+    dragStart(event) {
+        this.emit('dragstart', event)
+    }
+
+    drop(event) {
+        this.emit('drop', event)
+    }
+
+    updateDragListeners() {
+        const button = this.getComponent('button')
+
+        if(this.draggable) {
+            button.on('dragend', this.dragEnd)
+            button.on('dragover', this.dragOver)
+            button.on('dragleave', this.dragLeave)
+            button.on('dragstart', this.dragStart)
+            button.on('drop', this.drop)
+        }
+        else {
+            button.off('dragend', this.dragEnd)
+            button.off('dragover', this.dragOver)
+            button.off('dragleave', this.dragLeave)
+            button.off('dragstart', this.dragStart)
+            button.off('drop', this.drop)
+        }
+    }
+}
+
+<button-default.button-icon
+    key='button'
+    class=[input.class, input.loading ? 'loading' : '']
+    disabled=input.disabled
+    draggable=input.draggable
+    href=input.href
+    link=input.link
+    newTab=input.newTab
+    style=input.style
+    tabindex=input.tabindex
+    tooltip=input.tooltip
+    tooltipExtraClasses=input.tooltipExtraClasses
+    on-click('emit', 'click')
+    on-contextmenu('emit', 'contextmenu')
+    on-focusout('emit', 'focusout')
+    on-middleClick('emit', 'middleClick')
+    on-mouseout('emit', 'mouseout')
+    on-mouseover('emit', 'mouseover')
+>
+    <if(input.expandAreaTouch || (input.class && input.class.includes('icon-only')))>
+        <div.area-touch />
+    </if>
+
+    <icon
+        class=(['channel', 'comments'].includes(input.icon) ? 'icon-grow' : '')
+        flip=input.iconFlip
+        name=(input.loading ? 'loading' : input.icon)
+        rotation=input.iconRotation
+    />
+
+    <${input.renderBody} />
+</button-default>
+
+style.less {
+    .button-icon {
+        --backgroundcolor: var(--color-background2);
+        --bordercolor: var(--color-border1);
+        --color: var(--color-icon2);
+        --icon-size: 20px;
+        --size: 40px;
+
+        background-color: var(--backgroundcolor);
+        border: 1px solid var(--bordercolor);
+        border-radius: var(--app-borderradius);
+        color: var(--color);
+        height: var(--size);
+        min-width: var(--size);
+        position: relative;
+        .flex-center();
+        .transition(background-color 0.1s ease-out, color 0.1s ease-out;);
+
+        >.area-touch {
+            .absolute-fill();
+            .scale(2);
+        }
+
+        >.icon {
+            display: flex;
+            pointer-events: none;
+            .size(var(--icon-size));
+
+            &.icon-grow {
+                height: unset;
+                width: calc(var(--icon-size) + 4px);
+            }
+        }
+
+        &:hover {
+            >.icon {
+                .scale(1.1);
+            }
+        }
+
+        &:hover,
+        &.selected {
+            --backgroundcolor: var(--color-button1);
+            --bordercolor: var(--color-border1);
+            --color: var(--color-icon3);
+        }
+
+        &.light {
+            --color: var(--color-icon1);
+
+            &:hover,
+            &.selected {
+                --color: var(--color-icon2);
+            }
+        }
+
+        &.small {
+            --icon-size: 17px;
+            --size: 30px;
+
+            border-radius: 4px;
+        }
+
+        &.medium {
+            --icon-size: 18px;
+        }
+
+        &.big {
+            --icon-size: 30px;
+            --size: 50px;
+        }
+
+        &.icon-only {
+            --backgroundcolor: transparent;
+            --size: var(--icon-size);
+
+            border: none;
+            padding: 0;
+        }
+
+        &.bg-transparent {
+            --backgroundcolor: transparent;
+            --bordercolor: transparent;
+        }
+
+        &.special {
+            &:hover,
+            &.selected {
+                --color: var(--color-accent1);
+            }
+        }
+
+        &.danger {
+            &:hover {
+                --color: var(--color-warning);
+
+                &:not(.bg-transparent) {
+                    --bordercolor: var(--color-warning);
+
+                    &.small {
+                        --bordercolor: var(--color-border2);
+                    }
+                }
+            }
+        }
+
+        &.loading {
+            >.icon {
+                .svg-loading();
+            }
+        }
+
+        &.disabled {
+            opacity: 0.4;
+        }
+
+        // Media queries.
+
+        .r-max(@break-xl, {
+            --icon-size: 18px;
+            --size: 36px;
+
+            &.small {
+                --icon-size: 16px;
+                --size: 32px;
+            }
+
+            &.big {
+                --icon-size: 28px;
+                --size: 44px;
+            }
+
+            &.icon-only {
+                --size: var(--icon-size);
+            }
+        });
+
+        .r-max(@break-md, {
+            --icon-size: 17px;
+            --size: 34px;
+
+            &.small {
+                --icon-size: 15px;
+                --size: 30px;
+            }
+
+            &.big {
+                --icon-size: 24px;
+                --size: 40px;
+            }
+
+            &.icon-only {
+                --size: var(--icon-size);
+            }
+        });
+
+        .r-max(@break-xs, {
+            --icon-size: 16px;
+            --size: 32px;
+
+            &.small {
+                --icon-size: 15px;
+                --size: 26px;
+            }
+
+            &.big {
+                --icon-size: 20px;
+                --size: 36px;
+            }
+
+            &.icon-only {
+                --size: var(--icon-size);
+            }
+        });
+    }
+};

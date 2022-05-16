@@ -1,0 +1,196 @@
+import appm from 'js/app-manager'
+import { validateEmail, validatePassword, validateUsername } from 'js/utils'
+
+class {
+    onCreate() {
+        this.state = {
+            passwordVisible: false,
+            status: 0
+        }
+
+        this.signedIn = this.signedIn.bind(this)
+        this.signInError = this.signInError.bind(this)
+    }
+
+    onMount() {
+        this.errorMessages = appm.tr('status')
+        this.idUserComponent = this.getComponent('inputIdUser')
+        this.passwordComponent = this.getComponent('inputPassword')
+        this.statusMessage = this.getComponent('statusMessage')
+
+        appm.on('signedIn', this.signedIn)
+        appm.on('signInError', this.signInError)
+    }
+
+    onDestroy() {
+        appm.off('signedIn', this.signedIn)
+        appm.off('signInError', this.signInError)
+    }
+
+    // Functions
+
+    keyPressed(event) {
+        switch(event.keyCode) {
+            case 27: // Escape
+                this.emit('closeRequested')
+                break
+            case 13:
+                this.submitRequested()
+                break
+        }
+    }
+
+    signedIn() {
+        this.emit('closeRequested')
+    }
+
+    signInError(error) {
+        switch(error) {
+        case 1:
+            this.idUserComponent.setValid(false)
+            this.passwordComponent.setValid(false)
+            this.statusMessage.setMessage(this.errorMessages.wrongSignInDetails)
+            break
+        case 2:
+            this.statusMessage.setMessage(this.errorMessages.emailNotVerified)
+            break
+        case 3:
+            this.statusMessage.setMessage(this.errorMessages.userBanned)
+            break
+        case -100:
+            this.statusMessage.setMessage(this.errorMessages.problemReachingServers)
+            break
+        default:
+            this.statusMessage.setMessage(this.errorMessages.problemUnknown)
+            break
+        }
+
+        this.state.status = -1
+    }
+
+    submitRequested() {
+        if(this.state.status == 1) {
+            return
+        }
+
+        const idUser = this.idUserComponent.getValue().trim()
+        const password = this.passwordComponent.getValue()
+
+        this.statusMessage.hide()
+
+        let validData = true
+
+        if(!validateUsername(idUser) && !validateEmail(idUser)) {
+            this.idUserComponent.setValid(false, this.errorMessages.invalidIdUser)
+            validData = false
+        }
+
+        if(!validatePassword(password)) {
+            this.passwordComponent.setValid(false, this.errorMessages.invalidPassword)
+            validData = false
+        }
+
+        if(!validData) {
+            return
+        }
+
+        this.state.status = 1
+
+        appm.signIn(idUser, password)
+    }
+
+    togglePasswordVisibility() {
+        this.state.passwordVisible = !this.state.passwordVisible
+    }
+}
+
+$ const trGeneric = appm.tr('generic') || {}
+$ const trSignIn = appm.tr('auth.signIn') || {}
+
+<panel-auth.panel-signin
+    class=input.class
+    idImageBanner='signin'
+    text=trSignIn.text
+>
+    <div.inputs>
+        <input-text.big
+            key='inputIdUser'
+            icon='userId'
+            maxlength=320
+            noExternalUpdate
+            placeholder=appm.tr('generic.idUser')
+            on-keyup('keyPressed')
+        />
+
+        <input-password.big
+            key='inputPassword'
+            charsVisible=state.passwordVisible
+            placeholder=appm.tr('generic.password')
+            on-keyPressed('keyPressed')
+            on-toggleVisibility('togglePasswordVisibility')
+        />
+    </div>
+
+    <div.wrapper-submit>
+        <text-agreement on-closeRequested('emit', 'closeRequested') />
+
+        <status-message key='statusMessage' />
+
+        <button-submit.button-signin.big
+            loading=(state.status == 1)
+            text=trSignIn.buttonSignIn
+            on-click('submitRequested')
+        />
+    </div>
+
+    <div.other>
+        <button-text
+            icon='key'
+            text='Recuperar'
+            on-click('emit', 'showRecoverAccount')
+        />
+
+        <button-text
+            icon='user'
+            text='Criar conta'
+            on-click('emit', 'showSignUp')
+        />
+    </div>
+</panel-auth>
+
+style.less {
+    .panel-signin {
+        >.wrapper {
+            >.inputs {
+                display: flex;
+                flex-direction: column;
+                gap: var(--inputs-spacing);
+                width: 100%;
+            }
+
+            >.wrapper-submit {
+                align-items: flex-start;
+                display: flex;
+                flex-direction: column;
+                gap: 20px;
+            }
+
+            >.other {
+                display: flex;
+                gap: 15px;
+            }
+        }
+
+        // Media queries
+
+        .r-max(@break-ms, {
+            >.wrapper-image {
+                >.banner {
+                    >img {
+                        object-position: 50% 72%;
+                    }
+                }
+            }
+        });
+    }
+};

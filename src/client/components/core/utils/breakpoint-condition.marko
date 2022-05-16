@@ -1,0 +1,61 @@
+import appm from 'js/app-manager'
+
+class {
+    onCreate(input) {
+        this.state = {
+            breakpoint: input.break,
+            check: false,
+            min: input.min || false
+        }
+
+        this.calculateVisibility = this.calculateVisibility.bind(this)
+    }
+
+    onMount() {
+        this.calculateVisibility()
+
+        appm.on('resize', this.calculateVisibility)
+    }
+
+    onDestroy() {
+        appm.off('resize', this.calculateVisibility)
+    }
+
+    calculateVisibility() {
+        const breakpoint = this.state.breakpoint
+        const width = window.innerWidth
+        const min = this.state.min
+        let check
+
+        if(breakpoint == 'xxs') {
+            check = min ? width > 320 : width <= 320
+        }
+        else if(breakpoint == 'xs') {
+            check = min ? width > 480 : width <= 480
+        }
+        else if(breakpoint == 'sm') {
+            check = min ? width > 576 : width <= 576
+        }
+        else if(breakpoint == 'ms') {
+            check = min ? width > 768 : width <= 768
+        }
+        else if(breakpoint == 'md') {
+            check = min ? width > 992 : width <= 992
+        }
+        else if(breakpoint == 'lg') {
+            check = min ? width > 1200 : width <= 1200
+        }
+        else if(breakpoint == 'xl') {
+            check = min ? width > 1440 : width <= 1440
+        }
+
+        this.state.check = check
+    }
+}
+
+<if(state.check)>
+    <${input.renderBody} />
+</if>
+<else-if(data.else)>
+    <${data.else} />
+</else-if>

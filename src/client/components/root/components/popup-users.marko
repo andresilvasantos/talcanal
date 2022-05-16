@@ -1,0 +1,422 @@
+import appm from 'js/app-manager'
+import { timers } from 'js/default-vars'
+
+class {
+    onCreate(input) {
+        this.state = {
+            countUsers: 0,
+            fetchingUsers: true,
+            users: [],
+            userSelected: null
+        }
+
+        this.filter = ''
+        this.filtersExtra = {}
+        this.idsUsersExcluded = []
+        this.pageCurrent = 0
+        this.purpose = input.purpose
+
+        this.usersFetched = this.usersFetched.bind(this)
+    }
+
+    onInput(input) {
+        const purposeOld = this.purpose
+
+        if(purposeOld != input.purpose) {
+            this.purpose = input.purpose
+            this.fetchUsers()
+        }
+    }
+
+    onMount() {
+        this.popupComponent = this.getComponent('popup')
+
+        appm.on('fetchItemsSuccess', this.usersFetched)
+    }
+
+    onDestroy() {
+        clearTimeout(this.timeoutBetweenFetches)
+
+        appm.off('fetchItemsSuccess', this.usersFetched)
+    }
+
+    // Getters & Setters.
+
+    isVisible() {
+        return this.visible
+    }
+
+    // Functions.
+
+    clearFilter() {
+        this.getComponent('inputSearch').clear()
+    }
+
+    fetchUsers() {
+        this.state.fetchingUsers = true
+
+        if(!this.pageCurrent) {
+            this.state.countUsers = 0
+            this.state.users = []
+            this.selectUser(null)
+        }
+
+        if(this.timeoutBetweenFetches) {
+            clearTimeout(this.timeoutBetweenFetches)
+        }
+
+        const filtersExtra = Object.assign({}, this.filtersExtra)
+
+        if(this.purpose) {
+            filtersExtra[this.purpose] = true
+        }
+        else {
+            filtersExtra.exclude = this.idsUsersExcluded
+        }
+
+        this.timeoutBetweenFetches = setTimeout(() => {
+            this.idFetchUsers = appm.fetchItems(
+                'users', this.filter, filtersExtra, this.pageCurrent, 'az'
+            )
+        }, timers.betweenFetches)
+    }
+
+    hide() {
+        if(!this.visible) {
+            return
+        }
+
+        this.popupComponent.hide()
+    }
+
+    hidden() {
+        this.visible = false
+
+        this.emit('hidden')
+    }
+
+    keyPressed(event) {
+        switch(event.keyCode) {
+            case 13: // Enter
+                break
+            case 27:
+                this.hide()
+        }
+    }
+
+    searchChanged(search) {
+        this.pageCurrent = 0
+        this.filter = search
+
+        this.fetchUsers()
+        this.emit('searchChanged', search)
+    }
+
+    selectUser(user) {
+        this.state.userSelected = user
+
+        this.emit('userSelectionChanged', this.state.userSelected)
+    }
+
+    show(usersExcluded = [], filtersExtra = {}) {
+        if(this.visible) {
+            return
+        }
+
+        this.filtersExtra = filtersExtra
+        this.idsUsersExcluded = usersExcluded.map(user => user._id)
+        this.visible = true
+
+        this.popupComponent.show()
+        this.fetchUsers()
+    }
+
+    submitRequested() {
+        if(!this.state.userSelected) {
+            return
+        }
+
+        this.emit('submitRequested', this.state.userSelected)
+    }
+
+    userAccepted(username, accepted) {
+        for(const user of this.state.users) {
+            if(user.username == username) {
+                user.isMember = accepted
+                user.text = null
+
+                const userSelected = this.state.userSelected
+
+                if(userSelected && userSelected.username == username) {
+                    this.emit('userSelectionChanged', userSelected)
+                }
+
+                this.setStateDirty('users')
+                break
+            }
+        }
+    }
+
+    userBanned(username, banned) {
+        for(const user of this.state.users) {
+            if(user.username == username) {
+                user.isBanned = banned
+
+                const userSelected = this.state.userSelected
+
+                if(userSelected && userSelected.username == username) {
+                    this.emit('userSelectionChanged', userSelected)
+                }
+
+                this.setStateDirty('users')
+                break
+            }
+        }
+    }
+
+    userInvited(username, invited) {
+        for(const user of this.state.users) {
+            if(user.username == username) {
+                user.isMember = invited
+
+                const userSelected = this.state.userSelected
+
+                if(userSelected && userSelected.username == username) {
+                    this.emit('userSelectionChanged', userSelected)
+                }
+
+                this.setStateDirty('users')
+                break
+            }
+        }
+    }
+
+    usersFetched(idFetch, items, count) {
+        if(idFetch != this.idFetchUsers) {
+            return
+        }
+
+        this.state.fetchingUsers = false
+
+        if(this.pageCurrent > 0) {
+            const usersUnique = items.filter(user => !this.idsUsers.includes(user.username))
+
+            this.state.users = this.state.users.concat(usersUnique)
+            this.idsUsers = this.idsUsers.concat(usersUnique.map(user => user.username ))
+        }
+        else {
+            this.state.users = items
+            this.idsUsers = items.map(user => user.username)
+        }
+
+        this.state.countUsers = count
+    }
+}
+
+<popup.popup-users
+    key='popup'
+    class=input.class
+    title=input.title
+    on-hidden('hidden')
+    on-keyPressed('keyPressed')
+>
+    <${ data.afterTitle } />
+
+    <div.wrapper-search>
+        <input-search.big
+            key='inputSearch'
+            count=state.countUsers
+            loading=state.fetchingUsers
+            placeholder=appm.tr('generic.searchUser')
+            on-searchChanged('searchChanged')
+        />
+    </div>
+
+    <div.wrapper-users>
+        <for|user| of=state.users>
+            $ const selected = state.userSelected && state.userSelected.username == user.username
+
+            <button-default.user
+                class=(selected ? 'selected' : '')
+                on-click('selectUser', user)
+            >
+                <div.wrapper>
+                    <div.wrapper-image>
+                        <if(user.image)>
+                            <image.cover
+                                lazyload
+                                noPlaceholder
+                                src=`${appm.getUrlCdn()}/${user.image}-tn.jpg`
+                            />
+                        </if>
+                        <else>
+                            <icon name='image' />
+                        </else>
+                    </div>
+
+                    <span.username>
+                        ${user.username}
+                    </span>
+
+                    <div.icons>
+                        <if(user.isAdmin)>
+                            <icon name='key' />
+                        </if>
+                        <else-if(user.isMod)>
+                            <icon name='shield' />
+                        </else-if>
+                        <else-if(user.isMember)>
+                            <icon name='user' />
+                        </else-if>
+                        <else-if(user.isBanned)>
+                            <icon.danger name='block' />
+                        </else-if>
+                    </div>
+                </div>
+
+                <if(input.purpose == 'requests' && user.text)>
+                    <text-p.text-request>
+                        "${user.text}"
+                    </text-p>
+                </if>
+            </button-default>
+        </for>
+    </div>
+
+    <div.controls>
+        <if(data.controls)>
+            <${data.controls} />
+        </if>
+        <else>
+            <button-submit.big
+                class=(input.danger ? 'danger' : '')
+                disabled=(!state.userSelected)
+                icon=input.iconButton
+                loading=(input.status == 1)
+                text=input.textButton
+                on-click('submitRequested')
+            />
+        </else>
+    </div>
+</popup>
+
+style.less {
+    .popup.popup-users {
+        --image-size: 40px;
+        --imageicon-size: 20px;
+        --wrappersearch-padding: 30px;
+        --wrapperusers-height: 250px;
+
+        >.wrapper {
+            >.panel {
+                max-width: 480px; // TODO
+
+                >.wrapper-search {
+                    border-bottom: 1px solid var(--color-border2);
+                    padding: var(--wrappersearch-padding);
+
+                    >.input-search {
+                        width: 100%;
+                    }
+                }
+
+                >.wrapper-users {
+                    display: flex;
+                    flex-direction: column;
+                    height: var(--wrapperusers-height);
+                    .scroll-custom();
+
+                    >.user {
+                        display: flex;
+                        flex-direction: column;
+                        padding: 0 30px; // TODO
+                        .transition(background-color 0.2s ease-out);
+
+                        >.wrapper {
+                            align-items: center;
+                            display: flex;
+                            gap: 15px; // TODO
+                            height: 60px; // TODO
+
+                            >.wrapper-image {
+                                background-color: var(--color-background3);
+                                border-radius: 50%;
+                                overflow: hidden;
+                                position: relative;
+                                .flex-center();
+                                .size(var(--image-size));
+
+                                >.image {
+                                    .absolute-fill();
+                                }
+
+                                >.icon {
+                                    color: var(--color-icon1);
+                                    display: flex;
+                                    .size(var(--imageicon-size));
+                                }
+                            }
+
+                            >.username {
+                                color: var(--color-text2);
+                                font-family: @font-medium;
+                                font-size: 18px; // TODO
+                                .transition(color 0.2s ease-out);
+                            }
+
+                            >.icons {
+                                align-items: center;
+                                display: flex;
+                                gap: 10px; // TODO
+                                margin-left: auto;
+
+                                >.icon {
+                                    color: var(--color-accent1);
+                                    .size(20px);
+
+                                    &.danger {
+                                        color: var(--color-warning);
+                                    }
+                                }
+                            }
+                        }
+
+                        >.text-request {
+                            color: var(--color-text2);
+                            margin-left: 55px;
+                            margin-top: -10px;
+                            padding-bottom: 15px;
+                        }
+
+                        &:hover {
+                            background-color: var(--color-button1);
+
+                            >.wrapper {
+                                >.username {
+                                    color: var(--color-text4);
+                                }
+                            }
+                        }
+
+                        &.selected {
+                            background-color: var(--color-button2);
+
+                            >.wrapper {
+                                >.username {
+                                    color: var(--color-text4);
+                                }
+                            }
+                        }
+                    }
+                }
+
+                >.controls {
+                    border-top: 1px solid var(--color-border2);
+                    gap: 10px; // TODO
+                    padding: 30px 0;
+                    .flex-center();
+                }
+            }
+        }
+    }
+};

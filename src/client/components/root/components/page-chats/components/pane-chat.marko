@@ -1,0 +1,641 @@
+import appm from 'js/app-manager'
+import { processObjectsTr, scrollReachTop } from 'js/utils'
+import { timers } from 'js/default-vars'
+
+class {
+    onCreate() {
+        this.state = {
+            chat: {},
+            countMessages: 0,
+            fetchingChat: true,
+            fetchingMessages: true,
+            messages: [],
+            status: 0,
+            user: appm.getUser(),
+            userPair: {}
+        }
+
+        this.filter = ''
+        this.pageCurrent = 0
+
+        this.chatDeleted = this.chatDeleted.bind(this)
+        this.itemsFetched = this.itemsFetched.bind(this)
+        this.messageSent = this.messageSent.bind(this)
+        this.pinged = this.pinged.bind(this)
+        this.sendMessageError = this.sendMessageError.bind(this)
+        this.userUpdated = this.userUpdated.bind(this)
+    }
+
+    onMount() {
+        this.inputMessage = this.getComponent('inputMessage')
+
+        appm.on('deleteItemSuccess', this.chatDeleted)
+        appm.on('fetchItemsSuccess', this.itemsFetched)
+        appm.on('messageSent', this.messageSent)
+        appm.on('sendMessageError', this.sendMessageError)
+        appm.on('pingChatSuccess', this.pinged)
+        appm.on('userUpdated', this.userUpdated)
+
+        document.addEventListener('visibilitychange', () => {
+            if(document.hidden) {
+                appm.stopPingChat(this.state.chat.id)
+            }
+            else {
+                appm.startPingChat(this.state.chat.id)
+            }
+        })
+    }
+
+    onDestroy() {
+        clearTimeout(this.timeoutBetweenFetches)
+        appm.stopPingChat()
+
+        appm.off('deleteItemSuccess', this.chatDeleted)
+        appm.off('fetchItemsSuccess', this.itemsFetched)
+        appm.off('messageSent', this.messageSent)
+        appm.off('sendMessageError', this.sendMessageError)
+        appm.off('pingChatSuccess', this.pinged)
+        appm.off('userUpdated', this.userUpdated)
+    }
+
+    // Getters & Setters.
+
+    setData(chat) {
+        this.state.chat = Object.assign({}, chat)
+        this.state.userPair = {}
+        this.state.messages = []
+        this.mapMessages = new Map()
+        this.mapRequests = new Map()
+        this.pageCurrent = 0
+
+        this.inputMessage.setValue('')
+
+        appm.stopPingChat()
+
+        if(!chat.creator) {
+            const heightOld = document.documentElement.scrollHeight
+
+            this.fetchChat()
+
+            this.update()
+            // Update scroll so it won't jump to the top.
+            const height = document.documentElement.scrollHeight
+            window.scrollTo(0, height - heightOld)
+        }
+        else {
+            this.state.fetchingChat = false
+
+            for(const user of this.state.chat.users) {
+                if(user.username != this.state.user.username) {
+                    this.state.userPair = user
+                    break
+                }
+            }
+
+            this.fetchMessages()
+
+            appm.startPingChat(this.state.chat.id)
+        }
+    }
+
+    // Functions.
+
+    chatDeleted(type, id) {
+        if(type != 'chats' || id != this.state.chat.id) {
+            return
+        }
+
+        appm.openPage('chats', '', { allowBack: false })
+    }
+
+    checkLoadMore() {
+        if(
+            this.state.fetchingChat ||
+            this.state.fetchingMessages ||
+            !this.state.messages.length ||
+            this.state.messages.length >= this.state.countMessages ||
+            !scrollReachTop(this.getEl())
+        ) {
+            return
+        }
+
+        ++this.pageCurrent
+
+        this.fetchMessages()
+    }
+
+    controlRequested(idControl) {
+        switch(idControl) {
+            case 'enableNotifications':
+            case 'disableNotifications':
+                this.toggleNotifications()
+                break
+            case 'block':
+                this.state.user.usersBlocked.push({ _id: this.state.userPair._id })
+
+                appm.updateAccount({ usersBlocked: this.state.user.usersBlocked })
+                break
+            case 'unblock':
+                for(const [index, user] of this.state.user.usersBlocked.entries()) {
+                    if(user.username == this.state.userPair.username) {
+                        this.state.user.usersBlocked.splice(index, 1)
+                        break
+                    }
+                }
+
+                appm.updateAccount({ usersBlocked: this.state.user.usersBlocked })
+                break
+            case 'report':
+                appm.showPopup('report', 'users', this.state.userPair.username)
+                break
+            case 'delete':
+                appm.deleteItem('chats', this.state.chat.id)
+                break
+        }
+    }
+
+    fetchChat() {
+        this.state.fetchingChat = true
+
+        if(this.timeoutBetweenFetches) {
+            clearTimeout(this.timeoutBetweenFetches)
+        }
+
+        this.timeoutBetweenFetches = setTimeout(() => {
+            this.idFetchChat = appm.fetchItems(
+                'chats', '', { id: this.state.chat.id }, 0
+            )
+        }, timers.betweenFetches)
+    }
+
+    fetchMessages(idFetch, items, count) {
+        this.state.fetchingMessages = true
+
+        if(!this.pageCurrent) {
+            this.state.countMessages = 0
+            this.state.messages = []
+        }
+
+        if(this.timeoutBetweenFetches) {
+            clearTimeout(this.timeoutBetweenFetches)
+        }
+
+        this.timeoutBetweenFetches = setTimeout(() => {
+            this.idFetchMessages = appm.fetchItems(
+                'messages', this.filter, { chat: this.state.chat._id }, this.pageCurrent, 'new'
+            )
+        }, timers.betweenFetches)
+    }
+
+    keyPressed(event) {
+        switch(event.keyCode) {
+            case 13:
+                this.sendMessage()
+                break
+        }
+    }
+
+    messageSent(idSend, idChat, dataMessage) {
+        if(!this.mapRequests.has(idSend)) {
+            return
+        }
+
+        const message = this.mapRequests.get(idSend)
+
+        message.id = dataMessage.id
+        message.delivered = true
+        message.problem = false
+
+        this.mapRequests.delete(idSend)
+        this.mapMessages.set(dataMessage.id, message)
+        this.setStateDirty('messages')
+    }
+
+    itemsFetched(idFetch, items, count) {
+        if(idFetch != this.idFetchMessages && idFetch != this.idFetchChat) {
+            return
+        }
+
+        if(idFetch == this.idFetchMessages) {
+            this.state.fetchingMessages = false
+
+            if(this.pageCurrent > 0) {
+                const heightOld = document.documentElement.scrollHeight
+                const messagesUnique = items.filter(message => !this.idsMessages.includes(message.id))
+
+                for(const message of messagesUnique) {
+                    if(message.sender == appm.getUser()._id) {
+                        message.self = true
+                    }
+                }
+
+                this.state.messages = messagesUnique.reverse().concat(this.state.messages)
+                this.idsMessages = this.idsMessages.concat(messagesUnique.map(message => message.id ))
+
+                this.update()
+
+                // Update scroll so it won't jump to the top.
+                const height = document.documentElement.scrollHeight
+                window.scrollTo(0, height - heightOld)
+            }
+            else {
+                for(const message of items) {
+                    if(message.sender == appm.getUser()._id) {
+                        message.self = true
+                    }
+                }
+
+                this.state.messages = items.reverse()
+                this.idsMessages = items.map(message => message.id )
+
+                // Scroll to bottom.
+                this.update()
+                window.scrollTo(0, document.body.scrollHeight)
+            }
+
+            this.state.countMessages = count
+        }
+        else if(idFetch == this.idFetchChat) {
+            this.state.fetchingChat = false
+
+            if(!items.length) {
+                appm.openPage('error')
+                return
+            }
+
+            this.state.chat = items[0]
+
+            for(const user of this.state.chat.users) {
+                if(user.username != this.state.user.username) {
+                    this.state.userPair = user
+                    break
+                }
+            }
+
+            this.fetchMessages()
+
+            appm.startPingChat(this.state.chat.id)
+        }
+    }
+
+    pinged(data) {
+        if(data.idChat != this.state.chat.id) {
+            return
+        }
+
+        if(data.message) {
+            const message = data.message
+            const scrollY = window.scrollY
+            const scrollHeight = document.body.scrollHeight
+            const threshold = 50
+            const atBottom = (scrollHeight - window.innerHeight) - scrollY < threshold
+
+            this.mapMessages.set(message.id, message)
+            this.state.messages.push(message)
+
+            this.setStateDirty('messages')
+
+            if(atBottom) {
+                this.update()
+                window.scrollTo(0, document.body.scrollHeight)
+            }
+        }
+    }
+
+    profileRequested(user, newTab = false) {
+        appm.openPage('channels', 'user', { allowBack: true, newTab }, user)
+    }
+
+    sendMessage() {
+        const message = this.inputMessage.getValue().trim()
+
+        if(!message.length) {
+            this.inputMessage.setValid(false)
+            this.inputMessage.focusInput()
+            return
+        }
+
+        this.inputMessage.setValue('')
+        this.inputMessage.focusInput()
+
+        const idSend = appm.sendMessage(this.state.chat.id, message)
+        const dataMessage = { text: message, time: Date.now(), self: true }
+
+        this.mapRequests.set(idSend, dataMessage)
+
+        // Update messages locally with message (not delivered).
+        this.state.messages.push(dataMessage)
+        this.setStateDirty('messages')
+
+        // Scroll to bottom.
+        this.update()
+        window.scrollTo(0, document.body.scrollHeight)
+    }
+
+    sendMessageError(idSend) {
+        if(!this.mapRequests.has(idSend)) {
+            return
+        }
+
+        const message = this.mapRequests.get(idSend)
+
+        message.problem = true
+
+        this.mapRequests.delete(idSend)
+        this.setStateDirty('messages')
+    }
+
+    toggleNotifications() {
+        this.state.chat.notificationsDisabled = !this.state.chat.notificationsDisabled
+
+        appm.updateAccount({ chat: {
+            id: this.state.chat.id,
+            notificationsDisabled: this.state.chat.notificationsDisabled
+        }})
+
+        this.setStateDirty('chat')
+    }
+
+    toggleSearch() {
+        console.log('TODO')
+    }
+
+    userUpdated(user) {
+        this.state.user = user
+
+        this.setStateDirty('user')
+    }
+}
+
+$ const processOptions = (chat, isBlocked, trOptions) => {
+    const options = []
+
+    options.push({
+        id: chat.notificationsDisabled ? 'enableNotifications' : 'disableNotifications',
+        icon: chat.notificationsDisabled ? 'bell' : 'bellOff'
+    })
+
+    options.push({
+        id: isBlocked ? 'unblock' : 'block',
+        danger: !isBlocked,
+        icon: isBlocked ? 'check' : 'block',
+        special: isBlocked
+    })
+
+    options.push({
+        id: 'report',
+        danger: true,
+        icon: 'flag'
+    })
+
+    options.push({
+        id: 'delete',
+        danger: true,
+        icon: 'bin'
+    })
+
+    return processObjectsTr(options, trOptions)
+}
+
+$ const processUserBlocked = (user, userPair) => {
+    if(!user) {
+        return false
+    }
+
+    let isBlocked = false
+
+    for(const userBlocked of user.usersBlocked) {
+        if(userBlocked.username == userPair.username) {
+            isBlocked = true
+        }
+    }
+
+    return isBlocked
+}
+
+$ const chat = state.chat || {}
+$ const userPair = state.userPair || {}
+$ const trChats = appm.tr('chats') || {}
+$ const trChat = trChats.chat || {}
+$ const trTooltips = trChats.tooltips || {}
+$ const isBlocked = processUserBlocked(state.user, state.userPair)
+
+<pane-default.pane-chat
+    key='root'
+    allowBack
+    class=input.class
+    disableRefresh
+    idPage='chats'
+    scrollInverted
+>
+    <@barTitleCustom>
+        <button-default.button-profile
+            on-click('profileRequested', userPair, false)
+            on-middleClick('profileRequested', userPair, true)
+        >
+            <image-circle icon='user' image=userPair.image />
+        </button-default>
+
+        <span.username>
+            ${userPair.username}
+        </span>
+    </@barTitleCustom>
+
+    <@barControls>
+        <button-icon.light
+            disabled
+            icon='search'
+            tooltip='Procura mensagens'
+            on-click('toggleSearch')
+        />
+
+        <button-icon-menu.open-left
+            icon='ellipsis'
+            iconRotation=90
+            options=processOptions(
+                chat,
+                isBlocked,
+                trChats.controls
+            )
+            tooltip=trTooltips.more
+            on-optionRequested('controlRequested')
+        />
+    </@barControls>
+
+    <@contents>
+        <div.messages>
+            <!-- <text-p.message-intro>
+                $!{trChat.messageStart}
+            </text-p> -->
+
+            <for|message, index| of=state.messages>
+                <balloon-message message=message />
+            </for>
+
+            <if(isBlocked)>
+                <div.message-userblocked>
+                    <icon name='block' />
+
+                    <text-p.text>
+                        ${trChat.userBlocked}
+                    </text-p>
+                </div>
+            </if>
+        </div>
+
+        <div.typer>
+            <input-textrich.input-message.big
+                key='inputMessage'
+                disabled=isBlocked
+                lineBreakWithShift
+                mini
+                noExternalUpdate
+                placeholder=trChat.inputMessage
+                on-keydown('keyPressed')
+            />
+
+            <button-icon.button-send.big
+                disabled=isBlocked
+                icon='send2'
+                on-click('sendMessage')
+            />
+        </div>
+    </@contents>
+
+    <@footer>
+        <loading-finder show=(state.fetchingChat || state.fetchingMessages) />
+    </@footer>
+</pane-default>
+
+style.less {
+    .pane-default.pane-chat {
+        --balloon-maxwidth: 80%;
+        --loading-size: 20px;
+        //--messageintro-marginbottom: 40px;
+        --messages-spacing: 5px;
+        --padding-bottom: 20px;
+        --typer-spacing: var(--app-padding);
+        --username-fontsize: 20px;
+
+        padding-bottom: var(--padding-bottom);
+
+        >.bar {
+            >.wrapper-title {
+                >.button-profile {
+                    >.image-circle {
+                        .transition(outline-color 0.2s ease-out);
+                    }
+
+                    &:hover {
+                        >.image-circle {
+                            outline-color: var(--color-border3);
+                        }
+                    }
+                }
+
+                >.username {
+                    color: var(--color-text4);
+                    font-family: @font-medium;
+                    font-size: var(--username-fontsize);
+                }
+            }
+        }
+
+        >.contents {
+            display: flex;
+            flex-direction: column;
+
+            >.messages {
+                background-color: var(--color-background4);
+                display: flex;
+                flex-direction: column;
+                flex-grow: 1;
+                gap: var(--messages-spacing);
+                padding: 70px var(--app-padding) 30px;
+
+                /*>.message-intro {
+                    color: var(--color-text2);
+                    margin-bottom: var(--messageintro-marginbottom);
+                    text-align: center;
+                }*/
+
+                >.balloon-message {
+                    align-self: flex-start;
+                    max-width: var(--balloon-maxwidth);
+
+                    &.self {
+                        align-self: flex-end;
+                    }
+                }
+
+                >.message-userblocked {
+                    align-items: center;
+                    align-self: center;
+                    background-color: var(--color-background2);
+                    border: 1px solid var(--color-warning);
+                    border-radius: var(--app-borderradius);
+                    display: flex;
+                    gap: 10px;
+                    margin-top: 20px; // TODO
+                    padding: 10px 15px;
+
+                    >.icon {
+                        color: var(--color-warning);
+                        .size(20px);
+                    }
+
+                    >.text {
+                        color: var(--color-text5);
+                        text-align: center;
+                    }
+                }
+            }
+
+            >.typer {
+                align-items: center;
+                background-color: var(--color-background2);
+                border-top: 1px solid var(--color-border1);
+                bottom: 0;
+                display: flex;
+                gap: var(--typer-spacing);
+                padding: var(--app-padding);
+                position: sticky;
+
+                >.input-message {
+                    flex-grow: 1;
+                }
+            }
+        }
+
+        >.wrapper-footer {
+            >.loading-finder {
+                bottom: unset;
+                top: 0;
+
+                &.show {
+                    --loading-y: 150%;
+                }
+            }
+        }
+
+        // Media queries.
+
+        .r-max(@break-md, {
+            --username-fontsize: 18px;
+        });
+
+        .r-max(@break-sm, {
+            --padding-bottom: 0;
+
+            >.contents {
+                >.typer {
+                    //position: relative;
+                }
+            }
+        });
+
+        .r-max(@break-xs, {
+            --username-fontsize: 16px;
+        });
+    }
+};

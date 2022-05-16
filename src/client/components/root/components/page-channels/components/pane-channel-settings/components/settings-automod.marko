@@ -1,0 +1,95 @@
+import appm from 'js/app-manager'
+import { maxTriggersAutoMod, modActionOptions, modTriggerTypes, modTriggerDataTypes } from 'js/default-vars'
+
+class {
+    onCreate(input) {
+        this.state = {
+            configAuto: {},
+            triggers: []
+        }
+    }
+
+    onInput(input) {
+        this.state.configAuto = input.configAuto || {}
+        this.state.triggers = this.state.configAuto.triggers || []
+    }
+
+    // Functions.
+
+    addTrigger() {
+        this.state.triggers.push({
+            action: modActionOptions[0],
+            type: modTriggerTypes[0],
+            typeData: modTriggerDataTypes[0].id,
+            value: ''
+        })
+
+        this.setStateDirty('triggers')
+        appm.addAnalyticsEvent('channelSettings', 'addAutoTrigger')
+    }
+
+    removeTrigger(index) {
+        this.state.triggers.splice(index, 1)
+
+        this.setStateDirty('triggers')
+        appm.addAnalyticsEvent('channelSettings', 'removeAutoTrigger')
+    }
+}
+
+$ const trModeration = input.trModeration || {}
+$ const trAutoMod = trModeration.autoMod || {}
+
+<div.settings-automod class=input.class>
+    <span.title>
+        ${trAutoMod.title}
+    </span>
+
+    <if(state.triggers.length)>
+        <div.wrapper-triggers>
+            <for|trigger, index| of=state.triggers>
+                <trigger-automod
+                    trAutoMod=trAutoMod
+                    trigger=trigger
+                    on-removeRequested('removeTrigger', index)
+                />
+            </for>
+        </div>
+    </if>
+
+    <if(state.triggers.length < maxTriggersAutoMod)>
+        <button-text.button-addtrigger
+            icon='plus'
+            text=trAutoMod.buttonAddTrigger
+            on-click('addTrigger')
+        />
+    </if>
+</div>
+
+style.less {
+    .settings-automod {
+        --spacing: 20px;
+        --title-fontsize: 15px;
+        --wrappertriggers-spacing: 10px;
+
+        display: flex;
+        flex-direction: column;
+        gap: var(--spacing);
+
+        >.title {
+            color: var(--color-text1);
+            font-family: @font-medium;
+            font-size: var(--title-fontsize);
+            text-transform: uppercase;
+        }
+
+        >.wrapper-triggers {
+            display: flex;
+            flex-direction: column;
+            gap: var(--wrappertriggers-spacing);
+        }
+
+        >.button-addtrigger {
+            align-self: flex-start;
+        }
+    }
+};

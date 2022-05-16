@@ -1,0 +1,146 @@
+import appm from 'js/app-manager'
+
+<button-default.button-imagetext
+    class=input.class
+    disabled=input.disabled
+    on-click('emit', 'click')
+    on-middleClick('emit', 'middleClick')
+>
+    <image-circle
+        class=input.class
+        icon=input.icon
+        iconRotation=input.iconRotation
+        image=input.idImage
+    />
+
+    <if(input.text)>
+        <span.text>
+            ${input.text}
+        </span>
+    </if>
+
+    <${input.renderBody} />
+</button-default>
+
+style.less {
+    .button-imagetext {
+        --image-icon-size: 15px;
+        --image-size: 25px;
+        --spacing: 10px;
+        --text-fontsize: 15px;
+
+        align-items: center;
+        display: flex;
+        gap: var(--spacing);
+
+        >.image-circle {
+            --icon-size: var(--image-icon-size) !important;
+            --size: var(--image-size) !important;
+
+            flex-shrink: 0;
+        }
+
+        >.text {
+            color: var(--color-text1);
+            font-size: var(--text-fontsize);
+            .transition(color 0.2s ease-out);
+        }
+
+        &:hover {
+            >.image-circle {
+                .scale(1.1);
+            }
+
+            >.text {
+                color: var(--color-text3);
+            }
+        }
+
+        &.small {
+            --image-icon-size: 13px;
+            --image-size: 20px;
+        }
+
+        &.big {
+            --image-icon-size: 18px;
+            --image-size: 30px;
+            --text-fontsize: 18px;
+
+            >.image-circle {
+                >.image {
+                    --iconloading-size: var(--image-icon-size) !important;
+                }
+            }
+
+            >.text {
+                color: var(--color-text2);
+                font-family: @font-medium;
+            }
+
+            &:hover {
+                >.text {
+                    color: var(--color-text4);
+                }
+            }
+        }
+
+        &.huge {
+            --image-icon-size: 26px;
+            --image-size: 45px;
+            --spacing: 15px;
+            --text-fontsize: 22px;
+
+            >.text {
+                color: var(--color-text3);
+                font-family: @font-medium;
+            }
+
+            &:hover {
+                >.text {
+                    color: var(--color-text5);
+                }
+            }
+        }
+
+        &.disabled {
+            opacity: 1;
+        }
+
+        // Media queries.
+
+        .r-max(@break-sm, {
+            &.huge {
+                --image-icon-size: 20px;
+                --image-size: 40px;
+                --spacing: 12px;
+                --text-fontsize: 20px;
+            }
+        });
+
+        .r-max(@break-xs, {
+            --spacing: 5px;
+            /*--image-icon-size: 15px;
+            --image-size: 25px;
+            --spacing: 10px;
+            --text-fontsize: 15px;
+
+            &.small {
+                --image-icon-size: 13px;
+                --image-size: 20px;
+            }*/
+
+            &.big {
+                --image-icon-size: 15px;
+                --image-size: 25px;
+                --text-fontsize: 15px;
+            }
+
+            &.huge {
+                --image-icon-size: 18px;
+                --image-size: 35px;
+                --spacing: 10px;
+                --text-fontsize: 18px;
+            }
+        });
+    }
+};

@@ -1,0 +1,53 @@
+<div.combo-titletextlink>
+    <text-title.title>
+        ${input.title}
+    </text-title>
+
+    <text-p.text>
+        $!{input.text}
+    </text-p>
+
+    <if(input.hasLink)>
+        <if(input.link)>
+            <button-default.button-link
+                href=input.link
+                link
+                newTab=(input.link && !input.link.startsWith('/'))
+            >
+                <text-p.medium>
+                    $!{input.textLink}
+                </text-p>
+            </button-default>
+        </if>
+        <else>
+            <button-default.button-link on-click('emit', 'linkRequested')>
+                <text-p.medium>
+                    $!{input.textLink}
+                </text-p>
+            </button-default>
+        </else>
+    </if>
+</div>
+
+style.less {
+    .combo-titletextlink {
+        --spacing: 20px;
+
+        display: flex;
+        flex-direction: column;
+        gap: var(--spacing);
+
+        >.title {
+            color: var(--color-text4);
+        }
+
+        >.text {
+            color: var(--color-text3);
+        }
+
+        >.button-link {
+            align-self: flex-start;
+            color: var(--color-accent1);
+        }
+    }
+};

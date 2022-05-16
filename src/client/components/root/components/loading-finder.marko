@@ -1,0 +1,33 @@
+<div.loading-finder class=(input.show ? 'show' : '')>
+    <icon name='loading' />
+</div>
+
+style.less {
+    .loading-finder {
+        --icon-size: 20px;
+        --loading-y: 0;
+
+        background-color: var(--color-background1);
+        border-radius: 50%;
+        bottom: 0;
+        left: 50%;
+        opacity: 0;
+        padding: 10px;
+        pointer-events: none;
+        position: absolute;
+        .transition(opacity 0.2s ease-out, transform 0.2s ease-out;);
+        .translate(-50%, var(--loading-y));
+
+        >.icon {
+            color: var(--color-icon2);
+            .size(var(--icon-size));
+            .svg-loading();
+        }
+
+        &.show {
+            --loading-y: -150%;
+
+            opacity: 1;
+        }
+    }
+};

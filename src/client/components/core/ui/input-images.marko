@@ -1,0 +1,667 @@
+import appm from 'js/app-manager'
+import { imageSizeLimitMb } from 'js/default-vars'
+
+class {
+    onCreate(input) {
+        this.state = {
+            changed: false,
+            countMax: input.countMax || 0,
+            needsUpload: false,
+            images: [],
+            valid: true
+        }
+
+        this.files = []
+        this.mapImagesOrder = new Map()
+
+        if(input.images) {
+            this.setImages(input.images)
+        }
+
+        this.dragEntered = this.dragEntered.bind(this)
+        this.dragExited = this.dragExited.bind(this)
+        this.dragOvered = this.dragOvered.bind(this)
+        this.dropped = this.dropped.bind(this)
+        this.handleInput = this.handleInput.bind(this)
+        this.uploadImagesError = this.uploadImagesError.bind(this)
+        this.uploadImagesSuccess = this.uploadImagesSuccess.bind(this)
+    }
+
+    onInput(input) {
+        if(!input.noExternalUpdate) {
+            this.setImages(input.images || [])
+        }
+    }
+
+    onMount() {
+        this.root = this.getEl()
+        this.dropDummy = this.getEl('dropDummy')
+        this.inputFiles = this.getEl('inputFiles')
+
+        this.dropDummy.addEventListener('dragexit', this.dragExited)
+        this.dropDummy.addEventListener('dragover', this.dragOvered)
+        this.dropDummy.addEventListener('drop', this.dropped)
+        this.inputFiles.addEventListener('change', this.handleInput)
+        this.root.addEventListener('dragenter', this.dragEntered)
+        appm.on('uploadImagesError', this.uploadImagesError)
+        appm.on('uploadImagesSuccess', this.uploadImagesSuccess)
+    }
+
+    onDestroy() {
+        this.dropDummy.removeEventListener('dragexit', this.dragExited)
+        this.dropDummy.removeEventListener('dragover', this.dragOvered)
+        this.dropDummy.removeEventListener('drop', this.dropped)
+        this.inputFiles.removeEventListener('change', this.handleInput)
+        this.root.removeEventListener('dragenter', this.dragEntered)
+        appm.off('uploadImagesError', this.uploadImagesError)
+        appm.off('uploadImagesSuccess', this.uploadImagesSuccess)
+    }
+
+    // Getters & Setters.
+
+    getFiles() {
+        return this.files
+    }
+
+    getImages() {
+        const ids = []
+
+        // Apply order from dragging.
+        for(const [index, image] of this.state.images.entries()) {
+            if(this.mapImagesOrder.has(index)) {
+                const order = this.mapImagesOrder.get(index)
+
+                ids.splice(order, 0, image.image)
+            }
+            else {
+                ids.push(image.image)
+            }
+        }
+
+        return ids
+    }
+
+    needsUpload() {
+        return this.state.needsUpload
+    }
+
+    setImages(images) {
+        const imagesUploaded = []
+
+        for(const image of images) {
+            imagesUploaded.push({ image: image, uploaded: true })
+        }
+
+        this.state.images = imagesUploaded
+    }
+
+    setValid(valid) {
+        this.state.valid = valid
+    }
+
+    // Functions.
+
+    dragEntered() {
+        if(this.dragging) {
+            return
+        }
+
+        this.showDropZone()
+    }
+
+    dragExited() {
+        this.hideDropZone()
+    }
+
+    dragOvered(event) {
+        event.preventDefault()
+    }
+
+    dropped(event) {
+        event.preventDefault()
+
+        this.loadImages(Array.from(event.dataTransfer.files))
+
+        this.hideDropZone()
+        appm.addAnalyticsEvent('images', 'drop')
+    }
+
+    dragEnd(event) {
+        if(!this.dragging) {
+            return
+        }
+
+        this.dragging = false
+
+        // In Chrome dataTransfer is only set on drop, so it won't work here.
+        /* const type = event.dataTransfer.getData('type')
+
+        if(type != 'image') {
+            return
+        } */
+
+        this.componentsImage[this.indexDragged].getEl().classList.remove('dragging')
+
+        /* if(this.indexDragged == this.indexDragToPosition) {
+            return
+        } */
+
+        appm.addAnalyticsEvent('inputImages', 'dragImage')
+    }
+
+    dragOver(index, event) {
+        if(!this.dragging) {
+            return
+        }
+
+        const order = this.mapImagesOrder.has(index) ? this.mapImagesOrder.get(index) : index
+        const orderImageDragged = (
+            this.mapImagesOrder.has(this.indexDragged) ?
+            this.mapImagesOrder.get(this.indexDragged) :
+            this.indexDragged
+        )
+
+        if(this.indexDragged == index) {
+            if(order != orderImageDragged) {
+                return
+            }
+        }
+
+        if(this.indexDragToPosition == order) {
+            return
+        }
+
+        this.indexDragToPosition = order
+
+        for(const [indexImage, image] of this.componentsImage.entries()) {
+            const orderImage = (
+                this.mapImagesOrder.has(indexImage) ?
+                this.mapImagesOrder.get(indexImage) :
+                indexImage
+            )
+
+            let orderNew
+
+            if(indexImage == this.indexDragged) {
+                orderNew = this.indexDragToPosition
+            }
+            else {
+                orderNew = (
+                    orderImage < orderImageDragged &&
+                    orderImage >= this.indexDragToPosition ? orderImage + 1 :
+                    (
+                        orderImage > orderImageDragged &&
+                        orderImage <= this.indexDragToPosition ?
+                        orderImage - 1 : orderImage
+                    )
+                )
+            }
+
+            image.getEl().style.order = orderNew
+
+            this.mapImagesOrder.set(indexImage, orderNew)
+        }
+    }
+
+    dragStart(index, event) {
+        //event.dataTransfer.setData('type', 'image')
+
+        this.componentsImage = this.getComponents('buttonImages')
+        this.dragging = true
+        this.indexDragged = index
+
+        this.componentsImage[index].getEl().classList.add('dragging')
+    }
+
+    handleInput() {
+        this.loadImages(Array.from(this.inputFiles.files))
+    }
+
+    hideDropZone() {
+        this.dropDummy.style.pointerEvents = 'none'
+
+        this.root.classList.remove('show-dropzone')
+    }
+
+    loadImages(files) {
+        // If there is a limit set.
+        if(this.state.countMax) {
+            // Limit images to max count.
+            files = files.slice(0, this.state.countMax - this.files.length)
+        }
+
+        if(!files.length) {
+            return
+        }
+
+        let showWarningWrongType = false
+        let showWarningMaxSize = false
+        const filesAccepted = []
+
+        for(const file of files) {
+            const sizeMb = file.size / (1000 * 1000)
+            const type = file.type
+
+            if(!type.startsWith('image')) {
+                showWarningWrongType = true
+                continue
+            }
+
+            if(sizeMb > imageSizeLimitMb) {
+                showWarningMaxSize = true
+                continue
+            }
+
+            filesAccepted.push(file)
+            this.state.images.push({
+                file: file,
+                image: URL.createObjectURL(file),
+                uploaded: false
+            })
+            this.mapImagesOrder.set(
+                this.state.images.length - 1,
+                this.state.images.length - 1
+            )
+        }
+
+        if(showWarningWrongType) {
+            appm.showNotification('Ficheiro escolhido não é do tipo imagem.', -1)
+        }
+
+        if(showWarningMaxSize) {
+            appm.showNotification(`Tamanho máx. de cada imagem: ${imageSizeLimitMb}MB.`, -1)
+        }
+
+        if(!filesAccepted.length) {
+            return
+        }
+
+        this.files = this.files.concat(filesAccepted)
+        this.state.changed = true
+        this.state.needsUpload = true
+
+        this.setStateDirty('images')
+
+        // Existing images will lose the css order style, so update it.
+        if(!this.mapImagesOrder.size) {
+            return
+        }
+
+        this.update()
+
+        const images = this.getComponents('buttonImages')
+
+        for(const [key, value] of this.mapImagesOrder.entries()) {
+            images[key].getEl().style.order = value
+        }
+    }
+
+    removeImage(index, event) {
+        event.stopPropagation()
+
+        this.setValid(true)
+
+        this.files.splice(index, 1)
+        this.state.images.splice(index, 1)
+        this.setStateDirty('images')
+
+        if(!this.mapImagesOrder.has(index)) {
+            return
+        }
+
+        this.update()
+
+        const orderDeleted = this.mapImagesOrder.get(index)
+
+        this.mapImagesOrder.delete(index)
+
+        const images = this.getComponents('buttonImages')
+        const mapTemp = new Map(this.mapImagesOrder)
+
+        for(const [key, value] of this.mapImagesOrder.entries()) {
+            let newKey = key
+            let newValue = value
+
+            if(key > index) {
+                --newKey
+            }
+
+            if(value > orderDeleted) {
+                --newValue
+            }
+
+            mapTemp.set(newKey, newValue)
+
+            if(key != newKey) {
+                mapTemp.delete(key)
+            }
+
+            images[newKey].getEl().style.order = newValue
+        }
+
+        this.mapImagesOrder = mapTemp
+        this.state.changed = true
+
+        let allUploaded = true
+
+        for(const image of images) {
+            if(!image.uploaded) {
+                allUploaded = false
+                break
+            }
+        }
+
+        this.state.needsUpload = !allUploaded
+
+        appm.addAnalyticsEvent('inputImages', 'removeImage')
+    }
+
+    selectImages() {
+        this.setValid(true)
+
+        this.getEl('inputFiles').click()
+        this.emit('click')
+        appm.addAnalyticsEvent('inputImages', 'addImages')
+    }
+
+    showDropZone() {
+        this.dropDummy.style.pointerEvents = 'auto'
+
+        this.root.classList.add('show-dropzone')
+    }
+
+    upload(size) {
+        if(this.uploading || !this.state.needsUpload) {
+            return false
+        }
+
+        this.uploading = true
+
+        const formData = new FormData()
+
+        for(const file of this.files) {
+            formData.append('media', file)
+        }
+
+        this.idUpload = appm.uploadImages(size, formData)
+    }
+
+    uploadImagesError(idUpload, error) {
+        if(this.idUpload != idUpload) {
+            return
+        }
+
+        this.uploading = false
+        this.emit('uploadError', error)
+    }
+
+    uploadImagesSuccess(idUpload, ids) {
+        if(this.idUpload != idUpload) {
+            return
+        }
+
+        for(const [index, id] of ids.entries()) {
+            // Index will be the same of this.files
+            const file = this.files[index]
+            let foundFile = false
+
+            for(const image of this.state.images) {
+                if(!image.uploaded) {
+                    if(
+                        image.file.name == file.name &&
+                        image.file.lastModified == file.lastModified &&
+                        image.file.size == file.size
+                    ) {
+                        image.uploaded = true
+                        image.image = id
+                        foundFile = true
+                        break
+                    }
+                }
+            }
+        }
+
+        this.files = []
+        this.uploading = false
+        this.setStateDirty('images')
+        this.emit('uploaded', this.getImages())
+    }
+}
+
+$ const hasImages = state.images.length > 0
+
+<div.input-images
+    class=[
+        input.class,
+        hasImages ? '' : 'empty',
+        state.valid ? '' : 'invalid'
+    ]
+>
+    <input.input-files
+        key='inputFiles'
+        accept='image/*'
+        multiple
+        type='file'
+    />
+
+    <if(hasImages)>
+        <div.wrapper-images>
+            <for|image, index| of=state.images>
+                <button-default.button-image
+                    key='buttonImages[]'
+                    draggable
+                    on-dragend('dragEnd')
+                    on-dragover('dragOver', index)
+                    on-dragstart('dragStart', index)
+                >
+                    <image.cover lazyload src=(
+                        image.uploaded ?
+                        `${appm.getUrlCdn()}/${image.image}.jpg` :
+                        image.image
+                    ) />
+
+                    <button-icon.button-remove.small icon='bin' on-click('removeImage', index) />
+                </button-default>
+            </for>
+
+            <if(state.countMax && state.images.length < state.countMax)>
+                <button-default.button-add on-click('selectImages')>
+                    <icon name='plus' />
+                </button-default>
+            </if>
+        </div>
+    </if>
+    <else>
+        <button-default.button-empty on-click('selectImages')>
+            <div.wrapper>
+                <icon name=input.icon />
+
+                <span.text>
+                    ${input.text}
+                </span>
+            </div>
+        </button-default>
+    </else>
+
+    <div.drop-dummy key='dropDummy' />
+</div>
+
+style.less {
+    .input-images {
+        --buttonadd-iconsize: 40px;
+        --buttonremove-margin: 10px;
+        --image-height: 200px;
+        --images-gridcount: 3;
+        --images-spacing: 10px;
+        --wrapperempty-fontsize: 18px;
+        --wrapperempty-icon-size: 60px;
+        --wrapperempty-spacing: 10px;
+
+        background-color: var(--color-input1);
+        border: 1px solid var(--color-border1);
+        border-radius: var(--app-borderradius);
+        position: relative;
+        .transition(border-color 0.2s ease-out);
+
+        &:hover {
+            &.empty {
+                border-color: transparent;
+            }
+        }
+
+        >.input-files {
+            display: none;
+        }
+
+        >.wrapper-images {
+            padding: var(--app-padding);
+            .grid(var(--images-gridcount), var(--images-spacing), var(--images-spacing));
+
+            >.button-image {
+                border-radius: var(--app-borderradius);
+                overflow: hidden;
+                position: relative;
+
+                >.image {
+                    height: var(--image-height);
+                }
+
+                >.button-remove {
+                    background-color: rgba(var(--color-background3-rgb), 0.9);
+                    opacity: 0;
+                    position: absolute;
+                    right: var(--buttonremove-margin);
+                    top: var(--buttonremove-margin);
+                    .translateY(10px);
+                    .transition(opacity 0.2s ease-out, transform 0.2s ease-out;);
+                }
+
+                &.dragging {
+                    outline: 3px dashed var(--color-accent1);
+                }
+
+                &:hover {
+                    >.button-remove {
+                        opacity: 1;
+                        .translateY(0);
+                    }
+                }
+            }
+
+            >.button-add {
+                background-color: var(--color-input2);
+                border: 1px solid var(--color-border2);
+                border-radius: var(--app-borderradius);
+                height: var(--image-height); // TODO same as button-image
+                order: 1000;
+                .flex-center();
+                .transition(border-color 0.2s ease-out);
+
+                >.icon {
+                    color: var(--color-icon1);
+                    .size(var(--buttonadd-iconsize));
+                    .transition(color 0.2s ease-out);
+                }
+
+                &:hover {
+                    border-color: var(--color-border1);
+
+                    >.icon {
+                        color: var(--color-icon2);
+                        .scale(1.05);
+                    }
+                }
+            }
+        }
+
+        >.button-empty {
+            border-radius: var(--app-borderradius);
+            .flex-center();
+            .size(100%, 250px); // TODO
+
+            >.wrapper {
+                align-items: center;
+                display: flex;
+                flex-direction: column;
+                gap: var(--wrapperempty-spacing);
+                justify-content: center;
+                padding: 70px 0; // TODO
+                width: 60%; // TODO
+
+                >.icon {
+                    color: var(--color-icon2);
+                    .size(var(--wrapperempty-icon-size));
+                    .transition(color 0.2s ease-out);
+                }
+
+                >.text {
+                    color: rgba(var(--color-text4-rgb), 0.5);
+                    font-size: var(--wrapperempty-fontsize);
+                    text-align: center;
+                    .transition(color 0.2s ease-out);
+                }
+            }
+
+            &:hover {
+                background-color: var(--color-input2);
+                border: 2px dashed var(--color-border3);
+
+                >.wrapper {
+                    >.icon {
+                        color: var(--color-icon3);
+                        .scale(1.05);
+                    }
+
+                    >.text {
+                        color: var(--color-text3);
+                    }
+                }
+            }
+        }
+
+        >.drop-dummy {
+            pointer-events: none;
+            .fixed-fill(8);
+        }
+
+        &.show-dropzone {
+            background-color: var(--color-input2);
+            border: 2px dashed var(--color-border3);
+        }
+
+        &.small {
+            --wrapperempty-fontsize: 16px;
+            --wrapperempty-icon-size: 25px;
+            --wrapperempty-spacing: 5px;
+        }
+
+        &.invalid {
+            border-color: var(--color-warning);
+        }
+
+        // Media queries.
+
+        .r-max(@break-ms, {
+            --buttonadd-iconsize: 35px;
+            --image-height: 160px;
+            --wrapperempty-fontsize: 17px;
+            --wrapperempty-icon-size: 50px;
+        });
+
+        .r-max(@break-sm, {
+            --buttonadd-iconsize: 30px;
+            --image-height: 130px;
+            --wrapperempty-fontsize: 16px;
+            --wrapperempty-icon-size: 40px;
+            --wrapperempty-spacing: 5px;
+        });
+
+        .r-max(@break-xs, {
+            --buttonadd-iconsize: 25px;
+            --buttonremove-margin: 5px;
+            --image-height: 100px;
+            --wrapperempty-fontsize: 15px;
+            --wrapperempty-icon-size: 30px;
+        });
+    }
+};

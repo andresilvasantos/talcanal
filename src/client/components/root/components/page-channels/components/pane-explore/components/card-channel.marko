@@ -1,0 +1,278 @@
+import appm from 'js/app-manager'
+
+class {
+    onCreate(input) {
+        this.state = {
+            channel: input.channel || {}
+        }
+    }
+
+    onInput(input) {
+        this.state.channel = input.channel || {}
+
+        if(this.mounted) {
+            this.setStateDirty('channel')
+        }
+    }
+
+    onMount() {
+        this.mounted = true
+    }
+}
+
+$ const channel = state.channel || {}
+
+<button-default.card-channel
+    class=input.class
+    on-click('emit', 'openRequested', false)
+    on-middleClick('emit', 'openRequested', true)
+>
+    <breakpoint-condition break='sm' min>
+        <div.thumbnail>
+            <icon name='channel' />
+
+            <if(channel.image)>
+                $ const urlImage = `${appm.getUrlCdn()}/${channel.image}`
+
+                <image.cover
+                    lazyload
+                    src=`${urlImage}.jpg`
+                    srcSmall=`${urlImage}-tn.jpg`
+                />
+            </if>
+        </div>
+
+        <@else>
+            <image-circle.big icon='channel' image=(channel.image && channel.image.length ? channel.image : null) />
+        </@else>
+    </breakpoint-condition>
+
+    <div.info>
+        <div.bar>
+            <div.details>
+                <div.wrapper-id>
+                    <span.name>
+                        ${channel.name || channel.id}
+                    </span>
+
+                    <div.wrapper-id>
+                        <icon-text.light icon='channel' text=channel.id />
+
+                        <if(channel.type == 'restricted')>
+                            <icon.icon-restricted name='eyePeek' />
+                        </if>
+                        <else-if(channel.type == 'private')>
+                            <icon.icon-private name='lock' />
+                        </else-if>
+
+                        <if(channel.adultContent)>
+                            <icon.icon-adultcontent name='circle' />
+                        </if>
+                    </div>
+                </div>
+
+                <icon-text.fill icon='user' text=channel.countSubscribers />
+            </div>
+
+            <if(channel.status == 'active')>
+                <div.controls>
+                    <if(
+                        channel.type != 'private' || channel.isUserSubscribed ||
+                        channel.isUserAdmin || channel.isUserModerator || input.isSuper
+                    )>
+                        <button-text.strong.special
+                            class=(channel.isUserSubscribed ? 'selected' : '')
+                            icon=(channel.isUserSubscribed ? 'userMinus' : 'userPlus')
+                            text=(channel.isUserSubscribed ? 'Sair' : 'Entrar')
+                            on-click('emit', 'toggleSubscriptionRequested')
+                        />
+                    </if>
+
+                    <if(input.isSuper)>
+                        <button-text.strong.special
+                            class=(channel.default ? 'selected' : '')
+                            text='Padrão'
+                            on-click('emit', 'toggleDefaultRequested')
+                        />
+                    </if>
+                </div>
+            </if>
+        </div>
+
+        <if(channel.description)>
+            <span.description>
+                ${channel.description.replace(/<(.|\n)*?>/g, '')}
+            </span>
+        </if>
+    </div>
+</button-default>
+
+style.less {
+    .card-channel {
+        --description-fontsize: 15px;
+        --height: 130px;
+        --icon-size: 36px;
+        --info-padding: 15px;
+        --name-fontsize: 22px;
+        --spacing: 0;
+        --thumbnail-width: 150px;
+        --wrapperid-spacing: 10px;
+
+        border-bottom: 1px solid var(--color-border1);
+        display: flex;
+        gap: var(--spacing);
+        height: var(--height);
+        .transition(background-color 0.2s ease-out);
+
+        >.thumbnail {
+            background-color: var(--color-background4);
+            border: 1px solid var(--color-border1);
+            border-radius: var(--app-borderradius);
+            display: flex;
+            flex-shrink: 0;
+            justify-content: center;
+            opacity: 0.9;
+            overflow: hidden;
+            margin: 8px 0 8px 8px;
+            position: relative;
+            width: var(--thumbnail-width);
+            .transition(border-color 0.2s ease-out, opacity 0.2s ease-out;);
+
+            >.icon {
+                color: var(--color-icon2);
+                .absolute-center();
+                .size(var(--icon-size));
+            }
+
+            >.image {
+                width: 100%;
+            }
+        }
+
+        >.image-circle {
+            flex-shrink: 0;
+        }
+
+        >.info {
+            display: flex;
+            flex-direction: column;
+            flex-grow: 1;
+            height: 100%;
+            gap: 10px;
+            justify-content: space-between;
+            padding: var(--info-padding);
+
+            >.bar {
+                align-items: center;
+                display: flex;
+                flex-wrap: wrap;
+                gap: 15px;
+                justify-content: space-between;
+
+                >.details {
+                    align-items: center;
+                    display: flex;
+                    gap: 20px; // TODO
+
+                    >.wrapper-id {
+                        display: flex;
+                        flex-direction: column;
+
+                        >.name {
+                            color: var(--color-text3);
+                            font-family: @font-medium;
+                            font-size: var(--name-fontsize);
+                            .transition(color 0.2s ease-out);
+                            .text-truncate();
+                        }
+
+                        >.wrapper-id {
+                            align-items: center;
+                            display: flex;
+                            gap: var(--wrapperid-spacing);
+
+                            >.icon {
+                                display: flex;
+                                color: var(--color-text1);
+                                .size(16px);
+                            }
+
+                            >.icon-adultcontent {
+                                color: var(--color-warning);
+                            }
+                        }
+                    }
+                }
+
+                >.controls {
+                    align-items: center;
+                    display: flex;
+                    gap: 10px; // TODO
+                }
+            }
+
+            >.description {
+                color: var(--color-text2);
+                font-size: var(--description-fontsize);
+                word-wrap: anywhere;
+                .transition(color 0.2s ease-out);
+                .text-truncate-lines(2);
+            }
+        }
+
+        &:hover,
+        &.selected {
+            background-color: var(--color-button1);
+
+            >.thumbnail {
+                border-color: var(--color-border2);
+                opacity: 1;
+            }
+
+            >.info {
+                >.bar {
+                    >.details {
+                        >.wrapper-id {
+                            >.name {
+                                color: var(--color-text4);
+                            }
+                        }
+
+                        >.icon-text {
+                            background-color: var(--color-background2);
+                        }
+                    }
+                }
+
+                >.description {
+                    color: var(--color-text3);
+                }
+            }
+        }
+
+        // Media queries.
+
+        .r-max(@break-md, {
+            >.thumbnail {
+                opacity: 1;
+            }
+        });
+
+        .r-max(@break-sm, {
+            --spacing: var(--info-padding);
+
+            padding: var(--info-padding);
+
+            >.info {
+                padding: 0;
+            }
+        });
+
+        .r-max(@break-xs, {
+            --description-fontsize: 13px;
+            --height: unset;
+            --name-fontsize: 16px;
+            --thumbnail-width: 100px;
+        });
+    }
+};

@@ -1,0 +1,176 @@
+import appm from 'js/app-manager'
+import { extractHostName } from 'js/utils'
+
+class {
+    onCreate(input) {
+        this.state = {
+            post: input.post || {}
+        }
+    }
+
+    onInput(input) {
+        this.state.post = input.post || {}
+
+        if(this.mounted) {
+            this.setStateDirty('post')
+        }
+    }
+
+    onMount() {
+        this.mounted = true
+    }
+
+    // Functions.
+
+    linkClick(link) {
+        appm.addAnalyticsEvent('post', 'clickLink', link)
+    }
+}
+
+$ const processTag = (post) => {
+    const channel = post.channel || {}
+
+    for(const tag of channel.tags) {
+        if(tag.id == post.tag) {
+            return tag
+        }
+    }
+
+    return null
+}
+
+$ const post = state.post || {}
+
+<span.title-post class=input.class>
+    <status-post isMod=input.isMod isPinned=input.isPinned post=post />
+
+    <span.title class=(post.type == 'link' || post.tag ? 'has-margin' : '')>
+        <if(input.removed)>
+            [Removido]
+        </if>
+        <else>
+            ${post.title}
+        </else>
+    </span>
+
+    <if(post.type == 'link')>
+        $ const hostName = post.link ? extractHostName(post.link) : ''
+
+        <button-default.button-link
+            class=(post.tag ? 'has-margin' : '')
+            href=post.link
+            link
+            newTab
+            on-click('linkClick', post.link)
+            on-middleClick('linkClick', post.link)
+        >
+            ${hostName}
+        </button-default>
+    </if>
+
+    <if(post.tag)>
+        $ const tag = processTag(post)
+
+        <if(tag)>
+            <tag
+                tag=tag
+                on-click('emit', 'searchTagRequested', post.tag, post.channel, false)
+                on-middleClick('emit', 'searchTagRequested', post.tag, post.channel, true)
+            />
+        </if>
+    </if>
+</span>
+
+style.less {
+    .title-post {
+        --link-fontsize: 15px;
+        --title-fontsize: 20px;
+        --title-spacing: 10px;
+
+        >.wrapper-flag {
+            display: inline-flex;
+            vertical-align: 2px;
+            margin-right: var(--title-spacing);
+        }
+
+        >.icon-statuspost {
+            display: inline-flex;
+            margin-right: var(--title-spacing);
+        }
+
+        >.title {
+            color: var(--color-text4);
+            font-family: @font-medium;
+            font-size: var(--title-fontsize);
+            line-height: 1.3;
+            .transition(color 0.2s ease-out);
+        }
+
+        >.button-link {
+            color: var(--color-link);
+            display: inline-flex;
+            font-family: @font;
+            font-size: var(--link-fontsize);
+        }
+
+        >.title,
+        >.button-link {
+            &.has-margin {
+                margin-right: var(--title-spacing);
+            }
+        }
+
+        >.tag {
+            display: inline-flex;
+            margin: 2px 0;
+            vertical-align: 2px;
+        }
+
+        &.big {
+            --title-fontsize: 22px;
+
+            >.title {
+                color: var(--color-text5);
+            }
+        }
+
+        // Media queries.
+
+        .r-max(@break-md, {
+            --title-fontsize: 19px;
+
+            &.big {
+                --title-fontsize: 21px;
+            }
+        });
+
+        .r-max(@break-ms, {
+            --title-fontsize: 18px;
+            --link-fontsize: 14px;
+
+            &.big {
+                --title-fontsize: 20px;
+            }
+        });
+
+        .r-max(@break-sm, {
+            --link-fontsize: 13px;
+            --title-fontsize: 17px;
+            --title-spacing: 8px;
+
+            &.big {
+                --title-fontsize: 19px;
+            }
+        });
+
+        .r-max(@break-xs, {
+            --link-fontsize: 12px;
+            --title-fontsize: 16px;
+            --title-spacing: 5px;
+
+            &.big {
+                --title-fontsize: 18px;
+            }
+        });
+    }
+};

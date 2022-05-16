@@ -1,0 +1,157 @@
+class {
+    // Functions
+
+    keyPressed(key) {
+        if(key == 'del') {
+            this.emit('deleteRequested')
+
+            return
+        }
+
+        if(key == 'tentar') {
+            this.emit('submitRequested')
+
+            return
+        }
+
+        this.emit('setLetterRequested', key)
+    }
+}
+
+$ const keys = [
+    ['q', 'e', 'r', 't', 'u', 'i', 'o', 'p', 'del'],
+    ['a', 's', 'd', 'f', 'g', 'h', 'j', 'l'],
+    ['z', 'x', 'c', 'v', 'b', 'n', 'm', 'tentar']
+]
+
+<div.quina-keyboard class=input.class>
+    <for|rowKeys| of=keys>
+        <div.row>
+            <for|key| of=rowKeys>
+                $ const used = (input.lettersDitched || []).includes(key)
+
+                <button-default.button-key
+                    class=(used ? 'used' : '')
+                    on-click('keyPressed', key)
+                >
+                    <if(key == 'del')>
+                        <icon name='delete' />
+                    </if>
+                    <else>
+                        <span.letter.notranslate>
+                            ${key}
+                        </span>
+                    </else>
+                </button-default>
+            </for>
+        </div>
+    </for>
+</div>
+
+style.less {
+    .quina-keyboard {
+        --buttonkey-padding: 0 20px;
+        --buttonkey-size: 55px;
+        --icon-size: 30px;
+        --letter-fontsize: 26px;
+        --spacing: 8px;
+
+        align-items: center;
+        display: flex;
+        flex-direction: column;
+        gap: var(--spacing);
+
+        >.row {
+            display: flex;
+            gap: var(--spacing);
+
+            >.button-key {
+                background-color: var(--color-button2);
+                border: 1px solid var(--color-border2);
+                border-radius: var(--app-borderradius2);
+                height: var(--buttonkey-size);
+                min-width: var(--buttonkey-size);
+                padding: var(--buttonkey-padding);
+                .flex-center();
+                .transition(
+                    background-color 0.2s ease-out,
+                    border-color 0.2s ease-out,
+                    opacity 0.2s ease-out;
+                );
+
+                &.used {
+                    opacity: 0.4;
+                }
+
+                >.icon {
+                    color: var(--color-icon2);
+                    .size(var(--icon-size));
+                }
+
+                >.letter {
+                    color: var(--color-text3);
+                    font-family: @font-bold;
+                    font-size: var(--letter-fontsize);
+                    text-transform: uppercase;
+                }
+
+                &:hover {
+                    background-color: var(--color-button3);
+                    border-color: var(--color-border4);
+                    opacity: 1;
+
+                    >.letter {
+                        .scale(1.05);
+                    }
+
+                    >.icon {
+                        .scale(1.1);
+                    }
+                }
+            }
+        }
+
+        // Media queries.
+
+        .r-max(@break-lg, {
+            --buttonkey-size: 52px;
+            --letter-fontsize: 24px;
+            --spacing: 7px;
+        });
+
+        .r-max(@break-md, {
+            --buttonkey-size: 50px;
+            --letter-fontsize: 22px;
+            --spacing: 6px;
+        });
+
+        .r-max(@break-sm, {
+            --buttonkey-size: 45px;
+            --buttonkey-padding: 0 15px;
+            --icon-size: 25px;
+            --letter-fontsize: 20px;
+            --spacing: 5px;
+        });
+
+        .r-max(@break-xs, {
+            --buttonkey-height: 45px;
+            --buttonkey-minwidth: 35px;
+            --buttonkey-padding: 0 8px;
+            --icon-size: 20px;
+            --letter-fontsize: 15px;
+
+            >.row {
+                >.button-key {
+                    height: var(--buttonkey-height);
+                    min-width: var(--buttonkey-minwidth);
+                }
+            }
+        });
+
+        .r-max(380px, {
+            --buttonkey-minwidth: 30px;
+            --letter-fontsize: 14px;
+            --spacing: 3px;
+        });
+    }
+};

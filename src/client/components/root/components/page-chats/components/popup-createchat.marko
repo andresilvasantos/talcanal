@@ -1,0 +1,86 @@
+import appm from 'js/app-manager'
+
+class {
+    onCreate() {
+        this.state = {
+            status: 0
+        }
+
+        this.chatCreated = this.chatCreated.bind(this)
+        this.createError = this.createError.bind(this)
+    }
+
+    onMount() {
+        this.popupComponent = this.getComponent('popup')
+
+        appm.on('createItemError', this.createError)
+        appm.on('createItemSuccess', this.chatCreated)
+    }
+
+    onDestroy() {
+        clearTimeout(this.timeoutBetweenFetches)
+
+        appm.off('createItemError', this.createError)
+        appm.off('createItemSuccess', this.chatCreated)
+    }
+
+    // Functions.
+
+    chatCreated(type, idRequest, chat) {
+        if(type != 'chats' || idRequest != this.idRequest) {
+            return
+        }
+
+        this.state.status = 0
+
+        this.hide()
+        appm.openPage('chats', 'chat', true, chat)
+    }
+
+    createError(type, idRequest) {
+        if(idRequest != this.idRequest) {
+            return
+        }
+
+        this.state.status = -1
+    }
+
+    hide() {
+        this.popupComponent.hide()
+    }
+
+    hidden() {
+        this.state.status = 0
+    }
+
+    show() {
+        if(this.popupComponent.isVisible()) {
+            return
+        }
+
+        this.popupComponent.show()
+    }
+
+    submitRequested(user) {
+        if(this.state.status == 1) {
+            return
+        }
+
+        this.state.status = 1
+
+        this.idRequest = appm.createItem('chats', { user: user.username })
+    }
+}
+
+$ const trCreateChat = appm.tr('chats.createChat') || {}
+
+<popup-users
+    key='popup'
+    iconButton='plus'
+    purpose='chat'
+    status=state.status
+    title=trCreateChat.title
+    textButton=trCreateChat.buttonCreate
+    on-hidden('hidden')
+    on-submitRequested('submitRequested')
+/>

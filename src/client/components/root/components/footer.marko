@@ -1,0 +1,196 @@
+import appm from 'js/app-manager'
+import { urls } from 'js/default-vars'
+
+class {
+    buttonDevClicked() {
+        appm.addAnalyticsEvent('footer', 'devClicked')
+    }
+
+    buttonSocialClicked(idSocial) {
+        appm.addAnalyticsEvent('footer', 'socialClicked', idSocial)
+    }
+
+    linkRequested(idLink, newTab = false) {
+        appm.openPage('about', idLink, { allowBack: true, newTab })
+    }
+}
+
+$ const links = ['about', 'terms', 'privacy', 'transparency']
+$ const trFooter = appm.tr('about.footer') || {}
+$ const trLinks = trFooter.links || []
+
+<div.footer class=input.class>
+    <div.talcanal>
+        <text-p.copyright>
+            © ${(new Date()).getFullYear()} ${trFooter.copyright}
+        </text-p>
+
+        <div.links>
+            <for|link| of=links>
+                <button-default.button-link
+                    on-click('linkRequested', link, false)
+                    on-middleClick('linkRequested', link, true)
+                >
+                    <text-p>
+                        ${trLinks[link]}
+                    </text-p>
+                </button-default>
+            </for>
+        </div>
+    </div>
+
+    <div.dev>
+        <button-default.button-developer
+            href=urls.iconica
+            link
+            newTab
+            on-click('buttonDevClicked')
+        >
+            <icon name='logoDev' />
+        </button-default>
+
+        <div.socials>
+            <for|idSocial| of=['twitter', 'instagram']>
+                <button-default.button-social
+                    href=urls.social[idSocial]
+                    link
+                    newTab
+                    on-click('buttonSocialClicked', idSocial)
+                >
+                    <icon name=idSocial />
+                </button-default>
+            </for>
+        </div>
+    </div>
+</div>
+
+style.less {
+    .footer {
+        --buttonsocial-size: 20px;
+        --dev-spacing: 15px;
+        --links-spacing: 10px;
+        --logodev-height: 14px;
+        --padding: var(--app-padding-bigger);
+        --socials-spacing: 15px;
+        --spacing: 0;
+        --useful-spacing: 15px;
+
+        align-items: flex-end;
+        background-color: var(--color-background2);
+        border-top: 1px solid var(--color-border1);
+        display: flex;
+        gap: var(--spacing);
+        justify-content: space-between;
+        padding: var(--padding);
+
+        >.talcanal {
+            display: flex;
+            flex-direction: column;
+            gap: var(--useful-spacing);
+
+            >.copyright {
+                color: var(--color-text1);
+                font-family: @font-medium;
+            }
+
+            >.links {
+                align-items: center;
+                display: flex;
+                gap: var(--links-spacing);
+
+                >.button-link {
+                    align-items: center;
+                    color: var(--color-text1);
+                    display: flex;
+                    font-family: @font-medium;
+                    //font-size: var(--link-fontsize);
+                    .transition(color 0.2s ease-out);
+
+                    &:hover {
+                        color: var(--color-accent1);
+                    }
+                }
+            }
+        }
+
+        >.dev {
+            align-items: center;
+            display: flex;
+            gap: var(--dev-spacing);
+
+            >.button-developer {
+                color: var(--color-icon1);
+                .transition(color 0.2s ease-out);
+
+                >.icon {
+                    display: flex;
+                    height: var(--logodev-height);
+
+                    >svg {
+                        width: unset;
+                    }
+                }
+
+                &:hover {
+                    color: var(--color-accent1);
+                }
+            }
+
+            >.socials {
+                align-items: center;
+                display: flex;
+                gap: var(--socials-spacing);
+
+                >.button-social {
+                    color: var(--color-icon1);
+
+                    >.icon {
+                        display: flex;
+                        .size(var(--buttonsocial-size));
+                    }
+
+                    &:hover {
+                        color: var(--color-accent1);
+                        .scale(1.1);
+                    }
+                }
+            }
+        }
+
+        // Media queries.
+
+        .r-max(@break-ms, {
+            --buttonsocial-size: 16px;
+            --height: unset;
+            --logodev-height: 12px;
+            //--padding: 25px 20px;
+        });
+
+        .r-max(@break-sm, {
+            --spacing: 20px;
+
+            align-items: center;
+            flex-direction: column;
+
+            >.talcanal {
+                align-items: center;
+            }
+        });
+
+        .r-max(@break-xs, {
+            --buttonsocial-size: 14px;
+            --dev-spacing: 10px;
+            --logodev-height: 11px;
+            //--padding: 20px 15px;
+            --spacing: 15px;
+            --socials-spacing: 10px;
+            --useful-spacing: 10px;
+
+            /*align-items: flex-start;
+
+            >.talcanal {
+                align-items: flex-start;
+            }*/
+        });
+    }
+}

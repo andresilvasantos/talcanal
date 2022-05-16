@@ -1,0 +1,96 @@
+import appm from 'js/app-manager'
+
+class {
+    privacyRequested(newTab = false) {
+        appm.openPage('about', 'privacy', { allowBack: true, newTab })
+        appm.addAnalyticsEvent('cookies', 'viewPrivacy')
+    }
+}
+
+$ const trCookies = appm.tr('cookies') || {}
+
+<div.disclaimer-cookies class=input.class>
+
+    <div.wrapper-text>
+        <div.wrapper-title>
+            <icon name='cookie' />
+
+            <span.title>
+                ${trCookies.title}
+            </span>
+        </div>
+
+        <span.message-cookies>
+            ${trCookies.message} <button-default.link
+                link
+                on-click('privacyRequested', false)
+                on-middleClick('privacyRequested', true)
+            >${trCookies.privacy}</button-default>.
+        </span>
+    </div>
+
+    <button-text.button-agree.big.strong
+        text=trCookies.buttonAgree
+        on-click('emit', 'hideCookies')
+    />
+</div>
+
+style.less {
+    .disclaimer-cookies {
+        --icon-size: 25px;
+        --padding: 30px;
+        --spacing: 20px;
+        --text-fontsize: 16px;
+        --title-fontsize: 24px;
+        --wrappertext-spacing: 10px;
+        --wrappertitle-spacing: 15px;
+
+        background-color: var(--color-background1);
+        border-radius: var(--app-borderradius2);
+        border: 1px solid var(--color-border1);
+        display: flex;
+        flex-direction: column;
+        gap: var(--spacing);
+        padding: var(--padding);
+        .box-shadow(0 6px 15px 0 fade(@color-black, 10));
+
+        >.wrapper-text {
+            display: flex;
+            flex-direction: column;
+            gap: var(--wrappertext-spacing);
+
+            >.wrapper-title {
+                align-items: center;
+                display: flex;
+                gap: var(--wrappertitle-spacing);
+
+                >.icon {
+                    color: var(--color-icon2);
+                    .size(var(--icon-size));
+                }
+
+                >.title {
+                    color: var(--color-text3);
+                    font-family: @font-semibold;
+                    font-size: var(--title-fontsize);
+                }
+            }
+
+            >.message-cookies {
+                color: var(--color-text2);
+                font-size: var(--text-fontsize);
+
+                .link {
+                    color: var(--color-accent1);
+                    cursor: pointer;
+                    pointer-events: auto;
+                    white-space: nowrap;
+                }
+            }
+        }
+
+        >.button-agree {
+            align-self: center;
+        }
+    }
+};

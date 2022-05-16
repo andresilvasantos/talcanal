@@ -1,0 +1,238 @@
+import appm from 'js/app-manager'
+import { processObjectsTr } from 'js/utils'
+
+class {
+    onCreate(input) {
+        this.state = {
+            comments: input.comments || {}
+        }
+
+        this.calculateHighlights = this.calculateHighlights.bind(this)
+    }
+
+    onInput(input) {
+        this.state.comments = input.comments || {}
+
+        if(this.mounted) {
+            this.setStateDirty('comments')
+        }
+    }
+
+    onMount() {
+        this.root = this.getEl()
+        this.root.addEventListener('mousemove', this.calculateHighlights)
+
+        this.mounted = true
+    }
+
+    onDestroy() {
+        this.root.removeEventListener('mousemove', this.calculateHighlights)
+    }
+
+    // Functions.
+
+    calculateHighlights(event) {
+        let target = event.target
+
+        while(
+            target && target.classList &&
+            !target.classList.contains('comment-post')
+        ) {
+            target = target.parentNode
+        }
+
+        if(target.classList && target.classList.contains('comment-post')) {
+            this.calculateHighlightsComment(target)
+        }
+    }
+
+    calculateHighlightsComment(comment) {
+        if(this.commentHighlightOld != comment) {
+            const commentLeave = (event) => {
+                const comment = event.target
+
+                comment.classList.remove('highlight')
+                comment.removeEventListener('mouseleave', commentLeave)
+                this.commentHighlightOld = null
+            }
+
+            if(this.commentHighlightOld) {
+                this.commentHighlightOld.classList.remove('highlight')
+                this.commentHighlightOld.removeEventListener('mouseleave', commentLeave)
+            }
+
+            comment.classList.add('highlight')
+            comment.addEventListener('mouseleave', commentLeave)
+
+            this.commentHighlightOld = comment
+        }
+    }
+}
+
+$ const trSort = appm.tr('generic.sort') || {}
+
+<div.comments-post class=input.class>
+    <div.bar-title>
+        <div.wrapper-title class=(input.locked ? 'locked' : '')>
+            <if(input.highlightComment)>
+                <button-text
+                    text='Ver todos'
+                    on-click('emit', 'viewAllRequested')
+                />
+
+                <if(state.comments.length && state.comments[0].parent)>
+                    <button-text
+                        text='Ver contexto'
+                        on-click('emit', 'viewContextRequested')
+                    />
+                </if>
+            </if>
+            <else>
+                <span.title>
+                    <if(input.locked)>
+                        <icon name='lock' />
+                    </if>
+
+                    $!{
+                        input.locked ?
+                        `<span class='locked'>Discussão bloqueada</span><br>` :
+                        ''
+                    }${input.count}<span.label> comentário${input.count != 1 ? 's' : ''}</span>
+                </span>
+            </else>
+
+            <if(input.loading)>
+                <icon.icon-loading name='loading' />
+            </if>
+        </div>
+
+        <dropdown
+            options=processObjectsTr(input.sortOptions, trSort)
+            sort
+            tooltip=trSort.tooltip
+            on-optionChanged('emit', 'sortChanged')
+        />
+    </div>
+
+    <if(input.highlightComment &&  state.comments.length && state.comments[0].parent)>
+        $ const commentParent = state.comments[0].parent
+
+        <span.parent-text>
+            $!{commentParent.text}
+        </span>
+    </if>
+
+    <div.comments>
+        <for|comment| of=state.comments>
+            <comment-post
+                allowPin
+                comment=comment
+                creatorPost=input.creatorPost
+                idPost=input.idPost
+                isMod=input.isMod
+                locked=input.locked
+                moderators=input.moderators
+                on-collapsed('emit', 'commentCollapsed')
+                on-continueThreadRequested('emit', 'continueThreadRequested')
+                on-shareRequested('emit', 'shareCommentRequested')
+            />
+        </for>
+    </div>
+</div>
+
+style.less {
+    .comments-post {
+        --comments-spacing: 10px;
+        --iconloading-size: 17px;
+        --spacing: 20px;
+        --title-fontsize: 19px;
+        --title-spacing: 10px;
+
+        display: flex;
+        flex-direction: column;
+        gap: var(--spacing);
+
+        >.bar-title {
+            align-items: center;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            justify-content: space-between;
+
+            >.wrapper-title {
+                align-items: center;
+                display: flex;
+                gap: var(--title-spacing);
+
+                >.title {
+                    color: var(--color-text3);
+                    font-family: @font-medium;
+                    font-size: var(--title-fontsize);
+                    text-transform: uppercase;
+
+                    >.icon {
+                        color: var(--color-icon3);
+                        display: inline-flex;
+                        margin-right: 5px;
+                        vertical-align: -2px;
+                        .size(var(--iconloading-size));
+                    }
+
+                    >.label,
+                    >.locked {
+                        font-size: calc(var(--title-fontsize) - 4px);
+                    }
+                }
+
+                >.icon-loading {
+                    color: var(--color-icon1);
+                    display: flex;
+                    .size(var(--iconloading-size));
+                    .svg-loading();
+                }
+
+                &.locked {
+                    background-color: var(--color-accent1);
+                    border-radius: var(--app-borderradius);
+                    color: @color-darkcontrast;
+                    padding: 4px 10px;
+
+                    >.title {
+                        color: @color-darkcontrast;
+
+                        >.icon {
+                            color: @color-darkcontrast;
+                        }
+                    }
+                }
+            }
+        }
+
+        >.parent-text {
+            font-size: 15px;
+            padding: 0 var(--app-padding);
+            position: relative;
+            .text-rich(var(--color-text2));
+        }
+
+        >.comments {
+            display: flex;
+            flex-direction: column;
+            gap: var(--comments-spacing);
+        }
+
+        // Media Queries.
+
+        .r-max(@break-ms, {
+            --title-fontsize: 18px;
+        });
+
+        .r-max(@break-sm, {
+            --title-fontsize: 17px;
+        });
+
+        .r-max(@break-xs, {
+            --title-fontsize: 16px;
+        });
+    }
+};

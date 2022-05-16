@@ -1,0 +1,56 @@
+<h1.text-title class=input.class>
+    <${data.renderBody} />
+</h1>
+
+style.less {
+    .text-title {
+        --fontsize: 26px;
+        --fontsize-big: 30px;
+        --fontsize-medium: 22px;
+        --fontsize-small: 18px;
+
+        font-family: @font-semibold;
+        font-size: var(--fontsize);
+        line-height: 1.3;
+
+        &.small,
+        .small {
+            font-size: var(--fontsize-small);
+            text-transform: uppercase;
+        }
+
+        &.medium,
+        .medium {
+            font-family: @font-medium;
+            font-size: var(--fontsize-medium);
+        }
+
+        &.big,
+        .big {
+            //font-family: @font-semibold;
+            font-size: var(--fontsize-big);
+        }
+
+        // Media Queries.
+
+        .r-max(@break-ms, {
+            --fontsize: 24px;
+            --fontsize-medium: 20px;
+            --fontsize-big: 29px;
+        });
+
+        .r-max(@break-sm, {
+            --fontsize: 22px;
+            --fontsize-big: 27px;
+            --fontsize-medium: 19px;
+            --fontsize-small: 17px;
+        });
+
+        .r-max(@break-xs, {
+            --fontsize: 20px;
+            --fontsize-big: 25px;
+            --fontsize-medium: 18px;
+            --fontsize-small: 16px;
+        });
+    }
+};

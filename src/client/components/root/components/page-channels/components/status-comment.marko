@@ -1,0 +1,115 @@
+class {
+    onCreate(input) {
+        this.state = {
+            comment: input.comment || {}
+        }
+    }
+
+    onInput(input) {
+        this.state.comment = input.comment || {}
+
+        if(this.mounted) {
+            this.setStateDirty('comment')
+        }
+    }
+
+    onMount() {
+        this.mounted = true
+    }
+}
+
+$ const comment = state.comment || {}
+
+<if(comment.pinned)>
+    <icon.icon-statuspost.special2 class=input.class name='pin' />
+</if>
+
+<if(input.isMod)>
+    <if(comment.status == 'approved')>
+        <icon.icon-statuscomment.special class=input.class name='check' />
+    </if>
+
+    <if(comment.status == 'rejected' || comment.status == 'autorejected')>
+        <icon.icon-statuscomment.danger class=input.class name='reject' />
+    </if>
+
+    <if(comment.flags && comment.flags.length)>
+        <div.wrapper-flag class=input.class>
+            <span.reports-count>
+                ${comment.flags.length}
+            </span>
+
+            <icon.icon-statuscomment.danger class=input.class name='flag' />
+        </div>
+
+        <if(input.enableToggleReports)>
+            <button-text.small
+                text=(input.reportsVisible ? 'Esconder denúncias' : 'Ver denúncias')
+                on-click('emit', 'toggleReportsRequested')
+            />
+        </if>
+    </if>
+</if>
+
+style.less {
+    .icon-statuscomment {
+        --size: 16px;
+
+        color: var(--color-icon2);
+        .size(var(--size));
+
+        >svg {
+            display: flex;
+        }
+
+        &.danger {
+            color: var(--color-warning);
+        }
+
+        &.special {
+            color: var(--color-accent1);
+        }
+
+        &.special2 {
+            color: var(--color-voteup);
+        }
+
+        &.small {
+            --size: 14px;
+        }
+
+        &.medium {
+            --size: 15px;
+        }
+
+        &.big {
+            --size: 20px;
+        }
+    }
+
+    .wrapper-flag {
+        --fontsize: 15px;
+
+        align-items: center;
+        display: flex;
+        gap: 5px;
+
+        &.small {
+            --fontsize: 13px;
+        }
+
+        &.medium {
+            --fontsize: 14px;
+        }
+
+        &.big {
+            --fontsize: 18px;
+        }
+
+        >.reports-count {
+            color: var(--color-warning);
+            font-size: var(--fontsize);
+            font-family: @font-medium;
+        }
+    }
+};

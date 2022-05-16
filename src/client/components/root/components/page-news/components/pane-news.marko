@@ -1,0 +1,256 @@
+import appm from 'js/app-manager'
+import { getCookie, setCookie, scrollReachBottom } from 'js/utils'
+import { timers } from 'js/default-vars'
+
+static const sortOptions = ['trending', 'new', 'top']
+
+class {
+    onCreate(input) {
+        this.state = {
+            countNews: 0,
+            fetchingNews: false,
+            id: 'all',
+            indexSort: 0,
+            item: {},
+            news: [],
+            user: appm.getUser()
+        }
+
+        this.filter = ''
+        this.pageCurrent = 0
+
+        this.newsFetched = this.newsFetched.bind(this)
+        this.userUpdated = this.userUpdated.bind(this)
+    }
+
+    onMount() {
+        appm.on('fetchItemsSuccess', this.newsFetched)
+        appm.on('userUpdated', this.userUpdated)
+
+        this.fetch()
+    }
+
+    onDestroy() {
+        clearTimeout(this.timeoutBetweenFetches)
+
+        appm.off('fetchItemsSuccess', this.newsFetched)
+        appm.off('userUpdated', this.userUpdated)
+    }
+
+    // Getters & Setters
+
+    setData(id, item) {
+        this.state.id = id || 'all'
+
+        if(id == 'source' || id == 'category') {
+            this.state.item = item
+        }
+
+        this.pageCurrent = 0
+
+        // Set sort if it was saved in cookies.
+        const indexSort = sortOptions.indexOf(getCookie('sortNews'))
+
+        if(indexSort >= 0) {
+            this.state.indexSort = indexSort
+        }
+
+        this.fetch()
+    }
+
+    // Functions.
+
+    checkLoadMore() {
+        if(
+            this.state.fetchingNews ||
+            !this.state.news.length ||
+            this.state.news.length >= this.state.countNews ||
+            !scrollReachBottom(this.getEl())
+        ) {
+            return
+        }
+
+        ++this.pageCurrent
+
+        this.fetch()
+    }
+
+    deleteNewsRequested() {
+        appm.showPopup('deleteItem', 'news')
+    }
+
+    fetch() {
+        this.state.fetchingNews = true
+
+        if(!this.pageCurrent) {
+            this.state.countNews = 0
+            this.state.news = []
+        }
+
+        if(this.timeoutBetweenFetches) {
+            clearTimeout(this.timeoutBetweenFetches)
+        }
+
+        this.timeoutBetweenFetches = setTimeout(() => {
+            let filtersExtra = {}
+
+            switch(this.state.id) {
+                case 'categories':
+                    filtersExtra.categories = true
+                    break
+                case 'category':
+                    filtersExtra.category = this.state.item.id
+                    break
+                case 'source':
+                    filtersExtra.source = this.state.item.id
+                    break
+            }
+
+            this.idFetch = appm.fetchItems(
+                'news', this.filter, filtersExtra,
+                this.pageCurrent, sortOptions[this.state.indexSort]
+            )
+        }, timers.betweenFetches)
+    }
+
+    newsFetched(idFetch, news, count) {
+        if(idFetch != this.idFetch) {
+            return
+        }
+
+        this.state.fetchingNews = false
+
+        if(this.pageCurrent > 0) {
+            const newsUnique = news.filter(newsSingle => !this.linksNews.includes(newsSingle.link))
+
+            this.state.news = this.state.news.concat(newsUnique)
+            this.linksNews = this.linksNews.concat(newsUnique.map(newsSingle => newsSingle.link ))
+        }
+        else {
+            this.state.news = news
+            this.linksNews = news.map(newsSingle => newsSingle.link )
+        }
+
+        this.state.countNews = count
+    }
+
+    refresh() {
+        this.pageCurrent = 0
+        //this.filter = ''
+
+        this.fetch()
+        appm.addAnalyticsEvent('news', 'refresh')
+    }
+
+    searchChanged(search) {
+        this.pageCurrent = 0
+        this.filter = search
+
+        this.fetch()
+    }
+
+    sortChanged(index) {
+        this.pageCurrent = 0
+        this.state.indexSort = index
+
+        setCookie('sortNews', sortOptions[this.state.indexSort])
+
+        this.fetch()
+    }
+
+    userUpdated(user) {
+        this.state.user = user
+    }
+}
+
+$ const icons = {
+    all: 'atom',
+    categories: 'folder',
+    category: 'folder'
+}
+
+$ const item = state.item || {}
+$ const trNews = appm.tr('news') || {}
+
+<pane-default.pane-news
+    key='root'
+    class=input.class
+    icon=icons[state.id]
+    title=(state.id == 'category' ? item.name || item.id : trNews[state.id])
+    on-refreshRequested('refresh')
+>
+    <if(state.id == 'source')>
+        <@barTitleCustom>
+            <image-circle.medium image=item.image />
+
+            <span.title>
+                ${item.name || item.id}
+            </span>
+        </@barTitleCustom>
+    </if>
+
+    <@barControls>
+        <combo-searchsort
+            countItems=state.countNews
+            indexSort=state.indexSort
+            loading=state.fetchingNews
+            sortOptions=sortOptions
+            on-searchChanged('searchChanged')
+            on-sortChanged('sortChanged')
+        />
+    </@barControls>
+
+    <@contents class=(!state.news.length ? 'center' : 'grid')>
+        <if(state.news.length || state.fetchingNews)>
+            <for|news, index| of=state.news>
+                $ const div10Remain = index % 10
+
+                <card-news
+                    big=(div10Remain == 0 || div10Remain == 3)
+                    news=news
+                />
+            </for>
+        </if>
+        <else>
+            <contents-empty
+                icon='search'
+                noButton
+                text=trNews.emptyText
+                title=trNews.emptyTitle
+            />
+        </else>
+    </@contents>
+
+    <@footer>
+        <loading-finder show=state.fetchingNews />
+    </@footer>
+</pane-default>
+
+style.less {
+    .pane-news {
+        >.contents {
+            &.grid {
+                grid-auto-rows: min-content;
+                .grid(var(--grid-count), var(--grid-spacing), var(--grid-spacing), minmax(0, 1fr));
+            }
+
+            >.card-news {
+                &.big {
+                    grid-column: span 2;
+                }
+            }
+        }
+
+        // Media queries.
+
+        .r-max(@break-sm, {
+            >.contents {
+                >.card-news {
+                    &.big {
+                        grid-column: span 1;
+                    }
+                }
+            }
+        });
+    }
+};

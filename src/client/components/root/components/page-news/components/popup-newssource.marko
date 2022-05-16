@@ -1,0 +1,331 @@
+import appm from 'js/app-manager'
+import { prepareUrl, validateNewsSourceId, validateUrl } from 'js/utils'
+
+class {
+    onCreate() {
+        this.state = {
+            edit: false,
+            source: {},
+            status: 0
+        }
+
+        this.created = this.created.bind(this)
+        this.createError = this.createError.bind(this)
+        this.updated = this.updated.bind(this)
+        this.updateError = this.updateError.bind(this)
+    }
+
+    onMount() {
+        this.popupComponent = this.getComponent('popup')
+
+        appm.on('createItemError', this.createError)
+        appm.on('createItemSuccess', this.created)
+        appm.on('updateItemError', this.updateError)
+        appm.on('updateItemSuccess', this.updated)
+    }
+
+    onDestroy() {
+        appm.off('createItemError', this.createError)
+        appm.off('createItemSuccess', this.created)
+        appm.off('updateItemError', this.updateError)
+        appm.off('updateItemSuccess', this.updated)
+    }
+
+    // Getters & Setters.
+
+    getData() {
+        return this.data
+    }
+
+    setData(source) {
+        this.state.edit = true
+        this.state.source = source
+
+        this.idComponent.setValue(source.id)
+        this.nameComponent.setValue(source.name)
+        this.urlFeedComponent.setValue(source.urlFeedRss)
+        this.urlWebsiteComponent.setValue(source.urlWebsite)
+        this.categoryDefaultComponent.setValue(source.categoryDefault)
+
+        if(source.image) {
+            this.imageComponent.setImage(source.image)
+        }
+    }
+
+    // Functions.
+
+    created(type, idRequest, source) {
+        if(idRequest != this.idRequest) {
+            return
+        }
+
+        this.state.status = 0
+
+        this.hide()
+        appm.openPage('news', 'source', false, source)
+    }
+
+    createError(idRequest) {
+        if(idRequest != this.idRequest) {
+            return
+        }
+
+        this.state.status = -1
+    }
+
+    hide() {
+        if(!this.visible || this.state.status == 1) {
+            return
+        }
+
+        this.popupComponent.hide()
+    }
+
+    hidden() {
+        this.state.status = 0
+        this.visible = false
+    }
+
+    imageUploaded(idImage) {
+        if(this.state.status != 1) {
+            return
+        }
+
+        this.data.image = idImage
+
+        if(this.state.edit) {
+            appm.updateItem('newsSource', this.state.source.id, this.data)
+        }
+        else {
+            this.idRequest = appm.createItem('newsSource', this.data)
+        }
+    }
+
+    keyPressed(event) {
+        switch(event.keyCode) {
+            case 13: // Enter
+                this.submitRequested()
+                break
+            case 27:
+                this.hide()
+        }
+    }
+
+    show(args) {
+        if(this.visible) {
+            return
+        }
+
+        this.visible = true
+
+        this.popupComponent.show()
+
+        this.idComponent = this.getComponent('inputId')
+        this.nameComponent = this.getComponent('inputName')
+        this.imageComponent = this.getComponent('inputImage')
+        this.urlFeedComponent = this.getComponent('inputUrlFeed')
+        this.urlWebsiteComponent = this.getComponent('inputUrlWebsite')
+        this.categoryDefaultComponent = this.getComponent('inputCategoryDefault')
+
+        if(args[0]) {
+            this.setData(args[0])
+        }
+    }
+
+    submitRequested() {
+        if(this.state.status == 1) {
+            return
+        }
+
+        if(!this.validate()) {
+            return
+        }
+
+        this.state.status = 1
+
+        if(this.imageComponent.needsUpload()) {
+            this.imageComponent.upload('square')
+        }
+        else {
+            if(this.state.edit) {
+                appm.updateItem('newsSource', this.state.source.id, this.data)
+            }
+            else {
+                this.idRequest = appm.createItem('newsSource', this.data)
+            }
+        }
+    }
+
+    updated(type, id, source) {
+        if(type != 'newsSource' || id != this.state.source.id) {
+            return
+        }
+
+        this.state.status = 0
+
+        this.hide()
+        appm.openPage('news', 'source', false, source)
+    }
+
+    updateError(type, id) {
+        if(type != 'newsSource' || id != this.state.source.id) {
+            return
+        }
+
+        this.state.status = -1
+    }
+
+    uploadImageError(error) {
+        if(this.state.status != 1) {
+            return
+        }
+
+        this.state.status = -1
+    }
+
+    validate() {
+        const id = this.idComponent.getValue()
+        const name = this.nameComponent.getValue()
+        const urlFeedRss = prepareUrl(this.urlFeedComponent.getValue())
+        const urlWebsite = prepareUrl(this.urlWebsiteComponent.getValue())
+        const categoryDefault = this.categoryDefaultComponent.getValue()
+
+        let validData = true
+
+        if(!validateNewsSourceId(id)) {
+            this.idComponent.setValid(false)
+            validData = false
+        }
+
+        if(!name.length) {
+            this.nameComponent.setValid(false)
+            validData = false
+        }
+
+        if(!validateUrl(urlFeedRss)) {
+            this.urlFeedComponent.setValid(false)
+            validData = false
+        }
+
+        if(!validateUrl(urlWebsite)) {
+            this.urlWebsiteComponent.setValid(false)
+            validData = false
+        }
+
+        if(!validData) {
+            return false
+        }
+
+        this.data = {
+            id,
+            name,
+            urlFeedRss,
+            urlWebsite,
+            categoryDefault
+        }
+
+        return true
+    }
+}
+
+$ const trFormSource = appm.tr('news.formSource') || {}
+$ const trInputs = trFormSource.inputs || {}
+
+<popup.popup-newssource
+    key='popup'
+    class=input.class
+    title=(state.edit ? trFormSource.titleEdit : trFormSource.titleCreate)
+    on-hidden('hidden')
+    on-keyPressed('keyPressed')
+>
+    <@form>
+        <div.inputs>
+            <input-text.input-name.big
+                key='inputName'
+                icon='title'
+                maxlength=50
+                noExternalUpdate
+                placeholder=trInputs.name
+                on-keyup('keyPressed')
+            />
+
+            <input-text.input-id.big
+                key='inputId'
+                icon='news'
+                maxlength=20
+                noExternalUpdate
+                placeholder=trInputs.id
+                on-keyup('keyPressed')
+            />
+
+            <input-image.small
+                key='inputImage'
+                icon='image'
+                noExternalUpdate
+                text=trInputs.image
+                on-uploaded('imageUploaded')
+                on-uploadError('uploadImageError')
+            />
+
+            <input-text.input-url.big
+                key='inputUrlFeed'
+                icon='link'
+                noExternalUpdate
+                placeholder=trInputs.feed
+                on-keyup('keyPressed')
+            />
+
+            <input-text.input-url.big
+                key='inputUrlWebsite'
+                icon='globe'
+                noExternalUpdate
+                placeholder=trInputs.website
+                on-keyup('keyPressed')
+            />
+
+            <input-text.input-category.big
+                key='inputCategoryDefault'
+                icon='folder'
+                noExternalUpdate
+                placeholder=trInputs.category
+                on-keyup('keyPressed')
+            />
+        </div>
+
+        <button-submit.big
+            loading=(state.status == 1)
+            text=trFormSource[state.edit ? 'buttonSave' : 'buttonCreate']
+            on-click('submitRequested')
+        />
+    </@form>
+</popup>
+
+style.less {
+    .popup-newssource {
+        --inputs-spacing: 15px;
+
+        >.wrapper>.panel>.form {
+            >.inputs {
+                .grid(4, var(--inputs-spacing), var(--inputs-spacing));
+
+                >.input-id,
+                >.input-name {
+                    grid-column: span 2;
+                }
+
+                >.input-image {
+                    grid-row: span 3;
+                }
+
+                >.input-url,
+                >.input-category {
+                    grid-column: span 3;
+                }
+            }
+
+            >.button-submit {
+                align-self: center;
+            }
+        }
+    }
+};

@@ -1,0 +1,30 @@
+import appm from 'js/app-manager'
+
+class {
+    // Getters & Setters.
+
+    setData(args, allowBack = false) {
+        const pane = this.getComponent('pane')
+
+        if(!pane) {
+            return
+        }
+
+        const paneDefault = pane.getComponent('root')
+
+        if(pane.setData) {
+            pane.setData(...args)
+        }
+
+        if(paneDefault) {
+            paneDefault.setAllowBack(allowBack)
+        }
+    }
+}
+
+<if(input.id == 'quina')>
+    <pane-game-quina key='pane' />
+</if>
+<else>
+    <pane-games key='pane' />
+</else>

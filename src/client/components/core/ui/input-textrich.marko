@@ -1,0 +1,1415 @@
+import appm from 'js/app-manager'
+import sanitizeHtml from 'sanitize-html'
+import { isMobile, prepareUrl, validateUrl } from 'js/utils'
+import { optionsHtmlSanitize } from 'js/default-vars'
+
+static const emojis = [
+    '🙂', '😃', '😂', '😆', '😉', '🤤', '😜', '😍', '😐', '😎', '😕', '😢', '😨',
+    '😲', '🥳', '🤓', '😫', '😤', '😠', '🤬', '👌', '👍', '👎', '🙏', '👏', '🙌',
+    '👊', '💪', '👀', '💀'
+]
+static const toolsFormat = [
+    'bold', 'italic', 'strikeThrough', 'link', 'emoji', 'quotes', 'code', 'spoiler', 'listUl', 'listOl'
+]
+static const toolsFormatMini = [
+    'bold', 'italic'
+]
+static const toolsFormatMiniHidden = [
+    'emoji', 'strikeThrough', 'link', 'quotes', 'code', 'spoiler', 'listUl', 'listOl'
+]
+
+static const removeLineBreaks = (text, joinMultiple = false) => {
+    // Remove all leading and trailing line breaks and whitespaces.
+    text = text.replace(/^\s*(?:<br\s*\/?\s*>)+|(?:<br\s*\/?\s*>)+\s*$/gi, '')
+
+    if(joinMultiple) {
+        // Replace multiple br's with 2.
+        text = text.replace(/(?:<br\s*\/?\s*>){2,}/g, '<br><br>')
+    }
+
+    return text
+}
+
+// WTF copying this and pasting?!
+// removeLineBreaksLeadTrail
+// results in this -> rHgS5orgPvsuzJ7shn8vw28y1XaePY4uDP
+
+/*
+ Gets the offset of a node within another node. Text nodes are
+ counted a n where n is the length. Entering (or passing) an
+ element is one offset. Exiting is 0.
+ */
+static const getNodeOffset = (start, dest) => {
+    let node = start
+    let offset = 0
+    const stack = []
+
+    while(true) {
+        if(node === dest) {
+            return offset
+        }
+
+        // Go into children
+        if(node.firstChild) {
+            // Going into first one doesn't count
+            if(node !== start) {
+                offset += 1
+            }
+
+            stack.push(node)
+            node = node.firstChild
+        }
+        // If can go to next sibling
+        else if(stack.length > 0 && node.nextSibling) {
+            // If text, count length (plus 1)
+            if (node.nodeType === 3) {
+                offset += node.nodeValue.length + 1
+            }
+            else {
+                offset += 1
+            }
+
+            node = node.nextSibling
+        }
+        else {
+            // If text, count length
+            if(node.nodeType === 3) {
+                offset += node.nodeValue.length + 1
+            }
+            else {
+                offset += 1
+            }
+
+            // No children or siblings, move up stack
+            while(true) {
+                if(stack.length <= 1) {
+                    return offset
+                }
+
+                const next = stack.pop()
+
+                // Go to sibling
+                if(next.nextSibling) {
+                    node = next.nextSibling
+                    break
+                }
+            }
+        }
+    }
+}
+
+// Calculate the total offsets of a node
+static const calculateNodeOffset = (node) => {
+    let offset = 0
+
+    // If text, count length
+    if(node.nodeType === 3) {
+        offset += node.nodeValue.length + 1
+    }
+    else {
+        offset += 1
+    }
+
+    if(node.childNodes) {
+        for(let i = 0; i < node.childNodes.length; ++i) {
+            offset += calculateNodeOffset(node.childNodes[i])
+        }
+    }
+
+    return offset
+}
+
+// Determine total offset length from returned offset from ranges
+static const totalOffsets = (parentNode, offset) => {
+    if(parentNode.nodeType == 3) {
+        return offset
+    }
+
+    if(parentNode.nodeType == 1) {
+        let total = 0
+        // Get child nodes
+        for(let i = 0; i < offset; ++i) {
+            total += calculateNodeOffset(parentNode.childNodes[i])
+        }
+
+        return total
+    }
+
+    return 0
+}
+
+static const getNodeAndOffsetAt = (start, offset) => {
+    let node = start
+    const stack = []
+
+    while(true) {
+      // If arrived
+        if(offset <= 0) {
+            return { node: node, offset: 0 }
+        }
+
+        // If will be within current text node
+        if(node.nodeType == 3 && (offset <= node.nodeValue.length)) {
+            return { node: node, offset: Math.min(offset, node.nodeValue.length) }
+        }
+
+        // Go into children (first one doesn't count)
+        if(node.firstChild) {
+            if(node !== start) {
+                offset -= 1
+            }
+
+            stack.push(node)
+            node = node.firstChild
+        }
+        // If can go to next sibling
+        else if(stack.length > 0 && node.nextSibling) {
+            // If text, count length
+            if(node.nodeType === 3) {
+                offset -= node.nodeValue.length + 1
+            }
+            else {
+                offset -= 1
+            }
+
+            node = node.nextSibling
+        }
+        else {
+            // No children or siblings, move up stack
+            while(true) {
+                if(stack.length <= 1) {
+                    // No more options, use current node
+                    if(node.nodeType == 3) {
+                        return { node: node, offset: Math.min(offset, node.nodeValue.length) }
+                    }
+                    else {
+                        return { node: node, offset: 0 }
+                    }
+                }
+
+                const next = stack.pop()
+
+                // Go to sibling
+                if(next.nextSibling) {
+                    // If text, count length
+                    if(node.nodeType === 3) {
+                        offset -= node.nodeValue.length + 1
+                    }
+                    else {
+                        offset -= 1
+                    }
+
+                    node = next.nextSibling
+                    break
+                }
+            }
+        }
+    }
+}
+
+static const getSelection = (element) => {
+    const selection = window.getSelection()
+
+    if(selection.rangeCount > 0) {
+        const range = selection.getRangeAt(0)
+        const offsetStartNode = getNodeOffset(element, range.startContainer)
+        const offsetStartTotal = totalOffsets(range.startContainer, range.startOffset)
+        const offsetEndNode = getNodeOffset(element, range.endContainer)
+        const offsetEndTotal = totalOffsets(range.endContainer, range.endOffset)
+
+        return {
+            start: offsetStartNode + offsetStartTotal,
+            end: offsetEndNode + offsetEndTotal
+        }
+    }
+
+    return null
+}
+
+static const restoreSelection = (element, selection) => {
+    if(!selection) {
+        return
+    }
+
+    const range = document.createRange()
+    const startNodeOffset = getNodeAndOffsetAt(element, selection.start)
+    const endNodeOffset = getNodeAndOffsetAt(element, selection.end)
+
+    range.setStart(startNodeOffset.node, startNodeOffset.offset)
+    range.setEnd(endNodeOffset.node, endNodeOffset.offset)
+
+    const selectionNew = window.getSelection()
+    selectionNew.removeAllRanges()
+    selectionNew.addRange(range)
+}
+
+static const toggleTag = (idElement = 'span', classes = '', expand = true, clean = false) => {
+    const selection = window.getSelection()
+    const classesCompare = '.' + classes.replace(/\s/g, '.')
+
+    if(expand) {
+        selection.coverAll()
+    }
+
+    let removed = false
+
+    for(let i = 0; i< selection.rangeCount; i++) {
+        const range = selection.getRangeAt(i)
+        const parent = range.commonAncestorContainer
+
+        let parentNext = parent
+
+        while(parentNext != this.elementInput && !removed) {
+            if(parentNext.nodeName.toLowerCase() == idElement) {
+                if(!classes.length || parentNext.matches(classesCompare)) {
+                    parentNext.replaceWith(...parentNext.childNodes)
+                    removed = true
+                }
+            }
+
+            parentNext = parentNext.parentNode
+        }
+
+        if(parent.nodeType == 1) {
+            const children = parent.getElementsByTagName('*')
+
+            for(const child of children) {
+                if(!range.intersectsNode(child)) {
+                    continue
+                }
+
+                if(child.nodeName.toLowerCase() == idElement) {
+                    if(!classes.length || child.matches(classesCompare)) {
+                        child.replaceWith(...child.childNodes)
+                        removed = true
+                    }
+                }
+            }
+        }
+
+        if(!removed) {
+            const element = document.createElement(idElement)
+
+            if(classes.length) {
+                element.className = classes
+            }
+
+            if(parent.nodeType == 3) {
+                range.surroundContents(element)
+            }
+            else if(parent.nodeType == 1) {
+                const content = range.extractContents()
+
+                if(clean) {
+                    element.innerHTML = content.textContent
+                }
+                else {
+                    element.appendChild(content)
+                }
+
+                range.insertNode(element)
+            }
+        }
+    }
+}
+
+static const tryRemoveBlock = (removePrevious = true) => {
+    const selection = window.getSelection()
+    const range = selection.getRangeAt(0)
+    const element = range.startContainer.parentElement
+    const elementOther = removePrevious ? element.previousSibling : element.nextSibling
+    const elements = [element, elementOther]
+
+    for(const [index, element] of elements.entries()) {
+        if(!element) {
+            continue
+        }
+
+        if(!(
+            element.nodeName.toLowerCase() == 'code' ||
+            (element.nodeName.toLowerCase() == 'div' && element.classList.contains('quotation')) ||
+            (element.nodeName.toLowerCase() == 'span' && element.classList.contains('spoiler'))
+        )) {
+            continue
+        }
+
+        const offsetTarget = (
+            removePrevious ?
+            (index == 0 ? element.textContent.length : 0) :
+            (index == 0 ? 0 : element.textContent.length)
+        )
+
+        // TODO if multiline, offsets will only relate to the line, so it won't match up.
+        if(range.startOffset == range.endOffset && range.endOffset == offsetTarget) {
+            if(element.classList.contains('highlight')) {
+                element.remove()
+            }
+            else {
+                element.classList.add('highlight')
+            }
+
+            return true
+        }
+    }
+
+    return false
+}
+
+
+class {
+    onCreate(input, out) {
+        this.state = {
+            enabled: true,
+            errorMessage: input.errorMessage || '',
+            mini: input.mini,
+            placeholder: input.placeholder || '',
+            showPopupEmojis: false,
+            showPopupLink: false,
+            showPopupMoreTools: false,
+            valid: true
+        }
+
+        this.inFocus = false
+        this.redos = []
+        this.text = input.text || ''
+        this.undos = []
+        this.lineBreakWithShift = input.lineBreakWithShift
+        this.maxLength = input.maxlength || (this.state.mini ? 1000 : 10000)
+
+        Selection.prototype.coverAll = function() {
+            const ranges = []
+
+            for(var i = 0; i < this.rangeCount; ++i) {
+                const range = this.getRangeAt(i)
+
+                while(
+                    range.startContainer.nodeType == 3 ||
+                    range.startContainer.childNodes.length == 1
+                ) {
+                    range.setStartBefore(range.startContainer)
+                }
+
+                while(
+                    range.endContainer.nodeType == 3 ||
+                    range.endContainer.childNodes.length == 1
+                ) {
+                    range.setEndAfter(range.endContainer)
+                }
+
+                ranges.push(range)
+            }
+
+            this.removeAllRanges()
+
+            for(let i = 0; i < ranges.length; ++i) {
+                this.addRange(ranges[i])
+            }
+
+            return
+        }
+
+        this.selectionChanged = this.selectionChanged.bind(this)
+    }
+
+    onInput(input) {
+        if(!input.noExternalUpdate) {
+            this.updateInput(input.text || '')
+
+            if(this.mounted) {
+                this.setValid(true)
+            }
+        }
+    }
+
+    onMount() {
+        this.root = this.getEl('root')
+        this.elementInput = this.getEl('input')
+
+        this.mounted = true
+
+        if(this.text) {
+            this.setValue(this.text)
+        }
+
+        document.addEventListener('selectionchange', this.selectionChanged)
+    }
+
+    onUpdate() {
+        this.elementInput.innerHTML = this.text
+
+        if(this.inFocus) {
+            this.restoreSelection()
+        }
+    }
+
+    onDestroy() {
+        document.removeEventListener('selectionchange', this.selectionChanged)
+    }
+
+    // Getters & Setters.
+
+    getValue() {
+        const text = removeLineBreaks(this.text)
+
+        return text
+    }
+
+    setValid(valid, error) {
+        this.state.valid = valid
+
+        if(!valid) {
+            this.state.errorMessage = error
+        }
+    }
+
+    setValue(value) {
+        this.updateInput(value == null ? '' : value)
+
+        //this.update()a
+        //this.elementInput.innerHTML = this.state.text
+
+        this.setValid(true)
+    }
+
+    applyFormat(id) {
+        switch(id) {
+            case 'bold':
+                this.applyBold()
+                break
+            case 'italic':
+                this.applyItalic()
+                break
+            case 'strikeThrough':
+                this.applyStrikeThrough()
+                break
+            case 'link':
+                this.showPopupLink()
+                break
+            case 'emoji':
+                this.showPopupEmojis()
+                break
+            case 'quotes':
+                this.applyQuotation()
+                break
+            case 'code':
+                this.applyCode()
+                break
+            case 'spoiler':
+                this.applySpoiler()
+                break
+            case 'listUl':
+                this.applyListUl()
+                break
+            case 'listOl':
+                this.applyListOl()
+                break
+        }
+
+        this.state.showPopupMoreTools = false
+
+        appm.addAnalyticsEvent('inputTextRich', 'formatApplied')
+    }
+
+    applyBold() {
+        this.focusInput()
+        toggleTag('span', 'bold', false)
+        this.updateText(this.elementInput.innerHTML, true)
+    }
+
+    applyCode() {
+        this.focusInput()
+        toggleTag('code')
+        this.updateText(this.elementInput.innerHTML, true)
+    }
+
+    applyEmoji(emoji) {
+        this.focusInput()
+        document.execCommand('insertText', false, emoji)
+
+        this.state.showPopupEmojis = false
+    }
+
+    applyItalic() {
+        this.focusInput()
+        document.execCommand('italic')
+        this.undos.push(this.elementInput.innerHTML, true)
+    }
+
+    applyLink() {
+        let text = this.inputText.getValue().trim()
+        const url = prepareUrl(this.inputUrl.getValue())
+
+        let validData = true
+
+        if(!validateUrl(url)) {
+            this.inputUrl.setValid(false)
+            validData = false
+        }
+
+        if(!validData) {
+            return
+        }
+
+        this.state.showPopupLink = false
+
+        this.focusInput()
+
+        if(!text.length) {
+            text = url
+        }
+
+        document.execCommand(
+            'insertHTML',
+            false,
+            '<a href="' + url + '" target="_blank">' + text + '</a>')
+    }
+
+    applyListUl() {
+        this.focusInput()
+
+        document.execCommand('insertUnorderedList')
+    }
+
+    applyListOl() {
+        this.focusInput()
+
+        document.execCommand('insertOrderedList')
+    }
+
+    applyQuotation() {
+        this.focusInput()
+        toggleTag('span', 'quotation')
+        this.updateText(this.elementInput.innerHTML, true)
+    }
+
+    applySpoiler() {
+        this.focusInput()
+        toggleTag('span', 'spoiler', false, true)
+        this.updateText(this.elementInput.innerHTML, true)
+    }
+
+    applyStrikeThrough() {
+        this.focusInput()
+
+        document.execCommand('strikethrough')
+    }
+
+    focus(event) {
+        this.root.classList.add('in-focus')
+        this.inFocus = true
+
+        this.emit('focus')
+    }
+
+    focusInput() {
+        this.root.classList.add('in-focus')
+        this.inFocus = true
+        this.restoreSelection()
+
+        this.getEl('input').focus()
+    }
+
+    focusOut() {
+        this.root.classList.remove('in-focus')
+        this.inFocus = false
+
+        // Test if there's length after trimming.
+        if(!this.elementInput.textContent.trim().length) {
+            this.updateInput('')
+            //this.state.text = ''
+        }
+        else {
+            //this.state.text = this.elementInput.innerHTML
+            this.text = this.elementInput.innerHTML
+        }
+
+        this.emit('focusout')
+    }
+
+    hidePopups() {
+        this.state.showPopupEmojis = false
+        this.state.showPopupLink = false
+        this.state.showPopupMoreTools = false
+    }
+
+    keyPressed(event) {
+        if(this.state.showPopupEmojis) {
+            switch(event.which) {
+                case 27: { // Escape.
+                    this.state.showPopupEmojis = false
+                    break
+                }
+            }
+
+            return
+        }
+
+        if(this.state.showPopupLink) {
+            switch(event.which) {
+                case 27: { // Escape.
+                    this.state.showPopupLink = false
+                    break
+                }
+                case 13: { // Enter.
+                    this.applyLink()
+                    break
+                }
+            }
+
+            return
+        }
+
+        if(this.state.showPopupMoreTools) {
+            switch(event.which) {
+                case 27: { // Escape.
+                    this.state.showPopupMoreTools = false
+                    break
+                }
+            }
+
+            return
+        }
+
+        switch(event.which) {
+            case 27: { // Escape.
+                return this.emit('closeRequested')
+            }
+            case 8: { // Backspace.
+                if(tryRemoveBlock()) {
+                    event.preventDefault()
+                }
+
+                return
+            }
+            case 9: { // Tab.
+                document.execCommand('insertHTML', false, '&emsp;')
+
+                /* if(event.shiftKey) {
+                    Remove tab?
+                } */
+
+                event.preventDefault()
+                return
+            }
+            case 46: { // Delete.
+                if(tryRemoveBlock(false)) {
+                    event.preventDefault()
+                }
+
+                return
+            }
+            case 33: { // PageUp.
+                if(this.elementInput.childNodes.length) {
+                    const selection = document.getSelection()
+                    const range = document.createRange()
+
+                    range.setStart(this.elementInput.childNodes[0], 0)
+                    selection.removeAllRanges()
+                    selection.addRange(range)
+                }
+
+                event.preventDefault()
+                return
+            }
+            case 34: { // PageDown.
+                const selection = document.getSelection()
+                const range = document.createRange()
+
+                range.selectNodeContents(this.elementInput)
+                range.collapse(false)
+                selection.removeAllRanges()
+                selection.addRange(range)
+                event.preventDefault()
+                return
+            }
+            case 13: { // Enter.
+                const selection = getSelection(this.elementInput)
+                const countReplace = selection.end - selection.start
+                const lengthLeft = this.maxLength - this.elementInput.innerHTML.length + countReplace
+
+                if((!this.lineBreakWithShift || event.shiftKey || isMobile()) && lengthLeft > 0) {
+                    const selection = window.getSelection()
+                    const range = selection.getRangeAt(0)
+
+                    // Test if we are inside a list.
+                    // If that's the case, let enter behavior proceed normally.
+                    let parentTest = range.commonAncestorContainer
+
+                    while(parentTest != this.elementInput) {
+                        const name = parentTest.nodeName.toLowerCase()
+
+                        if(name == 'ul' || name == 'li' || name == 'ol') {
+                            return
+                        }
+
+                        parentTest = parentTest.parentNode
+                    }
+
+                    // Create a break.
+                    const br = document.createElement('br')
+
+                    range.deleteContents()
+                    range.insertNode(br)
+                    range.setStartAfter(br)
+                    range.setEndAfter(br)
+                    range.collapse(false)
+                    selection.removeAllRanges()
+                    selection.addRange(range)
+
+                    //this.updateText(this.elementInput.innerHTML, true)
+                }
+                else {
+                    this.emit('keydown', event)
+                }
+
+                this.updateHasText()
+
+                return event.preventDefault()
+            }
+        }
+
+        if(event.metaKey || event.ctrlKey) {
+            switch(event.which) {
+                case 89: // Redo, ctrl + y.
+                    event.preventDefault()
+                    event.stopPropagation()
+
+                    this.redo()
+                    break
+                case 90:
+                    event.preventDefault()
+                    event.stopPropagation()
+
+                    if(event.shiftKey) { // Redo, ctrl + shift + z.
+                        this.redo()
+                    }
+                    else { // Undo, ctrl + z.
+                        this.undo()
+                    }
+
+                    break
+            }
+        }
+        else if(event.shiftKey) {
+            this.saveSelection()
+        }
+    }
+
+    restoreSelection() {
+        if(this.selection) {
+            restoreSelection(this.elementInput, this.selection)
+        }
+    }
+
+    saveSelection() {
+        this.selection = getSelection(this.elementInput)
+    }
+
+    showPopupEmojis() {
+        this.state.showPopupEmojis = true
+
+        this.focusInput()
+    }
+
+    showPopupLink() {
+        this.focusInput()
+
+        const textSelected = document.getSelection().toString().trim()
+        this.state.showPopupLink = true
+
+        this.update()
+
+        this.inputText = this.getComponent('inputLinkText')
+        this.inputUrl = this.getComponent('inputLinkUrl')
+
+        this.inputUrl.focusInput()
+        this.inputText.setValue(textSelected)
+    }
+
+    showPopupMoreTools() {
+        this.state.showPopupMoreTools = true
+        this.focusInput()
+    }
+
+    redo() {
+        if(!this.redos.length) {
+            return
+        }
+
+        this.undos.push(this.text)
+        this.updateInput(this.redos.pop())
+
+        if(this.timeoutAddToUndo) {
+            clearTimeout(this.timeoutAddToUndo)
+            this.timeoutAddToUndo = null
+        }
+    }
+
+    selectionChanged() {
+        if(document.activeElement != this.elementInput) {
+            return
+        }
+
+        if(this.inFocus) {
+            this.saveSelection()
+        }
+        else {
+            //this.inFocus = true
+
+            this.focusInput()
+        }
+    }
+
+    textInput(event) {
+        let text = this.elementInput.innerHTML
+
+        if(text.length >= this.maxLength) {
+            text = text.slice(0, this.maxLength)
+
+            event.preventDefault()
+        }
+
+        this.saveSelection()
+        this.updateText(text)
+
+        this.emit('input', event)
+        this.emit('valueChanged', text)
+        this.setValid(true)
+    }
+
+    textPaste(event) {
+        event.preventDefault()
+        event.stopPropagation()
+
+        const clipboard = (event.clipboardData || window.clipboardData)
+        const selection = getSelection(this.elementInput)
+        const countReplace = selection.end - selection.start
+
+        let text = clipboard.getData('text/html') || clipboard.getData('text/plain')
+
+        // Replace \n with br.
+        text = text.replace(new RegExp('\r?\n','g'), '<br>')
+
+        const options = Object.assign({}, optionsHtmlSanitize)
+
+        // This filter will remove empty tags.
+        options.exclusiveFilter = (frame) => {
+            return frame.tag != 'br' && !frame.text.trim()
+        }
+
+        text = sanitizeHtml(text, options)
+        text = removeLineBreaks(text, true)
+
+        if(text.length + this.elementInput.innerHTML.length - countReplace >= this.maxLength) {
+            text = text.slice(0, Math.max(this.maxLength - this.elementInput.innerHTML.length + countReplace, 0))
+        }
+
+        if(!text.length) {
+            return
+        }
+
+        document.execCommand('insertHTML', false, text)
+
+        /* if(this.elementInput.innerHTML.length >= this.maxLength) {
+            this.elementInput.innerHTML = this.elementInput.innerHTML.slice(0, this.maxLength)
+        } */
+
+        this.updateText(this.elementInput.innerHTML, true)
+
+        this.emit('paste', event)
+        this.emit('valueChanged', this.text)
+        this.setValid(true)
+    }
+
+    undo() {
+        if(!this.undos.length) {
+            this.updateInput('')
+            return
+        }
+
+        this.redos.push(this.text)
+        this.updateInput(this.undos.pop())
+
+        if(this.timeoutAddToUndo) {
+            clearTimeout(this.timeoutAddToUndo)
+            this.timeoutAddToUndo = null
+        }
+    }
+
+    updateHasText() {
+        if(!this.root || !this.elementInput) {
+            return
+        }
+
+        const textHtml = this.elementInput.innerHTML
+
+        //if(this.elementInput.textContent.length) {
+        if(textHtml.length && textHtml != '<br>') {
+            this.root.classList.add('has-text')
+            this.elementInput.autocorrect = 'on'
+            this.elementInput.spellcheck = true
+        }
+        else {
+            this.root.classList.remove('has-text')
+            this.elementInput.autocorrect = 'off'
+            this.elementInput.spellcheck = false
+        }
+    }
+
+    updateInput(text) {
+        this.text = text
+
+        setTimeout(() => {
+            this.updateHasText()
+        }, 0)
+
+        if(this.elementInput) {
+            this.elementInput.innerHTML = text
+        }
+    }
+
+    updateText(text, forceAddToUndo = false) {
+        const textOld = this.text
+        this.redos = []
+
+        this.text = text
+        this.updateHasText()
+
+        if(forceAddToUndo) {
+            this.undos.push(textOld)
+
+            clearTimeout(this.timeoutAddToUndo)
+            this.timeoutAddToUndo = null
+            return
+        }
+
+        if(this.timeoutAddToUndo) {
+            this.textAddToUndo = textOld
+            return
+        }
+
+        this.textAddToUndo = textOld
+
+        this.timeoutAddToUndo = setTimeout(() => {
+            this.timeoutAddToUndo = null
+
+            if(this.textAddToUndo != this.text) {
+                this.undos.push(this.textAddToUndo)
+            }
+        }, 1000)
+    }
+}
+
+<div.input-textrich
+    key='root'
+    class=[
+        input.class,
+        state.mini ? 'mini' : '',
+        state.valid ? '' : 'invalid'
+    ]
+>
+    <div.input
+        key='input'
+        autocorrect='off'
+        spellcheck='false'
+        class=(input.buttonCloseEnabled ? 'has-buttonclose' : '')
+        contenteditable=(input.disabled ? 'false' : 'true')
+        on-focus('focus')
+        on-focusout('focusOut')
+        on-input('textInput')
+        on-keydown('keyPressed')
+        on-paste('textPaste')
+    />
+
+    <span.label>
+        ${input.placeholder}
+    </span>
+
+    <if(input.buttonCloseEnabled)>
+        <button-icon.button-close.light.small.bg-transparent
+            icon='close'
+            on-click('emit', 'closeRequested')
+        />
+    </if>
+
+    <if(state.mini)>
+        <if(state.showPopupEmojis)>
+            <div.overlay on-click('hidePopups') />
+        </if>
+
+        <if(input.icon)>
+            <div.wrapper-icon>
+                <icon name=input.icon />
+            </div>
+        </if>
+
+        <button-icon.button-emoji.light.bg-transparent.icon-only
+            icon='emoji'
+            on-click('applyFormat', 'emoji')
+        >
+            <if(state.showPopupEmojis)>
+                <div.popup-emojis>
+                    <for|emoji| of=emojis>
+                        <button-default.button-emoji on-click('applyEmoji', emoji)>
+                            ${emoji}
+                        </button-default>
+                    </for>
+                </div>
+            </if>
+        </button-icon>
+    </if>
+    <else>
+        <div.bar-controls>
+            <div.tools-formatting>
+                <breakpoint-condition break='ms' min>
+                    <for|idTool| of=toolsFormat>
+                        <button-icon.light.small.bg-transparent
+                            icon=idTool
+                            on-click('applyFormat', idTool)
+                        />
+                    </for>
+
+                    <@else>
+                        <for|idTool| of=toolsFormatMini>
+                            <button-icon.light.small.bg-transparent.icon-only
+                                icon=idTool
+                                on-click('applyFormat', idTool)
+                            />
+                        </for>
+
+                        <button-icon.light.small.bg-transparent.icon-only
+                            icon='ellipsis'
+                            iconRotation=90
+                            tooltip='Mais'
+                            on-click('showPopupMoreTools')
+                        />
+
+                        <if(state.showPopupMoreTools)>
+                            <div.popup-moretools>
+                                <for|idTool| of=toolsFormatMiniHidden>
+                                    <button-icon.light.bg-transparent.icon-only
+                                        icon=idTool
+                                        on-click('applyFormat', idTool)
+                                    />
+                                </for>
+                            </div>
+                        </if>
+
+                        <if(state.showPopupMoreTools)>
+                            <div.overlay on-click('hidePopups') />
+                        </if>
+                    </@else>
+                </breakpoint-condition>
+            </div>
+
+            <if(data.submit)>
+                <div.wrapper-submit>
+                    <${data.submit} />
+                </div>
+            </if>
+
+            <if(state.showPopupLink || state.showPopupEmojis)>
+                <div.overlay on-click('hidePopups') />
+            </if>
+
+            <if(state.showPopupLink)>
+                <div.popup-link>
+                    <input-text
+                        key='inputLinkText'
+                        icon='details'
+                        noExternalUpdate
+                        placeholder='Texto'
+                        on-keyup('keyPressed')
+                    />
+
+                    <input-text
+                        key='inputLinkUrl'
+                        icon='link'
+                        maxlength=2000
+                        noExternalUpdate
+                        placeholder='Cola ou escreve o URL'
+                        on-keyup('keyPressed')
+                    />
+
+                    <button-text.button-insert.small text='Inserir' on-click('applyLink') />
+                </div>
+            </if>
+
+            <if(state.showPopupEmojis)>
+                <div.popup-emojis>
+                    <for|emoji| of=emojis>
+                        <button-default.button-emoji on-click('applyEmoji', emoji)>
+                            ${emoji}
+                        </button-default>
+                    </for>
+                </div>
+            </if>
+        </div>
+    </else>
+</div>
+
+style.less {
+    .input-textrich {
+        --barcontrols-height: 50px;
+        --barcontrols-padding-h: 15px;
+        --fontfamily: @font;
+        --fontsize: 16px;
+        --input-height: 120px;
+        --margin-buttonclose: 10px;
+        --padding-h: 20px;
+        --padding-v: 14px;
+        --popupemojis-gridcount: 10;
+        --tools-spacing: 5px;
+        --wrappersubmit-spacing: 20px;
+
+        border: 1px solid var(--color-border1);
+        border-radius: var(--app-borderradius);
+        position: relative;
+        .transition(border-color 0.2s ease-out);
+
+        .popup-style(@marginLeft: 5px, @marginBottom: 5px) {
+            background-color: var(--color-background2);
+            border: 1px solid var(--color-border1);
+            border-radius: var(--app-borderradius2);
+            bottom: calc(100% + @marginBottom);
+            left: @marginLeft;
+            max-width: 430px; // TODO
+            padding: 10px; // TODO
+            position: absolute;
+            z-index: 2;
+        }
+
+        >.input{
+            border-radius: var(--app-borderradius);
+            display: block;
+            font-family: var(--fontfamily);
+            font-size: var(--fontsize);
+            min-height: var(--input-height);
+            overflow: hidden;
+            padding: var(--padding-v) var(--padding-h);
+            width: 100%;
+            .text-rich(var(--color-text2));
+            .transition(background-color 0.2s ease-out);
+
+            .highlight {
+                border: 2px dashed var(--color-border3);
+            }
+
+            &.has-buttonclose {
+                padding-right: calc(var(--padding-h) * 2);
+            }
+        }
+
+        >.label {
+            color: rgba(var(--color-text4-rgb), 0.5);
+            font-size: var(--fontsize);
+            left: var(--padding-h);
+            pointer-events: none;
+            position: absolute;
+            top: var(--padding-v);
+        }
+
+        >.bar-controls {
+            align-items: center;
+            background-color: var(--color-background2);
+            border-bottom-left-radius: var(--app-borderradius);
+            border-bottom-right-radius: var(--app-borderradius);
+            border-top: 1px solid var(--color-border1);
+            bottom: 0;
+            display: flex;
+            height: var(--barcontrols-height);
+            justify-content: space-between;
+            margin-top: var(--input-height);
+            padding: 0 var(--barcontrols-padding-h);
+            position: sticky;
+
+            .transition(border-color 0.2s ease-out);
+
+            >.tools-formatting {
+                display: flex;
+                gap: var(--tools-spacing);
+
+                .popup-moretools {
+                    display: flex;
+                    gap: 10px;
+                    .popup-style(5px);
+                }
+            }
+
+            >.wrapper-submit {
+                align-items: center;
+                display: flex;
+                gap: var(--wrappersubmit-spacing);
+            }
+
+            >.popup-link {
+                display: flex;
+                flex-direction: column;
+                gap: 10px; // TODO
+                .popup-style();
+
+                >.button-insert {
+                    align-self: flex-end;
+                }
+            }
+        }
+
+        // It can be inside bar-controls or button-emoji when mini.
+        .overlay {
+            pointer-events: auto;
+            .fixed-fill();
+        }
+
+        .popup-emojis {
+            .popup-style(5px); // TODO
+            .grid(var(--popupemojis-gridcount), 5px, 5px); // TODO
+
+            >.button-emoji {
+                border: 1px solid transparent;
+                border-radius: var(--app-borderradius);
+                .flex-center();
+                .size(35px); // TODO
+                .transition(background-color 0.2s ease-out, border-color 0.2s ease-out;);
+
+                &:hover {
+                    background-color: var(--color-button1);
+                    border-color: var(--color-border1);
+                }
+            }
+        }
+
+        >.button-close {
+            position: absolute;
+            right: var(--margin-buttonclose);
+            top: var(--margin-buttonclose);
+        }
+
+        &.big {
+            --fontsize: 17px;
+        }
+
+        &.mini {
+            --buttonemoji-bottom: 17px;
+            --buttonemoji-left: 17px;
+            --input-height: 50px;
+
+            background-color: var(--color-input1);
+
+            >.wrapper-icon {
+                --icon-size: 18px;
+
+                top: 15px; // TODO
+                left: 17px; // TODO
+                position: absolute;
+
+                >.icon {
+                    color: var(--color-icon2);
+                    .size(var(--icon-size));
+                }
+            }
+
+            >.button-emoji {
+                bottom: var(--buttonemoji-bottom);
+                left: var(--buttonemoji-left);
+                position: absolute;
+                z-index: 2;
+            }
+
+            >.label {
+                left: calc(var(--padding-h) + 30px); // TODO
+                top: 50%;
+                .translateY(-50%);
+            }
+
+            >.input {
+                padding-left: calc(var(--padding-h) + 30px); // TODO
+            }
+        }
+
+        &:not(.mini) {
+            >.input {
+                background-color: var(--color-input1);
+                border-bottom-left-radius: 0;
+                border-bottom-right-radius: 0;
+                // For sticky bar-controls correct positioning.
+                margin-bottom: calc(-1 * var(--input-height));
+            }
+        }
+
+        &.in-focus {
+            border-color: var(--color-border3);
+
+            >.input {
+                background-color: var(--color-input2);
+                color: var(--color-text4);
+            }
+
+            >.bar-controls {
+                border-color: var(--color-border1);
+            }
+
+            &.mini {
+                >.wrapper-icon {
+                    >.icon {
+                        .scale(1.1);
+                    }
+                }
+            }
+        }
+
+        &.has-text {
+            >.label {
+                display: none;
+            }
+        }
+
+        &.invalid {
+            border-color: var(--color-warning);
+        }
+
+        // Media queries.
+
+        .r-max(@break-md, {
+            --padding-h: 16px;
+            --padding-v: 10px;
+
+            &.mini {
+                --buttonemoji-bottom: 16px;
+                --input-height: 45px;
+            }
+        });
+
+        .r-max(@break-ms, {
+            --barcontrols-height: 40px;
+            --barcontrols-padding-h: 10px;
+            --fontsize: 15px;
+            --input-height: 100px;
+            --margin-buttonclose: 5px;
+            --padding-h: 10px;
+            //--padding-v: 10px;
+            --popupemojis-gridcount: 6;
+            --tools-spacing: 8px;
+            //--wrappersubmit-spacing: 10px;
+
+            &.big {
+                --fontsize: 16px;
+            }
+
+            &.mini {
+                --buttonemoji-bottom: 14px;
+                --buttonemoji-left: 15px;
+                --input-height: 40px;
+            }
+        });
+
+        .r-max(@break-sm, {
+            --barcontrols-height: 35px;
+            --input-height: 80px;
+
+            &.mini {
+                --buttonemoji-bottom: 14px;
+                --buttonemoji-left: 14px;
+            }
+        });
+    }
+};

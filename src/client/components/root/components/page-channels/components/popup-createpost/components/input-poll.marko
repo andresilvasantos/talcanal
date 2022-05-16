@@ -1,0 +1,219 @@
+import appm from 'js/app-manager'
+
+class {
+    onCreate(input) {
+        this.state = {
+            countMax: input.countMax,
+            optionsPoll: [{ name: '' }, { name: '' }],
+            valid: true
+        }
+    }
+
+    // Getters & Setters.
+
+    getOptions() {
+        return this.state.optionsPoll
+    }
+
+    setValid(valid) {
+        this.state.valid = valid
+    }
+
+    // Functions.
+
+    addOptionPoll() {
+        if(this.state.optionsPoll.length >= this.state.countMax) {
+            return
+        }
+
+        this.setValid(true)
+
+        this.state.optionsPoll.push({ name: '' })
+        this.setStateDirty('optionsPoll')
+        appm.addAnalyticsEvent('createPost', 'addOptionPoll')
+    }
+
+    dragEnd(event) {
+        if(!this.dragging) {
+            return
+        }
+
+        this.dragging = false
+
+        // In Chrome dataTransfer is only set on drop, so it won't work here.
+        /* const type = event.dataTransfer.getData('type')
+
+        if(type != 'pollOption') {
+            return
+        } */
+
+        this.componentsOption[this.indexDragged].getEl().classList.remove('dragging')
+
+        /* if(this.indexDragged == this.indexDragToPosition) {
+            return
+        } */
+
+        for(const option of this.componentsOption) {
+            option.getEl().style.order = 'unset'
+        }
+
+        const optionTarget = this.state.optionsPoll.splice(this.indexDragged, 1)
+        this.state.optionsPoll.splice(this.indexDragToPosition, 0, optionTarget[0])
+
+        this.setStateDirty('optionsPoll')
+
+        this.mapOptionsOrder = new Map()
+
+        appm.addAnalyticsEvent('createPost', 'dragOptionPoll')
+    }
+
+    dragOver(index, event) {
+        if(!this.dragging) {
+            return
+        }
+
+        const order = this.mapOptionsOrder.has(index) ? this.mapOptionsOrder.get(index) : index
+        const orderOptionDragged = (
+            this.mapOptionsOrder.has(this.indexDragged) ?
+            this.mapOptionsOrder.get(this.indexDragged) :
+            this.indexDragged
+        )
+
+        if(this.indexDragged == index) {
+            if(order != orderOptionDragged) {
+                return
+            }
+        }
+
+        if(this.indexDragToPosition == order) {
+            return
+        }
+
+        this.indexDragToPosition = order
+
+        for(const [indexOption, option] of this.componentsOption.entries()) {
+            const orderOption = (
+                this.mapOptionsOrder.has(indexOption) ?
+                this.mapOptionsOrder.get(indexOption) :
+                indexOption
+            )
+
+            let orderNew
+
+            if(indexOption == this.indexDragged) {
+                orderNew = this.indexDragToPosition
+            }
+            else {
+                orderNew = (
+                    orderOption < orderOptionDragged &&
+                    orderOption >= this.indexDragToPosition ? orderOption + 1 :
+                    (
+                        orderOption > orderOptionDragged &&
+                        orderOption <= this.indexDragToPosition ?
+                        orderOption - 1 : orderOption
+                    )
+                )
+            }
+
+            option.getEl().style.order = orderNew
+
+            this.mapOptionsOrder.set(indexOption, orderNew)
+        }
+    }
+
+    dragStart(index, event) {
+        //event.dataTransfer.setData('type', 'pollOption')
+
+        this.componentsOption = this.getComponents('inputOptions')
+        this.dragging = true
+        this.indexDragged = index
+        this.mapOptionsOrder = new Map()
+
+        this.componentsOption[index].getEl().classList.add('dragging')
+    }
+
+    optionChanged(index, name) {
+        this.setValid(true)
+
+        this.state.optionsPoll[index].name = name
+    }
+
+    removeOption(index) {
+        if(index >= this.state.optionsPoll.length) {
+            return
+        }
+
+        this.setValid(true)
+
+        this.state.optionsPoll.splice(index, 1)
+        this.setStateDirty('optionsPoll')
+        appm.addAnalyticsEvent('createPost', 'removeOptionPoll')
+    }
+}
+
+<div.input-poll class=input.class>
+    <div.wrapper-options>
+        <for|option, index| of=state.optionsPoll>
+            $ const allowRemove = index >= 2
+
+            <input-optionpoll
+                key='inputOptions[]'
+                allowRemove=allowRemove
+                placeholder=`Opção ${index + 1}`
+                name=option.name
+                valid=state.valid
+                on-dragEnd('dragEnd')
+                on-dragOver('dragOver', index)
+                on-dragStart('dragStart', index)
+                on-nameChanged('optionChanged', index)
+                on-removeRequested('removeOption', index)
+            />
+        </for>
+    </div>
+
+    <if(state.optionsPoll.length < state.countMax)>
+        <button-text.button-addoption
+            icon='plus'
+            text=input.textButtonAdd
+            on-click('addOptionPoll')
+        />
+    </if>
+</div>
+
+style.less {
+    .input-poll {
+        display: flex;
+        flex-direction: column;
+        gap: 15px;
+
+        >.wrapper-options {
+            align-self: center;
+            display: flex;
+            flex-direction: column;
+            gap: 10px; // TODO
+            //width: 460px; // TODO
+
+            >.input-optionpoll {
+                &.dragging {
+                    >.wrapper {
+                        >.input-text {
+                            >.wrapper {
+                                outline: 2px dashed var(--color-accent1);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        >.button-addoption {
+            align-self: center;
+        }
+
+        // Media queries
+
+        .r-max(@break-md, {
+            --input-width: unset;
+        });
+    }
+};

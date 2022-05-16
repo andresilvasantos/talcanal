@@ -1,0 +1,92 @@
+<div.contents-empty class=input.class>
+    <div.info>
+        <if(input.icon)>
+            <icon name=input.icon />
+        </if>
+
+        <div.wrapper-text>
+            <text-title.title>
+                ${input.title}
+            </text-title>
+
+            <if(input.text)>
+                <text-p.text.big>
+                    $!{input.text}
+                </text-p>
+            </if>
+        </div>
+    </div>
+
+    <if(!input.noButton)>
+        <button-text.button-action.big.strong
+            icon=input.iconButton
+            text=input.textButton
+            on-click('emit', 'click')
+            on-middleClick('emit', 'middleClick')
+        />
+    </if>
+</div>
+
+style.less {
+    .contents-empty {
+        --icon-size: 80px;
+        --info-spacing: 30px;
+        --maxwidth: 400px;
+        --spacing: 30px;
+        --wrappertext-spacing: 15px;
+
+        align-items: flex-start;
+        display: flex;
+        flex-direction: column;
+        gap: var(--spacing);
+        max-width: var(--maxwidth);
+        padding-top: 50px; // TODO
+
+        >.info {
+            align-items: flex-start;
+            display: flex;
+            flex-direction: column;
+            gap: var(--info-spacing);
+
+            >.icon {
+                color: var(--color-icon2);
+                height: var(--icon-size);
+            }
+
+            >.wrapper-text {
+                align-items: flex-start;
+                display: flex;
+                flex-direction: column;
+                gap: var(--wrappertext-spacing);
+
+                >.title {
+                    color: var(--color-text3);
+                    font-family: @font-semibold;
+                    //font-size: var(--title-fontsize);
+                }
+
+                >.text {
+                    color: var(--color-text1);
+                }
+            }
+        }
+
+        // Media Queries.
+
+        .r-max(@break-md, {
+            --icon-size: 75px;
+            --info-spacing: 15px;
+            --maxwidth: 280px;
+            --spacing: 25px;
+            --wrappertext-spacing: 10px;
+        });
+
+        .r-max(@break-sm, {
+            --icon-size: 60px;
+            --info-spacing: 10px;
+            --maxwidth: 200px;
+            //--spacing: 25px;
+            //--wrappertext-spacing: 10px;
+        });
+    }
+};

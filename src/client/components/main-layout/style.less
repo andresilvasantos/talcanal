@@ -1,0 +1,69 @@
+* {
+    .box-sizing(border-box);
+}
+
+html {
+    background-color: var(--color-background1);
+    margin: 0;
+    padding: 0;
+
+    /* Firefox */
+    scrollbar-color: var(--color-border1) var(--color-background1);
+
+    /* Chrome, Edge, and Safari */
+    &::-webkit-scrollbar {
+        background: var(--color-background1);
+    }
+
+    &::-webkit-scrollbar-corner,
+    &::-webkit-scrollbar-track {
+        background: var(--color-background1);
+    }
+
+    &::-webkit-scrollbar-thumb {
+        background-color: var(--color-border1);
+
+        &:hover {
+            background-color: var(--color-icon1);
+        }
+    }
+
+    // TODO button arrows for webkit browsers.
+}
+
+body {
+    font-family: @font;
+    //height: 100vh;
+    margin: 0;
+    min-height: 100%;
+    overflow-x: hidden;
+    overflow-y: scroll;
+    -webkit-tap-highlight-color: transparent;
+}
+
+input, textarea, select, button {
+    font-family: @font;
+}
+
+h1, h2, h3, h4, h5, p {
+    font-weight: normal;
+    line-height: 1;
+    margin: 0;
+}
+
+li, ul, ol {
+    margin: 0;
+    padding: 0;
+}
+
+ul {
+    list-style-type: disc;
+}
+
+a {
+    text-decoration: none;
+}
+
+*:focus {
+    outline: none;
+}

@@ -1,0 +1,702 @@
+import appm from 'js/app-manager'
+import { commentsSettings } from 'js/default-vars'
+import { dateToTime, elapsedDateToShortString } from 'js/utils'
+
+class {
+    onCreate(input) {
+        this.state = {
+            comment: input.comment || {},
+            commenting: false,
+            editing: false,
+            editMode: false,
+            idPost: input.idPost,
+            replies: [],
+            showOriginal: false,
+            showReplyInput: false,
+            showReports: false
+        }
+
+        this.state.replies = this.state.comment.replies || []
+
+        this.approved = this.approved.bind(this)
+        this.createReplyError = this.createReplyError.bind(this)
+        this.editCommentError = this.editCommentError.bind(this)
+        this.edited = this.edited.bind(this)
+        this.favorited = this.favorited.bind(this)
+        this.pinned = this.pinned.bind(this)
+        this.rejected = this.rejected.bind(this)
+        this.replyCreated = this.replyCreated.bind(this)
+        this.voted = this.voted.bind(this)
+    }
+
+    onInput(input) {
+        this.state.comment = input.comment || {}
+        this.state.idPost = input.idPost
+        this.state.replies = this.state.comment.replies || []
+
+        if(this.mounted) {
+            this.setStateDirty('replies')
+        }
+    }
+
+    onMount() {
+        appm.on('approveItemsSuccess', this.approved)
+        appm.on('favoriteItemSuccess', this.favorited)
+        appm.on('pinItemSuccess', this.pinned)
+        appm.on('rejectItemsSuccess', this.rejected)
+        appm.on('voteCommentSuccess', this.voted)
+
+        this.mounted = true
+    }
+
+    onDestroy() {
+        appm.off('approveItemsSuccess', this.approved)
+        appm.off('createItemError', this.createReplyError)
+        appm.off('createItemSuccess', this.replyCreated)
+        appm.off('favoriteItemSuccess', this.favorited)
+        appm.off('pinItemSuccess', this.pinned)
+        appm.off('rejectItemsSuccess', this.rejected)
+        appm.off('voteCommentSuccess', this.voted)
+    }
+
+    // Functions.
+
+    approved(type, ids) {
+        if(type != 'comments' || !ids.includes(this.state.comment.id)) {
+            return
+        }
+
+        this.state.comment.status = 'approved'
+
+        this.setStateDirty('comment')
+    }
+
+    approveRequested() {
+        appm.approveItems('comments', [this.state.comment.id])
+    }
+
+    cancelEditMode() {
+        this.state.editMode = false
+    }
+
+    collapse() {
+        this.emit('collapsed', this.state.comment.id, true)
+        appm.addAnalyticsEvent('comment', 'collapse')
+    }
+
+    createReplyError(type, idRequest) {
+        if(type != 'comments' || idRequest != this.idRequest) {
+            return
+        }
+
+        this.state.commenting = false
+
+        appm.off('createItemError', this.createReplyError)
+        appm.off('createItemSuccess', this.replyCreated)
+    }
+
+    creatorRequested(newTab = false) {
+        appm.openPage('channels', 'user', { allowBack: true, newTab }, this.state.comment.creator)
+    }
+
+    deleteRequested() {
+        appm.showPopup('deleteItem', 'comments', this.state.comment.id)
+    }
+
+    edit() {
+        const inputComponent = this.getComponent('inputComment')
+        const comment = inputComponent.getValue()
+
+        if(!comment.length) {
+            inputComponent.setValid(false)
+
+            return
+        }
+
+        const data = {
+            idPost: this.state.idPost,
+            text: comment
+        }
+
+        this.state.editing = true
+
+        appm.updateItem('comments', this.state.comment.id, data)
+        appm.on('updateItemError', this.editCommentError)
+        appm.on('updateItemSuccess', this.edited)
+    }
+
+    editCommentError(type, id) {
+        if(type != 'comments' || id != this.state.comment.id) {
+            return
+        }
+
+        this.state.editing = false
+
+        appm.off('updateItemError', this.editCommentError)
+        appm.off('updateItemSuccess', this.edited)
+    }
+
+    edited(type, id, comment) {
+        if(type != 'comments' || id != this.state.comment.id) {
+            return
+        }
+
+        this.state.editing = false
+        this.state.editMode = false
+        this.state.comment.editedAt = comment.editedAt
+        this.state.comment.edited = comment.edited
+        this.state.comment.text = comment.text
+        this.state.comment.textOriginal = comment.textOriginal
+
+        this.setStateDirty('comment')
+
+        appm.off('updateItemError', this.editCommentError)
+        appm.off('updateItemSuccess', this.edited)
+    }
+
+    editRequested() {
+        this.state.editMode = true
+    }
+
+    expand() {
+        this.emit('collapsed', this.state.comment.id, false)
+        appm.addAnalyticsEvent('comment', 'expand')
+    }
+
+    favorited(type, id, favorited) {
+        if(type != 'comments' || id != this.state.comment.id) {
+            return
+        }
+
+        this.state.comment.hasUserFavorited = favorited
+
+        this.setStateDirty('comment')
+    }
+
+    favoriteRequested() {
+        appm.favoriteItem('comments', this.state.comment.id)
+    }
+
+    pinned(type, id, pinned) {
+        if(type != 'comments' || id != this.state.comment.id) {
+            return
+        }
+
+        this.state.comment.pinned = pinned
+
+        this.setStateDirty('comment')
+    }
+
+    pinRequested() {
+        appm.pinItem('comments', this.state.comment.id)
+    }
+
+    rejected(type, ids) {
+        if(type != 'comments' || !ids.includes(this.state.comment.id)) {
+            return
+        }
+
+        this.state.comment.status = 'rejected'
+
+        this.setStateDirty('comment')
+    }
+
+    rejectRequested() {
+        appm.rejectItems('comments', [this.state.comment.id])
+    }
+
+    reply() {
+        const replyComponent = this.getComponent('inputReply')
+        const comment = replyComponent.getValue()
+
+        if(!comment.length) {
+            replyComponent.setValid(false)
+
+            return
+        }
+
+        const data = {
+            idPost: this.state.idPost,
+            idReplyTo: this.state.comment.id,
+            text: comment
+        }
+
+        this.idRequest = appm.createItem('comments', data)
+
+        if(this.idRequest) {
+            this.state.commenting = true
+
+            appm.on('createItemError', this.createReplyError)
+            appm.on('createItemSuccess', this.replyCreated)
+        }
+    }
+
+    replyCreated(type, idRequest, reply) {
+        if(idRequest != this.idRequest) {
+            return
+        }
+
+        this.state.commenting = false
+        this.state.showReplyInput = false
+
+        appm.off('createItemError', this.createReplyError)
+        appm.off('createItemSuccess', this.replyCreated)
+    }
+
+    reportRequested() {
+        appm.showPopup('report', 'comments', this.state.comment.id)
+    }
+
+    toggleReplyInput() {
+        this.state.showReplyInput = !this.state.showReplyInput
+
+        if(this.state.showReplyInput) {
+            this.update()
+
+            const replyComponent = this.getComponent('inputReply')
+
+            replyComponent.focusInput()
+        }
+
+        appm.addAnalyticsEvent('comment', 'toggleReply')
+    }
+
+    toggleReports() {
+        this.state.showReports = !this.state.showReports
+
+        appm.addAnalyticsEvent('comment', 'toggleReports')
+    }
+
+    reporterRequested(user, newTab = false) {
+        appm.openPage('channels', 'user', { allowBack: true, newTab }, user)
+    }
+
+    toggleEditView() {
+        if(!this.state.comment.edited) {
+            return
+        }
+
+        this.state.showOriginal = !this.state.showOriginal
+    }
+
+    voted(idComment, idPost, vote, voteIncrement) {
+        if(idComment != this.state.comment.id) {
+            return
+        }
+
+        this.state.comment.countVotes += voteIncrement
+        this.state.comment.hasUserUpvoted = vote == 1
+        this.state.comment.hasUserDownvoted = vote == -1
+
+        this.setStateDirty('comment')
+    }
+
+    voteRequested(up) {
+        appm.voteComment(this.state.comment.id, this.state.idPost, up)
+    }
+}
+
+$ const comment = state.comment || {}
+$ const collapsed = comment.collapsed || comment.collapsedManual
+$ const creator = comment.creator || {}
+$ const isCreator = appm.isUserSignedIn() && appm.getUser()._id == creator._id
+$ const moderators = input.moderators || []
+$ const rejected = ['rejected', 'autorejected'].includes(comment.status)
+$ const removed = comment.status == 'removed'
+$ const showUser = (
+    comment.creator && comment.creator.status != 'removed' &&
+    !removed && (!rejected || input.isMod || isCreator)
+)
+$ const trComment = appm.tr('channels.comment') || {}
+$ const trFlags = appm.tr('channels.report.flags') || {}
+$ const trPost = appm.tr('channels.post') || {}
+$ const trTooltips = trComment.tooltips || {}
+
+<macro|{ limit }| name='children'>
+    <if(comment.depth >= limit)>
+        <button-text.button-continuethread
+            icon='arrowLong'
+            text='Continuar thread'
+            on-click('emit', 'continueThreadRequested', comment.id)
+        />
+    </if>
+    <else>
+        <div.replies>
+            <for|reply| of=state.replies>
+                <comment-post.reply
+                    comment=reply
+                    creatorPost=input.creatorPost
+                    isMod=input.isMod
+                    idPost=state.idPost
+                    locked=input.locked
+                    moderators=input.moderators
+                    on-collapsed('emit', 'collapsed')
+                    on-continueThreadRequested('emit', 'continueThreadRequested')
+                    on-deleted('replyDeleted')
+                    on-shareRequested('emit', 'shareRequested')
+                />
+            </for>
+        </div>
+    </else>
+</macro>
+
+<div.comment-post class=[input.class, (removed || rejected) ? 'removed' : '']>
+    <if(!collapsed)>
+        <button-default.button-scope on-click('collapse')>
+            <div.line-scope />
+        </button-default>
+
+        <button-icon.button-collapse.small.icon-only.bg-transparent
+            icon='minus'
+            on-click('collapse')
+        />
+    </if>
+
+    <div.info>
+        <if(collapsed)>
+            <button-icon.button-expand.small.bg-transparent
+                icon='plus'
+                on-click('expand')
+            />
+        </if>
+
+        <button-imagetext.button-creator.small
+            disabled=!showUser
+            icon='user'
+            idImage=(!showUser ? '' : creator.image)
+            text=(!showUser ? '[Removido]' : creator.username)
+            on-click('creatorRequested', false)
+            on-middleClick('creatorRequested', true)
+        />
+
+        <if(!removed && showUser)>
+            <if(creator._id == (input.creatorPost || {})._id)>
+                <button-default.author tooltip='Autor'>
+                    A
+                </button-default>
+            </if>
+
+            <if(moderators.includes(creator._id))>
+                <button-default.mod tooltip='Moderador'>
+                    M
+                </button-default>
+            </if>
+
+            <if(creator.super)>
+                <button-default.super tooltip='Super'>
+                    S
+                </button-default>
+            </if>
+        </if>
+
+        <breakpoint-condition break='sm' min>
+            <icon-text.light.small icon='clock' text=dateToTime(comment.createdAt) />
+
+            <@else>
+                <icon-text.light.small icon='clock' text=elapsedDateToShortString(comment.createdAt) />
+            </@else>
+        </breakpoint-condition>
+
+        <if(comment.edited)>
+            <icon-text.light.small.fill
+                class=(state.showOriginal ? 'selected' : '')
+                icon=(state.showOriginal ? 'close' : 'pencil')
+                interactive
+                text=(state.showOriginal ? 'Original' : elapsedDateToShortString(comment.editedAt))
+                on-click('toggleEditView')
+            />
+        </if>
+
+        <status-comment.small
+            comment=comment
+            enableToggleReports=!collapsed
+            isMod=input.isMod
+            reportsVisible=state.showReports
+            on-toggleReportsRequested('toggleReports')
+        />
+    </div>
+
+    <if(!collapsed)>
+        <div.wrapper-inner>
+            <span.text>
+                <if(removed || rejected)>
+                    [Removido]
+                </if>
+
+                <if(!removed && (!rejected || (input.isMod || isCreator)))>
+                    <if(state.editMode)>
+                        <input-textrich.input-comment
+                            key='inputComment'
+                            buttonCloseEnabled
+                            noExternalUpdate
+                            placeholder=trPost.inputComment
+                            text=comment.text
+                            on-closeRequested('cancelEditMode')
+                        >
+                            <@submit>
+                                <button-submit.small
+                                    loading=state.editing
+                                    text=trPost.buttonEdit
+                                    on-click('edit')
+                                />
+                            </@submit>
+                        </input-textrich>
+                    </if>
+                    <else>
+                        <if(comment.edited && state.showOriginal)>
+                            $!{comment.textOriginal}
+                        </if>
+                        <else>
+                            $!{comment.text}
+                        </else>
+                    </else>
+                </if>
+            </span>
+
+            <if(state.showReports)>
+                <div.wrapper-reports>
+                    <for|flag| of=comment.flags>
+                        $ const user = flag.user || {}
+
+                        <div.report>
+                            <span.type>
+                                ${trFlags[flag.type]}
+                            </span>
+
+                            <if(flag.text && flag.text.length)>
+                                <span.text>
+                                    ${` - ${flag.text}`}
+                                </span>
+                            </if>
+
+                            <icon-text.small.light
+                                icon='user'
+                                interactive
+                                text=user.username
+                                on-click('reporterRequested', user, false)
+                                on-middleClick('reporterRequested', user, true)
+                            />
+                        </div>
+                    </for>
+                </div>
+            </if>
+
+            <controls-comment-post
+                allowPin=input.allowPin
+                comment=comment
+                isCreator=isCreator
+                isMod=input.isMod
+                locked=input.locked
+                removed=(removed || rejected)
+                on-approveRequested('approveRequested')
+                on-deleteRequested('deleteRequested')
+                on-editRequested('editRequested')
+                on-favoriteRequested('favoriteRequested')
+                on-pinRequested('pinRequested')
+                on-rejectRequested('rejectRequested')
+                on-replyRequested('toggleReplyInput')
+                on-reportRequested('reportRequested')
+                on-shareRequested('emit', 'shareRequested', comment.id)
+                on-voteRequested('voteRequested')
+            />
+
+            <if(state.showReplyInput && !input.locked)>
+                <input-textrich.input-comment
+                    key='inputReply'
+                    buttonCloseEnabled
+                    noExternalUpdate
+                    placeholder=trPost.inputComment
+                    on-closeRequested('toggleReplyInput')
+                >
+                    <@submit>
+                        <button-submit.small
+                            loading=state.commenting
+                            text=trPost.buttonComment
+                            on-click('reply')
+                        />
+                    </@submit>
+                </input-textrich>
+            </if>
+
+            <if(state.replies.length)>
+                <breakpoint-condition break='ms' min>
+                    <children limit=commentsSettings.threadLimit />
+
+                    <@else>
+                        <children limit=commentsSettings.threadLimitMobile />
+                    </@else>
+                </breakpoint-condition>
+            </if>
+        </div>
+    </if>
+</div>
+
+style.less {
+    .comment-post {
+        --author-fontsize: 11px;
+        --buttoncontinuethread-margintop: 10px;
+        --creatorimage-size: 25px;
+        --info-spacing: 10px;
+        --reply-marginleft: -10px;
+        --reply-margintop: 10px;
+        --report-fontsize: 14px;
+        --spacing: 5px;
+        --text-fontsize: 15px;
+        --wrapperinner-marginleft: calc(var(--creatorimage-size) + 10px);
+        --wrapperinner-spacing: 5px;
+        --wrapperreports-padding: 10px 15px;
+        --wrapperreports-spacing: 10px;
+
+        display: flex;
+        flex-direction: column;
+        gap: var(--spacing);
+        position: relative;
+
+        >.button-scope {
+            bottom: 0;
+            left: 0;
+            position: absolute;
+            top: var(--creatorimage-size);
+            width: var(--creatorimage-size);
+            .flex-center();
+            .transition(top 0.2s ease-out);
+
+            >.line-scope {
+                background-color: var(--color-border1);
+                .size(1px, 100%);
+                .transition(background-color 0.2s ease-out);
+            }
+        }
+
+        >.button-collapse {
+            top: calc(var(--creatorimage-size) + 3px);
+            left: calc(var(--creatorimage-size) / 2);
+            position: absolute;
+            opacity: 0;
+            .translateX(-50%);
+            .transition(opacity 0.2s ease-out);
+        }
+
+        &.highlight {
+            >.button-scope {
+                top: calc(var(--creatorimage-size) * 2);
+
+                >.line-scope {
+                    background-color: var(--color-border3);
+                }
+            }
+
+            >.button-collapse {
+                opacity: 1;
+            }
+        }
+
+        >.info {
+            align-items: center;
+            display: flex;
+            gap: var(--info-spacing);
+            //margin-left: 35px; // TODO test this value when info wraps.
+
+            >.button-expand {
+                --color: var(--color-icon1);
+                --size: 25px;
+
+                &:hover {
+                    --color: var(--color-icon3);
+                }
+            }
+
+            >.button-creator {
+                --image-size: 25px;
+
+                //margin-left: -35px; // TODO test this value when info wraps.
+            }
+
+            >.author,
+            >.mod,
+            >.super {
+                color: var(--color-accent1);
+                font-size: var(--author-fontsize);
+                font-family: @font-semibold;
+                text-transform: uppercase;
+            }
+        }
+
+        >.wrapper-inner {
+            display: flex;
+            flex-direction: column;
+            gap: var(--wrapperinner-spacing);
+            margin-left: var(--wrapperinner-marginleft);
+
+            >.text {
+                font-size: var(--text-fontsize);
+                .text-rich(var(--color-text3));
+            }
+
+            >.wrapper-reports {
+                background-color: var(--color-background2);
+                border: 1px solid var(--color-warning);
+                border-radius: var(--app-borderradius);
+                display: flex;
+                flex-direction: column;
+                gap: var(--wrapperreports-spacing);
+                padding: var(--wrapperreports-padding);
+
+                >.report {
+                    font-size: var(--report-fontsize);
+
+                    >.type {
+                        color: var(--color-text2);
+                    }
+
+                    >.text {
+                        color: var(--color-text1);
+                    }
+
+                    >.icon-text {
+                        display: inline-flex;
+                        margin-left: 5px; // TODO
+                    }
+                }
+            }
+
+            >.input-comment {
+                margin-top: var(--reply-margintop);
+                z-index: 4;
+            }
+
+            >.replies {
+                display: flex;
+                flex-direction: column;
+                margin-left: var(--reply-marginleft);
+
+                >.reply {
+                    margin-top: var(--reply-margintop);
+
+                    >.button-scope {
+                        top: calc(var(--creatorimage-size) + var(--reply-margintop));
+                    }
+
+                    &.highlight {
+                        >.button-scope {
+                            top: calc(var(--creatorimage-size) * 2);
+                        }
+                    }
+                }
+            }
+
+            >.button-continuethread {
+                align-self: flex-start;
+                margin-top: var(--buttoncontinuethread-margintop);
+            }
+        }
+
+        &.removed {
+            >.wrapper-inner {
+                >.text {
+                    color: var(--color-text1);
+                }
+            }
+        }
+    }
+};

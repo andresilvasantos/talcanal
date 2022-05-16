@@ -1,0 +1,117 @@
+import appm from 'js/app-manager'
+import { pages, timers } from 'js/default-vars'
+
+class {
+    onCreate() {
+        this.state = {
+            idPage: 'channels'
+        }
+
+        this.pageChanged = this.pageChanged.bind(this)
+    }
+
+    onMount() {
+        appm.on('pageChanged', this.pageChanged)
+    }
+
+    onDestroy() {
+        appm.off('pageChanged', this.pageChanged)
+    }
+
+    // Functions.
+
+    pageChanged(idPage) {
+        this.state.idPage = idPage
+    }
+
+    pageRequested(idPage, idPane, newTab = false) {
+        appm.openPage(idPage, idPane, { allowBack: false, newTab })
+    }
+}
+
+$ const pages = [{
+    id: 'channels',
+    icon: 'channel'
+}, {
+    id: 'news',
+    icon: 'news'
+}, {
+    id: 'games',
+    icon: 'gamepad'
+}, {
+    id: 'randomChat',
+    icon: 'comments'
+}]
+
+$ const pagesSecondary = [{
+    id: 'about',
+    icon: 'question'
+}]
+
+<div.navbar class=input.class>
+    <div.buttons-main>
+        <for|page| of=pages>
+            $ const selected = page.id == state.idPage
+
+            <button-nav
+                icon=page.icon
+                selected=selected
+                tooltip=appm.tr(`${page.id}.title`)
+                on-click('pageRequested', page.id, '', false)
+                on-middleClick('pageRequested', page.id, '', true)
+            />
+        </for>
+    </div>
+
+    <div.buttons-secondary>
+        <for|page| of=pagesSecondary>
+            $ const selected = page.id == state.idPage
+
+            <button-nav.small
+                icon=page.icon
+                selected=selected
+                tooltip=appm.tr(`${page.id}.title`)
+                on-click('pageRequested', page.id, '', false)
+                on-middleClick('pageRequested', page.id, '', true)
+            />
+        </for>
+    </div>
+</div>
+
+style.less {
+    .navbar {
+        --buttonsmain-spacing: 10px;
+        --buttonssecondary-spacing: 0;
+        --padding-v: 10px;
+        --spacing: 30px;
+
+        background-color: var(--color-background2);
+        display: flex;
+        flex-direction: column;
+        gap: var(--spacing);
+        justify-content: space-between;
+        padding: var(--padding-v) 0;
+
+        >.buttons-main,
+        >.buttons-secondary {
+            display: flex;
+            flex-direction: column;
+        }
+
+        >.buttons-main {
+            gap: var(--buttonsmain-spacing);
+        }
+
+        >.buttons-secondary {
+            gap: var(--buttonssecondary-spacing);
+        }
+
+        // Media queries
+
+        .r-max(@break-md, {
+            --padding-v: 5px;
+
+            border-right: 1px solid var(--color-border1);
+        });
+    }
+}

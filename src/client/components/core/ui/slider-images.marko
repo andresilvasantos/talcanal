@@ -1,0 +1,533 @@
+import animm from 'js/anim-manager'
+import appm from 'js/app-manager'
+
+class {
+    onCreate(input) {
+        this.state = {
+            allowScale: input.big,
+            images: input.images || [],
+            index: input.index || 0,
+            slidesPerView: input.slidesPerView || 1
+        }
+
+        this.scrolled = this.scrolled.bind(this)
+    }
+
+    onInput(input) {
+        if(!input.noExternalUpdate) {
+            const oldIndex = this.state.index
+
+            this.state.allowScale = input.big
+            this.state.images = input.images || []
+            this.state.index = input.hasOwnProperty('index') ? input.index : oldIndex || 0
+
+            if(this.mounted) {
+                this.adjustSlidesWidth()
+
+                if(this.state.index != oldIndex) {
+                    const sliderWidthPercentage = 1 / this.state.slidesPerView * 100
+
+                    animm.set(this.slider,
+                        { '--slider-pos': - this.state.index * sliderWidthPercentage + '%' })
+                }
+            }
+        }
+    }
+
+    onMount() {
+        let currentX = 0
+        let direction = 0
+        let lastX = 0
+        this.mouseMoved = false
+        this.mousePressed = false
+        let startClientX = 0
+        let startClientY = 0
+        let startX = 0
+
+        this.mounted = true
+        this.slider = this.getEl('slider')
+        this.touchPad = this.getEl('touchPad')
+
+        this.adjustSlidesWidth()
+
+        const eventPosition = (event) => {
+            const position = {}
+
+            const touchTypes = ['touchstart', 'touchmove', 'touchend']
+            let foundTouchType = false
+
+            for(const touchType of touchTypes) {
+                if(event.type == touchType) {
+                    const firstTouch = event.touches[0]
+                    const rect = event.target.getBoundingClientRect()
+
+                    position.clientX = firstTouch.pageX
+                    position.clientY = firstTouch.pageY
+                    position.offsetX = firstTouch.pageX - rect.left
+                    position.offsetY = firstTouch.pageY - rect.top
+
+                    foundTouchType = true
+
+                    break
+                }
+            }
+
+            if(!foundTouchType) {
+                position.clientX = event.clientX
+                position.clientY = event.clientY
+                position.offsetX = event.offsetX
+                position.offsetY = event.offsetY
+            }
+
+            return position
+        }
+
+        const touchPressed = (event) => {
+            if(event.button) {
+                return
+            }
+
+            window.addEventListener('mouseup', touchReleased)
+            window.addEventListener('touchend', touchReleased, { passive: true })
+            this.touchPad.addEventListener('mousemove', touchMoved)
+            this.touchPad.addEventListener('touchmove', touchMoved, { passive: true })
+            appm.on('scroll', this.scrolled)
+
+            animm.remove(this.slider)
+
+            const position = eventPosition(event)
+
+            this.mousePressed = true
+            this.mouseMoved = false
+
+            startX = position.clientX + this.slideLastYPos()
+            startClientX = position.clientX
+            startClientY = position.clientY
+            lastX = position.clientX
+            direction = 0
+
+            if(this.state.allowScale && event.touches && event.touches.length === 2) {
+                this.scaling = true
+
+                const dist = Math.hypot(
+                    event.touches[0].pageX - event.touches[1].pageX,
+                    event.touches[0].pageY - event.touches[1].pageY
+                )
+
+                this.lastPinch = dist
+            }
+
+            if(!event.type.startsWith('touch')) {
+                event.preventDefault()
+                event.stopPropagation()
+            }
+
+            this.windowScrollY = window.scrollY
+        }
+
+        const touchReleased = (event) => {
+            window.removeEventListener('mouseup', touchReleased)
+            window.removeEventListener('touchend', touchReleased, { passive: true })
+            this.touchPad.removeEventListener('mousemove', touchMoved)
+            this.touchPad.removeEventListener('touchmove', touchMoved, { passive: true })
+            appm.off('scroll', this.scrolled)
+
+            if(this.mousePressed) {
+                if(event.target == this.touchPad && !this.mouseMoved) {
+                    // Open with delay, otherwise it might open and click on the new opened item.
+                    this.timeoutOpen = setTimeout(() => {
+                        clearTimeout(this.timeoutOpen)
+                        this.emit('openRequested', event)
+                    }, 20)
+                }
+
+                dragFinished()
+            }
+
+            this.mousePressed = false
+            this.scaling = false
+        }
+
+        const touchMoved = (event) => {
+            const position = eventPosition(event)
+
+            if(this.state.allowScale && this.scaling && event.touches) {
+                const dist = Math.hypot(
+                    event.touches[0].pageX - event.touches[1].pageX,
+                    event.touches[0].pageY - event.touches[1].pageY
+                )
+                let scale = parseFloat(getComputedStyle(this.slider).getPropertyValue('--slide-scale'))
+
+                if(dist > this.lastPinch) {
+                    const proportion = (dist - this.lastPinch) / 20
+                    scale = Math.min(scale + 0.1 * proportion, 3)
+                    this.slider.style.setProperty('--slide-scale', scale)
+                }
+                else {
+                    const proportion = (this.lastPinch - dist) / 20
+                    scale = Math.max(scale - 0.1 * proportion, 1)
+                    this.slider.style.setProperty('--slide-scale', scale)
+                }
+
+                this.lastPinch = dist
+            }
+            else if(this.mousePressed && this.state.images.length) {
+                let moveY = position.clientY - startClientY
+                moveY = moveY < 0 ? moveY * -1 : moveY
+
+                let moveX = position.clientX - startClientX
+                moveX = moveX < 0 ? moveX * -1 : moveX
+
+                /* if(moveY > moveX) {
+                    this.mouseMoved = false
+                    return
+                } */
+
+                if(moveX > 10 || moveY > 10) {
+                    this.mouseMoved = true
+                }
+
+                if(this.state.images.length <= 1) {
+                    return
+                }
+
+                currentX = position.clientX - startX
+
+                const sliderWidth = this.slider.getBoundingClientRect().width
+                const slideWidth = sliderWidth / this.state.slidesPerView
+                const percentage = currentX / sliderWidth * -100
+
+                animm.set(this.slider, { '--slider-pos': -percentage + '%' })
+
+                if(position.clientX - lastX > 2) {
+                    if(currentX > -this.slideLastYPos()) {
+                        direction = 1
+                    }
+                    else {
+                        direction = 0
+                    }
+
+                }
+                else if(position.clientX - lastX < -2) {
+                    if(currentX < -this.slideLastYPos()) {
+                        direction = -1
+                    }
+                    else {
+                        direction = 0
+                    }
+                }
+
+                lastX = position.clientX
+            }
+        }
+
+        const dragFinished = () => {
+            let slided = false
+            const sliderWidth = this.slider.getBoundingClientRect().width
+            const slideWidth = sliderWidth / this.state.slidesPerView
+            const translationX = currentX + this.slideLastYPos()
+
+            if(direction == -1) {
+                const count = parseInt(translationX / -slideWidth) + 1
+
+                if(this.next(count)) {
+                    slided = true
+                }
+            }
+            else if(direction == 1) {
+                const count = - (parseInt(translationX / -slideWidth) - 1)
+
+                if(this.previous(count)) {
+                    slided = true
+                }
+            }
+
+            if(!slided) {
+                this.moveToIndex()
+            }
+        }
+
+
+
+        if(this.state.images.length > 1 && this.state.index > 0) {
+            this.moveToIndex(false)
+        }
+
+        this.touchPad.addEventListener('mousedown', touchPressed)
+        this.touchPad.addEventListener('touchstart', touchPressed, { passive: true })
+    }
+
+    onDestroy() {
+        clearTimeout(this.timeoutOpen)
+        appm.off('scroll', this.scrolled)
+    }
+
+    // Getters & Setters.
+
+    getIndex() {
+        return this.state.index
+    }
+
+    setIndex(index) {
+        if(
+            index < 0 ||
+            index > this.state.images.length - this.state.slidesPerView ||
+            this.state.index == index
+        ) {
+            return false
+        }
+
+        if(this.state.allowScale) {
+            this.resetScaling()
+        }
+
+        this.state.index = index
+
+        this.moveToIndex()
+        this.emit('indexChanged', this.state.index)
+        return true
+    }
+
+    // Functions.
+
+    adjustSlidesWidth() {
+        const slideComponents = this.getComponents('slides')
+
+        for(let i = 0; i < slideComponents.length; ++i) {
+            const slide = slideComponents[i].getEl()
+            slide.style.width = `${100 / this.state.slidesPerView}%`
+        }
+    }
+
+    click(event) {
+        event.stopPropagation()
+    }
+
+    moveToIndex(animate = true) {
+        animm.remove(this.slider)
+
+        const sliderWidthPercentage = 1 / this.state.slidesPerView * 100
+
+        animm.add(this.slider, { '--slider-pos': - this.state.index * sliderWidthPercentage + '%',
+            duration: animate ? 0.3 : 0,
+            easeOut: 'quart'
+        })
+    }
+
+    next(count = 1) {
+        // If more 1 is impossible, it fails.
+        if(this.state.index + 1 >= this.state.images.length - (this.state.slidesPerView - 1)) {
+            return false
+        }
+
+        if(this.state.allowScale) {
+            this.resetScaling()
+        }
+
+        // Remove the impossible moves
+        while(
+            this.state.index + count >=
+            this.state.images.length - (this.state.slidesPerView - 1)
+        ) {
+            --count
+        }
+
+        this.state.index += count
+
+        this.moveToIndex()
+        this.emit('indexChanged', this.state.index)
+        return true
+    }
+
+    previous(count = 1) {
+        // If less 1 is impossible, it fails.
+        if(this.state.index - 1 < 0) {
+            return false
+        }
+
+        if(this.state.allowScale) {
+            this.resetScaling()
+        }
+
+        // Remove the impossible moves
+        while(this.state.index - count < 0) {
+            --count
+        }
+
+        this.state.index -= count
+
+        this.moveToIndex()
+        this.emit('indexChanged', this.state.index)
+        return true
+    }
+
+    resetScaling() {
+        this.slider.style.setProperty('--slide-scale', 1)
+    }
+
+    scrolled(event) {
+        // If window scroll, stop slider drag.
+        const scrollDiff = Math.abs(this.windowScrollY - window.scrollY)
+
+        if(scrollDiff > 20) {
+            this.mouseMoved = true
+            this.mousePressed = false
+            this.moveToIndex(true)
+        }
+    }
+
+    slideLastYPos() {
+        const sliderWidth = this.slider.getBoundingClientRect().width
+        const slideWidth = sliderWidth / this.state.slidesPerView
+        return this.state.index * (slideWidth)
+    }
+}
+
+$ const tagSize = input.tagSize ? `-${input.tagSize}` : ''
+$ const tagSizeSmall = input.tagSizeSmall ? `-${input.tagSizeSmall}` : ''
+
+<div.slider-images class=input.class on-click('click')>
+    <div.slider key='slider'>
+        $ const imagesLength = state.images.length
+        $ const slidesCount = imagesLength < state.slidesPerView ? state.slidesPerView : imagesLength
+
+        <for|index| from=0 to=(slidesCount - 1)>
+            $ const dummySlide = index >= imagesLength
+
+            <image.fit.big
+                key='slides[]'
+                class=(state.index == index ? 'current' : '')
+                noPlaceholder
+                lazyload
+                src=`${input.pathBaseUrl}/${state.images[index]}${tagSize}.jpg`
+                srcSmall=`${input.pathBaseUrl}/${state.images[index]}${tagSizeSmall}.jpg`
+            />
+        </for>
+    </div>
+
+    <div.touchpad key='touchPad' />
+
+    <if(state.images.length > 1)>
+        <div.controls>
+            <button-icon.button-left
+                class=(input.big ? 'big' : '')
+                disabled=(state.index == 0)
+                expandAreaTouch
+                icon='arrow'
+                iconRotation=180
+                on-click('previous', 1)
+            />
+
+            <button-icon.button-right
+                class=(input.big ? 'big' : '')
+                disabled=(state.index + state.slidesPerView - 1 >= state.images.length - 1)
+                expandAreaTouch
+                icon='arrow'
+                on-click('next', 1)
+            />
+        </div>
+
+        <div.label-count>
+            ${state.index + 1} de ${state.images.length}
+        </div>
+    </if>
+</div>
+
+style.less {
+    .slider-images {
+        --buttonarrows-marginsides: 30px;
+        --slide-scale: 1;
+        --slider-pos: 0;
+
+        background-color: var(--color-background4);
+        border-radius: var(--app-borderradius2);
+        overflow: hidden;
+        position: relative;
+
+        >.slider {
+            display: flex;
+            position: absolute;
+            .size(100%);
+            .translateX(var(--slider-pos));
+
+            .image {
+                flex-shrink: 0;
+                height: 100%;
+
+                &.current {
+                    z-index: 2;
+                    .scale(var(--slide-scale));
+                }
+            }
+        }
+
+        >.touchpad {
+            //touch-action: none;
+            .absolute-fill();
+
+            &:hover {
+                cursor: pointer;
+            }
+        }
+
+        >.controls {
+            .buttonArrows() {
+                --backgroundcolor: var(--color-button1);
+
+                position: absolute;
+                top: 50%;
+                .translate(0, -50%);
+
+                &.disabled {
+                    border-color: transparent;
+                    pointer-events: auto;
+
+                    >.icon {
+                        .scale(1);
+                    }
+                }
+            }
+
+            >.button-left {
+                left: var(--buttonarrows-marginsides);
+                .buttonArrows();
+            }
+
+            >.button-right {
+                right: var(--buttonarrows-marginsides);
+                .buttonArrows();
+            }
+        }
+
+        >.label-count {
+            background-color: var(--color-background1);
+            border-radius: var(--app-borderradius);
+            bottom: var(--app-padding);
+            color: var(--color-text2);
+            font-size: 14px; // TODO
+            height: 25px; // TODO
+            left: var(--app-padding);
+            padding: 0 5px; // TODO
+            position: absolute;
+            .flex-center();
+        }
+
+        // Media queries
+
+        .r-max(@break-lg, {
+            --buttonarrows-marginsides: 25px;
+        });
+
+        .r-max(@break-md, {
+            --buttonarrows-marginsides: 20px;
+        });
+
+        .r-max(@break-ms, {
+            --buttonarrows-marginsides: 15px;
+        });
+
+        .r-max(@break-xs, {
+            --buttonarrows-marginsides: 10px;
+        });
+    }
+};

@@ -1,0 +1,293 @@
+class {
+    onCreate(input, out) {
+        this.state = {
+            errorMessage: input.errorMessage || '',
+            inFocus: false,
+            text: input.text || '',
+            valid: true
+        }
+
+        if(typeof this.state.text != String) {
+            this.state.text = this.state.text.toString()
+        }
+    }
+
+    onInput(input) {
+        if(!input.noExternalUpdate) {
+            this.state.text = input.text || ''
+
+            if(typeof this.state.text != String) {
+                this.state.text = this.state.text.toString()
+            }
+
+            if(this.mounted) {
+                this.setValid(true)
+                this.updateHeight(true)
+            }
+        }
+    }
+
+    onMount() {
+        this.update()
+        this.updateHeight(true)
+
+        this.mounted = true
+    }
+
+    // Getters & Setters.
+
+    getValue() {
+        return this.state.text
+    }
+
+    setValid(valid, error) {
+        this.state.valid = valid
+        this.state.errorMessage = error
+    }
+
+    setValue(value) {
+        if(value == null) {
+            this.state.text = ''
+        }
+        else {
+            this.state.text = value
+        }
+
+        this.update()
+        this.updateHeight()
+    }
+
+    // Functions.
+
+    focus(event) {
+        this.state.inFocus = true
+
+        this.emit('focus')
+    }
+
+    focusInput() {
+        this.getEl('input').focus()
+    }
+
+    focusOut() {
+        this.state.inFocus = false
+
+        this.emit('focusout')
+    }
+
+    textChange(event) {
+        this.state.text = event.target.value
+
+        this.emit('change', event)
+        this.emit('valueChanged', this.state.text)
+        this.setValid(true)
+    }
+
+    textInput(event) {
+        this.state.text = event.target.value
+
+        this.emit('input', event)
+        this.emit('valueChanged', event.target.value)
+        this.setValid(true)
+    }
+
+    textPaste(event) {
+        this.state.text = event.target.value
+
+        this.emit('paste', event)
+        this.emit('valueChanged', event.target.value)
+        this.setValid(true)
+    }
+
+    updateHeight(useTimeout = false) {
+        const root = this.getEl()
+        const inputMessage = this.getEl('input')
+
+        inputMessage.style.height = '1px'
+
+        const applyHeight = () => {
+            const heightRoot = root.offsetHeight
+            const heightScroll = inputMessage.scrollHeight
+            const height = Math.max(heightRoot, heightScroll)
+
+            root.style.setProperty('--height-calc', `${height}px`)
+            inputMessage.style.height = 'unset'
+        }
+
+        if(useTimeout) {
+            setTimeout(() => {
+                applyHeight()
+            }, 0)
+        }
+        else {
+            applyHeight()
+        }
+    }
+}
+
+<div.input-textmulti
+    class=[
+        input.class,
+        state.text && state.text.length ? 'has-text' : '',
+        state.inFocus ? 'in-focus' : '',
+        state.valid ? '' : 'invalid',
+        !state.valid && state.errorMessage ? 'has-errormessage' : ''
+    ]
+    on-focus('focusInput')
+    on-focusout('focusOut')
+>
+    <if(input.label)>
+        <label for:scoped='input'>
+            ${input.label}
+        </label>
+    </if>
+
+    <div.wrapper>
+        <if(input.icon)>
+            <div.wrapper-icon>
+                <icon name=input.icon />
+            </div>
+        </if>
+
+        <textarea
+            key='input'
+            id:scoped='input'
+            class=(input.label ? 'has-label' : '')
+            maxlength=(input.maxlength || 4000)
+            placeholder=(input.placeholder || '')
+            rows=(input.rows || 1)
+            spellcheck='false'
+            value=state.text
+            on-change('textChange')
+            on-focus('focus')
+            on-input('textInput')
+            on-paste('textPaste')
+        />
+    </div>
+
+    <if(!state.valid && state.errorMessage)>
+        <div.wrapper-error>
+            <text-p.small>
+                ${state.errorMessage}
+            </text-p>
+        </div>
+    </if>
+</div>
+
+style.less {
+    .input-textmulti {
+        --backgroundcolor: var(--color-input1);
+        --bordercolor: var(--color-border1);
+        --color: var(--color-text2);
+        --fontfamily: @font;
+        --fontsize: 16px;
+        --height-calc: 0;
+        --icon-size: 18px;
+        --label-marginbottom: 15px;
+        --minheight: 80px;
+        --padding-h: 15px;
+        --padding-v: 10px;
+        --wrappericon-paddingleft: 15px;
+
+        display: flex;
+        flex-direction: column;
+        position: relative;
+
+        >label {
+            color: var(--color-text2);
+            cursor: pointer;
+            font-family: @font-medium;
+            font-size: var(--fontsize);
+            margin-bottom: var(--label-marginbottom);
+        }
+
+        >.wrapper {
+            background-color: var(--backgroundcolor);
+            border: 1px solid var(--bordercolor);
+            border-radius: var(--app-borderradius);
+            display: flex;
+            min-height: var(--minheight);
+            overflow-y: auto;
+            .size(100%);
+            .transition(border-color 0.2s ease-out, background-color 0.2s ease-out;);
+
+            >.wrapper-icon {
+                margin-top: 13px;
+                padding-left: var(--wrappericon-paddingleft);
+
+                >.icon {
+                    color: var(--color-icon2);
+                    .size(var(--icon-size));
+                }
+            }
+
+            >textarea {
+                background-color: transparent;
+                border: none;
+                color: var(--color);
+                font-size: var(--fontsize);
+                height: calc(var(--height-calc) - var(--padding-v) * 2);
+                min-height: calc(100% - var(--padding-v) * 2);
+                padding: var(--padding-v) var(--padding-h);
+                resize: none;
+                width: 100%;
+                .placeholder({
+                    color: rgba(var(--color-text2-rgb), 0.5);
+                    opacity: 1;
+                });
+                .remove-appearance();
+            }
+        }
+
+        &.has-text {
+            --color: var(--color-text4);
+        }
+
+        &.in-focus {
+            --backgroundcolor: var(--color-input2);
+            --bordercolor: var(--color-border3);
+            --color: var(--color-text4);
+
+            >.wrapper {
+                >.wrapper-icon {
+                    >.icon {
+                        .scale(1.1);
+                    }
+                }
+            }
+        }
+
+        &.big {
+            --fontsize: 16px;
+            //--height: 50px;
+            --icon-size: 18px;
+            --padding-h: 20px;
+        }
+
+        &.invalid {
+            >.wrapper {
+                border-color: var(--color-warning);
+            }
+
+            &.has-errormessage {
+                display: flex;
+                flex-direction: column;
+
+                .wrapper-error {
+                    color: var(--color-warning);
+                    left: 0;
+                    margin-top: var(--error-margintop);
+                    width: 100%;
+                }
+            }
+        }
+
+        // Media queries
+
+        .r-max(@break-sm, {
+            --fontsize: 15px;
+            --icon-size: 17px;
+            --wrappericon-paddingleft: 10px;
+        });
+    }
+};

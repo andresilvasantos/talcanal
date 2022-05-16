@@ -1,0 +1,231 @@
+import appm from 'js/app-manager'
+import { urls } from 'js/default-vars'
+
+$ const post = input.post || {}
+
+<div.thumbnail-post
+    class=[
+        input.class,
+        input.expanded ? 'expanded' : '',
+        input.grid ? 'grid' : '',
+        post.type == 'text' && post.text && post.text.length ? 'type-text' : '',
+        post.type == 'image' ? 'type-image' : '',
+        post.type == 'link' ? 'type-link' : ''
+    ]
+>
+    <if(post.type == 'text')>
+        <if(input.expanded)>
+            <if(post.text && post.text.length)>
+                <span.text>
+                    $!{post.text}
+                </span>
+
+                <div.gradient />
+            </if>
+        </if>
+        <else>
+            <icon name='details' />
+        </else>
+    </if>
+    <else-if(post.type == 'link')>
+        $ const image = post.images[0]
+
+        <if(!input.expanded || !image)>
+            <icon name='link' />
+
+            <!-- TODO construct iframe if needed -->
+        </if>
+
+        <if(image)>
+            $ const urlImage = `${appm.getUrlCdn()}/${image}`
+
+            <image.image-link.cover
+                lazyload
+                src=`${urlImage}${input.expanded ? '' : '-sm'}.jpg`
+                srcSmall=`${urlImage}-${input.expanded ? 'sm-nocrop' : 'tn'}.jpg`
+            />
+        </if>
+
+        <if(input.grid || input.expanded)>
+            <image.favicon.fit.small
+                lazyload
+                noPlaceholder
+                src=`${urls.favicons}${post.link}`
+            />
+        </if>
+    </else-if>
+    <else-if(post.type == 'image')>
+        <icon name='image' />
+
+        <if(input.expanded)>
+            <slider-images
+                key='sliderImages'
+                pathBaseUrl=appm.getUrlCdn()
+                images=post.images
+                noExternalUpdate
+                tagSize='md'
+                tagSizeSmall='sm-nocrop'
+                on-indexChanged('emit', 'sliderImagesIndexChanged')
+                on-openRequested('emit', 'openRequested')
+            />
+        </if>
+        <else>
+            $ const image = post.images[0]
+
+            <if(image)>
+                <image.image-gallery.cover
+                    lazyload
+                    src=`${appm.getUrlCdn()}/${image}-sm.jpg`
+                    srcSmall=`${appm.getUrlCdn()}/${image}-tn.jpg`
+                />
+            </if>
+        </else>
+    </else-if>
+    <else-if(post.type == 'poll')>
+        <if(input.expanded)>
+            <poll post=post />
+        </if>
+        <else>
+            <icon name='poll' />
+        </else>
+    </else-if>
+
+    <${data.renderBody} />
+</div>
+
+style.less {
+    .thumbnail-post {
+        --color-gradient-rgb: var(--color-background2-rgb);
+        --favicon-borderradius: 2px;
+        --favicon-margin: 10px;
+        --favicon-size: 16px;
+        --icon-size: 30px;
+        --imagelink-maxheight: 350px;
+        --imagelink-minheight: 200px;
+        --poll-margintop: 10px;
+        --sliderimages-height: 450px;
+        --text-fontsize: 15px;
+        --text-maxheight: 320px;
+
+        background-color: var(--color-background4);
+        display: flex;
+        justify-content: center;
+        position: relative;
+
+        >.text {
+            font-size: var(--text-fontsize);
+            .text-rich(var(--color-text3));
+        }
+
+        >.image-link,
+        >.image-gallery {
+            width: 100%;
+        }
+
+        >.icon {
+            color: var(--color-icon2);
+            .absolute-center();
+            .size(var(--icon-size));
+        }
+
+        >.poll {
+            align-self: center;
+            margin-top: var(--poll-margintop);
+        }
+
+        >.favicon {
+            border-radius: var(--favicon-borderradius);
+            display: flex;
+            overflow: hidden;
+            position: absolute;
+            right: var(--favicon-margin);
+            top: var(--favicon-margin);
+            .size(var(--favicon-size));
+        }
+
+        &:not(.expanded) {
+            >.image-link,
+            >.image-gallery {
+                .absolute-fill();
+            }
+        }
+
+        &.expanded {
+            --favicon-borderradius: 4px;
+            --favicon-size: 32px;
+            --icon-size: 30px;
+
+            background-color: transparent;
+
+            &.type-text {
+                justify-content: unset;
+                max-height: var(--text-maxheight);
+                padding: 0 10px; // TODO
+
+                >.gradient {
+                    .absolute-fill();
+                    .linear-gradient(
+                        rgba(var(--color-gradient-rgb), 0) 0,
+                        rgba(var(--color-gradient-rgb), 0) calc(var(--text-maxheight) * 0.6),
+                        rgba(var(--color-gradient-rgb), 1) var(--text-maxheight)
+                    );
+                    .transition(background 0.2s ease-out);
+                }
+            }
+
+            &.type-link {
+                min-height: var(--imagelink-minheight);
+                max-height: var(--imagelink-maxheight);
+            }
+
+            &.type-image {
+                >.slider-images {
+                    .size(100%, var(--sliderimages-height));
+                }
+            }
+        }
+
+        // Media queries
+
+        .r-max(@break-md, {
+            --icon-size: 24px;
+
+            &.expanded {
+                >.image-link {
+                    min-height: 100px;
+                }
+            }
+        });
+
+        .r-max(@break-ms, {
+            --imagelink-maxheight: 320px;
+            --imagelink-minheight: 200px;
+            --sliderimages-height: 380px;
+            //--text-fontsize: 13px;
+            --text-maxheight: 280px;
+        });
+
+        .r-max(@break-sm, {
+            --favicon-margin: 5px;
+            --text-fontsize: 14px;
+            --imagelink-maxheight: 250px;
+            --imagelink-minheight: 160px;
+            --sliderimages-height: 300px;
+            --text-maxheight: 250px;
+
+            &.expanded {
+                --favicon-borderradius: 2px;
+                --favicon-size: 26px;
+                --icon-size: 25px;
+            }
+        });
+
+        .r-max(@break-xs, {
+            --imagelink-maxheight: 200px;
+            --imagelink-minheight: 140px;
+            --sliderimages-height: 240px;
+            --text-maxheight: 220px;
+            --text-fontsize: 13px;
+        });
+    }
+};

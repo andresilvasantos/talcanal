@@ -1,0 +1,200 @@
+import appm from 'js/app-manager'
+
+class {
+    onCreate() {
+        this.state = {
+            passwordVisible: false,
+            status: 0
+        }
+    }
+
+    // Getters & Setters.
+
+    setStatus(status) {
+        this.state.status = status
+    }
+
+    // Functions.
+
+    saveRequested() {
+        if(this.state.status == 1) {
+            return
+        }
+
+        // In App.
+        this.announcementsAppComponent = this.getComponent('checkboxAnnouncementsApp')
+        this.commentRepliesAppComponent = this.getComponent('checkboxCommentRepliesApp')
+        this.commentUpvotesAppComponent = this.getComponent('checkboxCommentUpvotesApp')
+        //this.mentionsAppComponent = this.getComponent('checkboxMentionsApp')
+        this.postCommentsAppComponent = this.getComponent('checkboxPostCommentsApp')
+        this.postUpvotesAppComponent = this.getComponent('checkboxPostUpvotesApp')
+
+        // Email.
+        /* this.commentRepliesEmailComponent = this.getComponent('checkboxCommentRepliesEmail')
+        this.commentUpvotesEmailComponent = this.getComponent('checkboxCommentUpvotesEmail')
+        this.mentionsEmailComponent = this.getComponent('checkboxMentionsEmail') */
+        this.newsletterEmailComponent = this.getComponent('checkboxNewsletterEmail')
+        /* this.postCommentsEmailComponent = this.getComponent('checkboxPostCommentsEmail')
+        this.postUpvotesEmailComponent = this.getComponent('checkboxPostUpvotesEmail') */
+
+        // In App.
+        const announcementsApp = this.announcementsAppComponent.isChecked()
+        const commentRepliesApp = this.commentRepliesAppComponent.isChecked()
+        const commentUpvotesApp = this.commentUpvotesAppComponent.isChecked()
+        //const mentionsApp = this.mentionsAppComponent.isChecked()
+        const postCommentsApp = this.postCommentsAppComponent.isChecked()
+        const postUpvotesApp = this.postUpvotesAppComponent.isChecked()
+
+        // Email.
+        /* const commentRepliesEmail = this.commentRepliesEmailComponent.isChecked()
+        const commentUpvotesEmail = this.commentUpvotesEmailComponent.isChecked()
+        const mentionsEmail = this.mentionsEmailComponent.isChecked() */
+        const newsletterEmail = this.newsletterEmailComponent.isChecked()
+        /* const postCommentsEmail = this.postCommentsEmailComponent.isChecked()
+        const postUpvotesEmail = this.postUpvotesEmailComponent.isChecked() */
+
+        this.data = {
+            preferences: {
+                notifications: {
+                    byEmail: {
+                        /* commentReplies: commentRepliesEmail,
+                        commentUpvotes: commentUpvotesEmail,
+                        mentions: mentionsEmail, */
+                        newsletter: newsletterEmail,
+                        /* postComments: postCommentsEmail,
+                        postUpvotes: postUpvotesEmail */
+                    },
+                    inApp: {
+                        commentReplies: commentRepliesApp,
+                        commentUpvotes: commentUpvotesApp,
+                        //mentions: mentionsApp,
+                        officialAnnouncements: announcementsApp,
+                        postComments: postCommentsApp,
+                        postUpvotes: postUpvotesApp
+                    }
+                }
+            }
+        }
+
+        this.state.status = 1
+
+        appm.updateAccount(this.data)
+        this.emit('statusChanged', this.state.status)
+    }
+}
+
+$ const user = input.user || {}
+$ const preferences = user.preferences || {}
+$ const notifications = preferences.notifications || {}
+$ const byEmail = notifications.byEmail || {}
+$ const inApp = notifications.inApp || {}
+$ const trSettings = appm.tr('settings') || {}
+$ const trNotifications = appm.tr('settings.tabs.notifications') || {}
+
+<section-settings.inapp title=trNotifications.sectionInApp>
+    <checkbox
+        key='checkboxPostCommentsApp'
+        checked=inApp.postComments
+        noExternalUpdate
+        text=trNotifications.postComments
+    />
+
+    <checkbox
+        key='checkboxCommentRepliesApp'
+        checked=inApp.commentReplies
+        noExternalUpdate
+        text=trNotifications.commentReplies
+    />
+
+    <checkbox
+        key='checkboxPostUpvotesApp'
+        checked=inApp.postUpvotes
+        noExternalUpdate
+        text=trNotifications.postUpvotes
+    />
+
+    <checkbox
+        key='checkboxCommentUpvotesApp'
+        checked=inApp.commentUpvotes
+        noExternalUpdate
+        text=trNotifications.commentUpvotes
+    />
+
+    <!-- <checkbox
+        key='checkboxMentionsApp'
+        checked=inApp.mentions
+        disabled
+        noExternalUpdate
+        text=trNotifications.mentions
+    /> -->
+
+    <checkbox
+        key='checkboxAnnouncementsApp'
+        checked=inApp.officialAnnouncements
+        noExternalUpdate
+        text=trNotifications.officialAnnouncements
+    />
+</section-settings>
+
+<section-settings.byemail title=trNotifications.sectionByEmail>
+    <!-- <checkbox
+        key='checkboxPostCommentsEmail'
+        checked=byEmail.postComments
+        noExternalUpdate
+        disabled
+        text=trNotifications.postComments
+    />
+
+    <checkbox
+        key='checkboxCommentRepliesEmail'
+        checked=byEmail.commentReplies
+        noExternalUpdate
+        disabled
+        text=trNotifications.commentReplies
+    />
+
+    <checkbox
+        key='checkboxPostUpvotesEmail'
+        checked=byEmail.postUpvotes
+        noExternalUpdate
+        disabled
+        text=trNotifications.postUpvotes
+    />
+
+    <checkbox
+        key='checkboxCommentUpvotesEmail'
+        checked=byEmail.commentUpvotes
+        noExternalUpdate
+        disabled
+        text=trNotifications.commentUpvotes
+    />
+
+    <checkbox
+        key='checkboxMentionsEmail'
+        checked=byEmail.mentions
+        noExternalUpdate
+        disabled
+        text=trNotifications.mentions
+    /> -->
+
+    <checkbox
+        key='checkboxNewsletterEmail'
+        checked=byEmail.newsletter
+        noExternalUpdate
+        text=trNotifications.newsletter
+    />
+</section-settings>
+
+<button-submit.button-save.big
+    loading=(state.status == 1)
+    text=trSettings.buttonSave
+    on-click('saveRequested')
+/>
+
+style.less {
+    .pane-settings>.contents {
+        >.button-save {
+            align-self: center;
+        }
+    }
+};

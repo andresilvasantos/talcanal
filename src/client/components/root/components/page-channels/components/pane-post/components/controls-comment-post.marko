@@ -1,0 +1,179 @@
+import appm from 'js/app-manager'
+import { processObjectsTr } from 'js/utils'
+
+class {
+    onCreate(input) {
+        this.state = {
+            comment: input.comment || {}
+        }
+    }
+
+    onInput(input) {
+        this.state.comment = input.comment || {}
+
+        if(this.mounted) {
+            this.setStateDirty('comment')
+        }
+    }
+
+    onMount() {
+        this.mounted = true
+    }
+
+    // Functions.
+
+    controlRequested(idControl) {
+        switch(idControl) {
+            case 'approve':
+                this.emit('approveRequested')
+                break
+            case 'delete':
+                this.emit('deleteRequested')
+                break
+            case 'edit':
+                this.emit('editRequested')
+                break
+            case 'pin':
+            case 'unpin':
+                this.emit('pinRequested')
+                break
+            case 'reject':
+                this.emit('rejectRequested')
+                break
+            case 'report':
+                this.emit('reportRequested')
+                break
+            case 'copyUrl':
+            case 'message':
+                this.emit('shareRequested', idControl)
+                break
+        }
+    }
+}
+
+$ const processOptions = (comment, isCreator, isMod, allowPin, trOptions) => {
+    const options = []
+
+    if(comment.status == 'removed') {
+        return options
+    }
+
+    if(isCreator) {
+        options.push({
+            id: 'edit',
+            icon: 'pencil'
+        })
+    }
+
+    if(isMod) {
+        if(comment.status != 'approved') {
+            options.push({
+                id: 'approve',
+                icon: 'check',
+                special: true
+            })
+        }
+
+        if(comment.status != 'rejected' && comment.status != 'autorejected') {
+            options.push({
+                id: 'reject',
+                danger: true,
+                icon: 'reject'
+            })
+        }
+    }
+
+    options.push({
+        id: 'share',
+        icon: 'send',
+        children: [{
+            id: 'copyUrl',
+            icon: 'link'
+        }, {
+            id: 'message',
+            icon: 'envelope'
+        }]
+    })
+
+    if(isMod && allowPin) {
+        options.push({
+            id: comment.pinned ? 'unpin' : 'pin',
+            danger: comment.pinned,
+            special2: !comment.pinned,
+            icon: 'pin'
+        })
+    }
+
+    if(isCreator) {
+        options.push({
+            id: 'delete',
+            danger: true,
+            icon: 'bin'
+        })
+    }
+    else if(!isMod) {
+        options.push({
+            id: 'report',
+            danger: true,
+            icon: 'flag'
+        })
+    }
+
+    return processObjectsTr(options, trOptions)
+}
+
+$ const comment = state.comment || {}
+$ const trTooltips = appm.tr('channels.comment.tooltips') || {}
+
+<div.controls-comment-post class=input.class>
+    <vote.small.flat
+        disabled=input.removed
+        count=comment.countVotes
+        downvoted=comment.hasUserDownvoted
+        upvoted=comment.hasUserUpvoted
+        on-voteRequested('emit', 'voteRequested')
+    />
+
+    <if(!input.removed)>
+        <if(!input.locked)>
+            <button-icon.light.small.icon-only
+                icon='comment'
+                tooltip=trTooltips.reply
+                on-click('emit', 'replyRequested')
+            />
+        </if>
+
+        <button-icon.light.small.icon-only.special
+            class=(comment.hasUserFavorited ? 'selected' : '')
+            icon='heart'
+            tooltip=trTooltips.favorite
+            on-click('emit', 'favoriteRequested')
+        />
+    </if>
+
+    <if(!input.removed || input.isMod)>
+        <button-icon-menu.small.icon-only.light
+            icon='ellipsis'
+            iconRotation=90
+            options=processOptions(
+                comment,
+                input.isCreator,
+                input.isMod,
+                input.allowPin,
+                appm.tr('channels.comment.controls')
+            )
+            tooltip=trTooltips.more
+            on-optionRequested('controlRequested')
+        />
+    </if>
+</div>
+
+style.less {
+    .controls-comment-post {
+        --spacing: 20px;
+
+        align-items: center;
+        display: flex;
+        gap: var(--spacing);
+    }
+};

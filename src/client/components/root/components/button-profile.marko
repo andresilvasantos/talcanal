@@ -1,0 +1,269 @@
+import appm from 'js/app-manager'
+import { abbreviateNumber } from 'js/utils'
+
+class {
+    onCreate(input) {
+        this.state = {
+            darkMode: appm.getTheme() == 'dark',
+            user: input.user
+        }
+
+        this.menuClosed = this.menuClosed.bind(this)
+    }
+
+    onInput(input) {
+        this.state.user = input.user
+
+        if(this.mounted) {
+            this.setStateDirty('user')
+        }
+    }
+
+    onMount() {
+        this.rootComponent = this.getComponent('root')
+        this.mounted = true
+
+        this.rootComponent.on('menuClosed', this.menuClosed)
+    }
+
+    // Getters & Setters.
+
+    setTheme(theme) {
+        appm.setTheme(theme)
+        appm.updateAccount({ preferences: { theme: appm.getTheme() }}, true)
+
+        this.rootComponent.closeMenu()
+        appm.addAnalyticsEvent('menuProfile', 'themeChange', theme)
+    }
+
+    // Functions.
+
+    menuClosed() {
+        this.getComponent('buttonMain').getEl().classList.remove('selected')
+    }
+
+    profileRequested(newTab = false) {
+        appm.openPage('channels', 'user', { allowBack: true, newTab }, this.state.user)
+
+        this.rootComponent.closeMenu()
+    }
+
+    settingsRequested(newTab = false) {
+        appm.openPage('settings', '', { allowBack: true, newTab })
+
+        this.rootComponent.closeMenu()
+    }
+
+    signOutRequested() {
+        appm.signOut()
+
+        this.rootComponent.closeMenu()
+    }
+
+    showMenu() {
+        this.getComponent('buttonMain').getEl().classList.add('selected')
+        this.rootComponent.showMenu()
+
+        appm.addAnalyticsEvent('buttonProfile', 'showMenu')
+    }
+
+    toggleSuperMode() {
+        appm.updateAccount({ superActive: !this.state.user.superActive }, true)
+
+        this.rootComponent.closeMenu()
+    }
+}
+
+$ const getTheme = (user) => {
+    if(!user.preferences) {
+        return 'light'
+    }
+
+    if(user.preferences.theme == 'auto') {
+        if(window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+            return 'dark'
+        }
+
+        return 'light'
+    }
+
+    return user.preferences.theme
+}
+
+$ const user = state.user || {}
+$ const image = user.image && user.image.length ? user.image : null
+$ const theme = getTheme(user)
+
+<button-menu.button-profile.open-left key='root' class=input.class>
+    <@button>
+        <button-icon
+            key='buttonMain'
+            icon=input.icon
+            tooltip=input.tooltip
+            on-click('showMenu')
+        />
+    </@button>
+
+    <@menu>
+        <button-default.button-profile
+            on-click('profileRequested', false)
+            on-middleClick('profileRequested', true)
+        >
+            <div.wrapper-image>
+                <if(image)>
+                    <image.cover
+                        lazyload
+                        noPlaceholder
+                        src=`${appm.getUrlCdn()}/${image}-tn.jpg`
+                    />
+                </if>
+                <else>
+                    <icon name='camera' />
+                </else>
+            </div>
+
+            <div.column>
+                <span.username>
+                    ${user.username}
+                </span>
+
+                <icon-text.karma icon='karma' text=`${abbreviateNumber(user.karma)} carma` />
+            </div>
+        </button-default>
+
+        <if(theme == 'light')>
+            <button-text.align-left.bg-transparent.big
+                icon='moon'
+                text='Tema Escuro'
+                on-click('setTheme', 'dark')
+            />
+        </if>
+        <else>
+            <button-text.align-left.bg-transparent.big
+                icon='sun'
+                text='Tema Claro'
+                on-click('setTheme', 'light')
+            />
+        </else>
+
+        <button-text.align-left.bg-transparent.big
+            icon='settings'
+            text='Configurações'
+            on-click('settingsRequested', false)
+            on-middleClick('settingsRequested', true)
+        />
+
+        <if(state.user.super)>
+            <button-text.align-left.bg-transparent.big
+                icon='key'
+                text='Super'
+                on-click('toggleSuperMode')
+            />
+        </if>
+
+        <button-text.align-left.bg-transparent.big
+            icon='exit'
+            text='Sair'
+            on-click('signOutRequested')
+        />
+    </@menu>
+</button-menu>
+
+style.less {
+    .button-profile {
+        --buttonprofile-padding: 15px;
+        --buttonprofile-spacing: 15px;
+        --buttons-fontsize: 18px;
+        --image-size: 46px;
+        --imageicon-size: 20px;
+        --username-fontsize: 20px;
+
+        position: relative;
+
+        &.special {
+            >.wrapper-button {
+                >.button-icon {
+                    --color: var(--color-accent1);
+                }
+            }
+        }
+
+        >.menu {
+            >.button-profile {
+                align-items: center;
+                border-bottom: 1px solid var(--color-border1);
+                display: flex;
+                gap: var(--buttonprofile-spacing);
+                padding: var(--buttonprofile-padding);
+                .transition(background-color 0.2s ease-out);
+
+                &:hover {
+                    background-color: var(--color-button1);
+                }
+
+                >.wrapper-image {
+                    background-color: var(--color-background3);
+                    border-radius: 50%;
+                    overflow: hidden;
+                    position: relative;
+                    .flex-center();
+                    .size(var(--image-size));
+
+                    >.image {
+                        .absolute-fill();
+                    }
+
+                    >.icon {
+                        color: var(--color-icon1);
+                        display: flex;
+                        .size(var(--imageicon-size));
+                    }
+                }
+
+                >.column {
+                    display: flex;
+                    flex-direction: column;
+                    gap: 3px; // TODO
+
+                    >.username {
+                        color: var(--color-text5);
+                        font-family: @font-semibold;
+                        font-size: var(--username-fontsize);
+                    }
+
+                    >.karma {
+                        >.icon {
+                            color: var(--color-accent1);
+                        }
+                    }
+                }
+            }
+
+            >.button-text {
+                --fontsize: var(--buttons-fontsize);
+                --padding-h: var(--buttonprofile-padding);
+
+                border-radius: 0;
+            }
+        }
+
+
+        // Media queries.
+
+        .r-max(@break-md, {
+            --image-size: 40px;
+            --imageicon-size: 18px;
+            --username-fontsize: 18px;
+        });
+
+        .r-max(@break-sm, {
+            --buttons-fontsize: 17px;
+        });
+
+        .r-max(@break-xs, {
+            --buttonprofile-padding: 10px;
+            --buttonprofile-spacing: 10px;
+            --buttons-fontsize: 16px;
+        });
+    }
+};

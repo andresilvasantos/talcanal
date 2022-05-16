@@ -1,0 +1,220 @@
+import appm from 'js/app-manager'
+
+class {
+    onCreate(input) {
+        this.state = {
+            admins: [],
+            channel: input.channel || {},
+            idSelected: null,
+            isAdmin: false,
+            mods: []
+        }
+
+        this.state.admins = this.state.channel.admins || []
+        this.state.mods = this.state.channel.moderators || []
+
+        this.modAdded = this.modAdded.bind(this)
+    }
+
+    onInput(input) {
+        this.state.channel = input.channel || {}
+        this.state.admins = this.state.channel.admins || []
+        this.state.mods = this.state.channel.moderators || []
+    }
+
+    onMount() {
+        appm.on('modAdded', this.modAdded)
+    }
+
+    onDestroy() {
+        appm.off('modAdded', this.modAdded)
+    }
+
+    // Getters & Setters.
+
+    getAdmins() {
+        return this.state.admins
+    }
+
+    getMods() {
+        return this.state.mods
+    }
+
+    // Functions.
+
+    addModerator() {
+        appm.showPopup('addMod', this.state.admins.concat(this.state.mods), this.state.channel)
+        appm.addAnalyticsEvent('channelSettings', 'addMod', this.state.channel.id)
+    }
+
+    depromoteAdmin() {
+        if(!this.state.idSelected) {
+            return
+        }
+
+        for(const [index, admin] of this.state.admins.entries()) {
+            if(admin.username == this.state.idSelected) {
+                this.state.admins.splice(index, 1)
+                this.state.mods.push(admin)
+                this.state.isAdmin = false
+                break
+            }
+        }
+
+        this.setStateDirty('admins')
+        this.setStateDirty('mods')
+        appm.addAnalyticsEvent('channelSettings', 'depromoteAdmin', this.state.channel.id)
+    }
+
+    modAdded(user) {
+        this.state.mods.push(user)
+
+        this.setStateDirty('mods')
+    }
+
+    openUser(username) {
+        appm.openPage('channels', 'user', { newTab: true }, { username })
+        appm.addAnalyticsEvent('channelSettings', 'openUser', this.state.channel.id)
+    }
+
+    promoteMod() {
+        if(!this.state.idSelected) {
+            return
+        }
+
+        for(const [index, mod] of this.state.mods.entries()) {
+            if(mod.username == this.state.idSelected) {
+                this.state.mods.splice(index, 1)
+                this.state.admins.push(mod)
+                this.state.isAdmin = true
+                break
+            }
+        }
+
+        this.setStateDirty('admins')
+        this.setStateDirty('mods')
+        appm.addAnalyticsEvent('channelSettings', 'promoteToAdmin', this.state.channel.id)
+    }
+
+    removeUser() {
+        if(!this.state.idSelected) {
+            return
+        }
+
+        for(const [index, admin] of this.state.admins.entries()) {
+            if(admin.username == this.state.idSelected) {
+                this.state.admins.splice(index, 1)
+                this.setStateDirty('admins')
+                break
+            }
+        }
+
+        for(const [index, mod] of this.state.mods.entries()) {
+            if(mod.username == this.state.idSelected) {
+                this.state.mods.splice(index, 1)
+                this.setStateDirty('mods')
+                break
+            }
+        }
+
+        this.state.idSelected = null
+        this.state.isAdmin = false
+
+        appm.addAnalyticsEvent('channelSettings', 'removeUser', this.state.channel.id)
+    }
+
+    selectUser(username, admin = false) {
+        if(this.state.idSelected == username) {
+            this.state.idSelected = null
+            return
+        }
+
+        this.state.idSelected = username
+        this.state.isAdmin = admin
+    }
+}
+
+$ const admins = state.admins || []
+$ const mods = state.mods || []
+$ const trSettings = input.trSettings || {}
+$ const trSectionMods = trSettings.sectionMods || {}
+
+<section-settings.section-mods title=trSectionMods.title>
+    <if(state.admins.length || state.mods.length)>
+        <div.wrapper-mods>
+            <for|admin| of=state.admins>
+                $ const selected = state.idSelected == admin.username
+
+                <button-user
+                    class=(selected ? 'selected' : '')
+                    isAdmin
+                    user=admin
+                    on-click('selectUser', admin.username, true)
+                    on-middleClick('openUser', admin.username)
+                />
+            </for>
+
+            <for|mod| of=state.mods>
+                $ const selected = state.idSelected == mod.username
+
+                <button-user
+                    class=(selected ? 'selected' : '')
+                    user=mod
+                    on-click('selectUser', mod.username, false)
+                    on-middleClick('openUser', mod.username)
+                />
+            </for>
+        </div>
+    </if>
+
+    <div.controls>
+        <if(state.idSelected)>
+            <if(state.isAdmin)>
+                <button-text.button-depromote
+                    icon='shield'
+                    text='Despromover a moderador'
+                    on-click('depromoteAdmin')
+                />
+            </if>
+            <else>
+                <button-text.button-promote
+                    icon='key'
+                    text='Promover a administrador'
+                    on-click('promoteMod')
+                />
+            </else>
+
+            <button-text.button-remove.danger
+                icon='bin'
+                text='Remover'
+                on-click('removeUser')
+            />
+        </if>
+        <else>
+            <button-text.button-addmod
+                icon='plus'
+                text=trSectionMods.buttonAdd
+                on-click('addModerator')
+            />
+        </else>
+    </div>
+</section-settings>
+
+style.less {
+    .section-mods {
+        >.contents {
+            >.wrapper-mods {
+                display: flex;
+                flex-direction: row;
+                flex-wrap: wrap;
+                gap: 10px; // TODO
+            }
+
+            >.controls {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 10px; // TODO
+            }
+        }
+    }
+};

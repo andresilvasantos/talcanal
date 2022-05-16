@@ -1,0 +1,88 @@
+import appm from 'js/app-manager'
+
+$ const type = input.type || {}
+$ const trType = appm.tr(`channels.types.${type.id}`)
+
+<button-default.card-channeltype class=input.class on-click('emit', 'click')>
+    <icon name=type.icon />
+
+    <text-title.title.small>
+        ${trType.title}
+    </text-title>
+
+    <text-p.text.small>
+        ${trType.text}
+    </text-p>
+</button-default>
+
+style.less {
+    .card-channeltype {
+        --icon-size: 36px;
+        --padding: 20px;
+        --spacing: 10px;
+
+        align-items: center;
+        background-color: var(--color-background2);
+        border: 1px solid var(--color-border1);
+        border-radius: var(--app-borderradius);
+        display: flex;
+        flex-direction: column;
+        gap: var(--spacing);
+        padding: var(--padding);
+        .transition(
+            background-color 0.2s ease-out,
+            border-color 0.2s ease-out,
+            box-shadow 0.2s ease-out;
+        );
+
+        >.icon {
+            color: var(--color-icon2);
+            .size(var(--icon-size));
+            .transition(color 0.2s ease-out);
+        }
+
+        >.title {
+            color: var(--color-text3);
+            .transition(color 0.2s ease-out);
+        }
+
+        >.text {
+            color: var(--color-text1);
+            text-align: center;
+            .transition(color 0.2s ease-out);
+        }
+
+        &:hover {
+            background-color: var(--color-button1);
+        }
+
+        &.selected {
+            background-color: var(--color-button2);
+            border-color: var(--color-border3);
+
+            >.icon {
+                color: var(--color-icon5);
+            }
+
+            >.title {
+                color: var(--color-text5);
+            }
+
+            >.text {
+                color: var(--color-text4);
+            }
+        }
+
+        // Media queries.
+
+        .r-max(@break-sm, {
+            --icon-size: 30px;
+            --spacing: 8px;
+        });
+
+        .r-max(@break-xs, {
+            --icon-size: 26px;
+            --spacing: 5px;
+        });
+    }
+};

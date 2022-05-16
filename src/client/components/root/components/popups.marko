@@ -1,0 +1,67 @@
+import appm from 'js/app-manager'
+
+class {
+    onCreate() {
+        this.state = {
+            visible: false
+        }
+
+        this.showPopup = this.showPopup.bind(this)
+        this.popupHidden = this.popupHidden.bind(this)
+    }
+
+    onMount() {
+        appm.on('showPopup', this.showPopup)
+        appm.on('popupHidden', this.popupHidden)
+    }
+
+    onDestroy() {
+        appm.off('showPopup', this.showPopup)
+        appm.off('popupHidden', this.popupHidden)
+    }
+
+    // Getters & Setters.
+
+    isVisible() {
+        return this.state.visible
+    }
+
+    // Functions.
+
+    hidePopup() {
+        if(!this.state.visible || !this.component) {
+            return
+        }
+
+        this.component.hide()
+    }
+
+    popupHidden() {
+        this.state.visible = false
+    }
+
+    showPopup(name, args) {
+        this.state.visible = true
+
+        this.update()
+
+        const loaderPopup = this.getComponent('loaderPopup')
+
+        loaderPopup.once('loaded', () => {
+            this.component = loaderPopup.getComponentLoaded()
+
+            if(!this.component || !this.component.show) {
+                console.log('Failed to load popup.')
+                return
+            }
+
+            this.component.show(args)
+        })
+
+        loaderPopup.loadFromName(`popup-${name}`)
+    }
+}
+
+<if(state.visible)>
+    <dynamic key='loaderPopup' />
+</if>

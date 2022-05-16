@@ -1,0 +1,143 @@
+static const icons = {
+    '404': require('assets/images/icons/404.svg'),
+    adjust: require('assets/images/icons/adjust.svg'),
+    archive: require('assets/images/icons/archive.svg'),
+    arrow: require('assets/images/icons/arrow.svg'),
+    arrowDouble: require('assets/images/icons/arrow-double.svg'),
+    arrowLong: require('assets/images/icons/arrow-long.svg'),
+    arrowTo: require('assets/images/icons/arrow-to.svg'),
+    atom: require('assets/images/icons/atom.svg'),
+    bell: require('assets/images/icons/bell.svg'),
+    bellOff: require('assets/images/icons/bell-off.svg'),
+    bin: require('assets/images/icons/bin.svg'),
+    block: require('assets/images/icons/block.svg'),
+    bold: require('assets/images/icons/bold.svg'),
+    book: require('assets/images/icons/book.svg'),
+    bookOpen: require('assets/images/icons/book-open.svg'),
+    cake: require('assets/images/icons/cake.svg'),
+    camera: require('assets/images/icons/camera.svg'),
+    cards: require('assets/images/icons/cards.svg'),
+    channel: require('assets/images/icons/channel.svg'),
+    chat: require('assets/images/icons/chat.svg'),
+    check: require('assets/images/icons/check.svg'),
+    chip: require('assets/images/icons/chip.svg'),
+    circle: require('assets/images/icons/circle.svg'),
+    clock: require('assets/images/icons/clock.svg'),
+    close: require('assets/images/icons/close.svg'),
+    code: require('assets/images/icons/code.svg'),
+    comment: require('assets/images/icons/comment.svg'),
+    comments: require('assets/images/icons/comments.svg'),
+    cookie: require('assets/images/icons/cookie.svg'),
+    delete: require('assets/images/icons/delete.svg'),
+    details: require('assets/images/icons/details.svg'),
+    ellipsis: require('assets/images/icons/ellipsis.svg'),
+    emoji: require('assets/images/icons/emoji.svg'),
+    envelope: require('assets/images/icons/envelope.svg'),
+    error: require('assets/images/icons/error.svg'),
+    eye: require('assets/images/icons/eye.svg'),
+    eyeClosed: require('assets/images/icons/eye-closed.svg'),
+    eyePeek: require('assets/images/icons/eye-peek.svg'),
+    exit: require('assets/images/icons/exit.svg'),
+    fire: require('assets/images/icons/fire.svg'),
+    flag: require('assets/images/icons/flag.svg'),
+    folder: require('assets/images/icons/folder.svg'),
+    gamepad: require('assets/images/icons/gamepad.svg'),
+    globe: require('assets/images/icons/globe.svg'),
+    grip: require('assets/images/icons/grip.svg'),
+    hand: require('assets/images/icons/hand.svg'),
+    hashtag: require('assets/images/icons/hashtag.svg'),
+    heart: require('assets/images/icons/heart.svg'),
+    image: require('assets/images/icons/image.svg'),
+    instagram: require('assets/images/icons/instagram.svg'),
+    italic: require('assets/images/icons/italic.svg'),
+    karma: require('assets/images/icons/karma.svg'),
+    key: require('assets/images/icons/key.svg'),
+    lamp: require('assets/images/icons/lamp.svg'),
+    link: require('assets/images/icons/link.svg'),
+    linkExternal: require('assets/images/icons/link-external.svg'),
+    list: require('assets/images/icons/list.svg'),
+    listOl: require('assets/images/icons/list-ol.svg'),
+    listUl: require('assets/images/icons/list-ul.svg'),
+    loading: require('assets/images/icons/loading.svg'),
+    lock: require('assets/images/icons/lock.svg'),
+    logo: require('assets/images/logo.svg'),
+    logoDev: require('assets/images/logo-iconica.svg'),
+    logoQuina: require('assets/images/logo-quina.svg'),
+    logoSymbol: require('assets/images/logo-symbol.svg'),
+    marker: require('assets/images/icons/marker.svg'),
+    menu: require('assets/images/icons/menu.svg'),
+    minus: require('assets/images/icons/minus.svg'),
+    moon: require('assets/images/icons/moon.svg'),
+    news: require('assets/images/icons/news.svg'),
+    pencil: require('assets/images/icons/pencil.svg'),
+    pin: require('assets/images/icons/pin.svg'),
+    plus: require('assets/images/icons/plus.svg'),
+    poll: require('assets/images/icons/poll.svg'),
+    post: require('assets/images/icons/post.svg'),
+    reject: require('assets/images/icons/reject.svg'),
+    question: require('assets/images/icons/question.svg'),
+    quotes: require('assets/images/icons/quotes.svg'),
+    search: require('assets/images/icons/search.svg'),
+    send: require('assets/images/icons/send.svg'),
+    send2: require('assets/images/icons/send2.svg'),
+    settings: require('assets/images/icons/settings.svg'),
+    shield: require('assets/images/icons/shield.svg'),
+    skull: require('assets/images/icons/skull.svg'),
+    sort: require('assets/images/icons/sort.svg'),
+    spoiler: require('assets/images/icons/spoiler.svg'),
+    stats: require('assets/images/icons/stats.svg'),
+    strikeThrough: require('assets/images/icons/strikethrough.svg'),
+    sun: require('assets/images/icons/sun.svg'),
+    sync: require('assets/images/icons/sync.svg'),
+    tag: require('assets/images/icons/tag.svg'),
+    title: require('assets/images/icons/title.svg'),
+    twitter: require('assets/images/icons/twitter.svg'),
+    unlock: require('assets/images/icons/unlock.svg'),
+    user: require('assets/images/icons/user.svg'),
+    userId: require('assets/images/icons/user-id.svg'),
+    userMinus: require('assets/images/icons/user-minus.svg'),
+    userPlus: require('assets/images/icons/user-plus.svg')
+}
+
+class {
+    onInput(input) {
+        this.state = {
+            name: input.name
+        }
+
+        this.rotation = input.flip ? 180 : (input.rotation || 0)
+
+        if(this.mounted && this.rotation) {
+            this.applyRotation()
+        }
+    }
+
+    onMount() {
+        if(this.rotation) {
+            this.applyRotation()
+        }
+
+        this.mounted = true
+    }
+
+    applyRotation() {
+        const svg = this.getEl().querySelector('svg')
+        svg.style.transform = `rotate(${this.rotation}deg)`
+    }
+
+    setName(name) {
+        this.state.name = name
+    }
+}
+
+<div.icon class=input.class on-click('emit', 'click')>
+    $!{icons[state.name]}
+</div>
+
+style.less {
+    .icon {
+        >svg {
+            .size(100%);
+        }
+    }
+};

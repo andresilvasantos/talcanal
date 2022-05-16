@@ -1,0 +1,56 @@
+$ const group = input.group || {}
+
+<button-text.button-group.align-left
+    class=[input.class, group.loading ? 'loading' : '']
+    icon=(group.loading ? 'loading' : group.icon)
+    iconRotation=(group.iconRotation || 0)
+    text=group.name
+    on-click('emit', 'click')
+    on-middleClick('emit', 'middleClick')
+>
+    <${data.renderBody} />
+</button-text>
+
+style.less {
+    .button-default.button-text.button-group {
+        --backgroundcolor: transparent;
+        --color: var(--color-text3);
+        --fontfamily: @font-semibold;
+        --fontsize: 15px;
+
+        // TODO
+        --height: 45px;
+
+        border: none;
+
+        >.text {
+            text-transform: uppercase;
+        }
+
+        &:hover {
+            --backgroundcolor: var(--color-button1);
+        }
+
+        &.selected {
+            --backgroundcolor: var(--color-button2);
+        }
+
+        &:hover,
+        &.selected {
+            --color: var(--color-text4);
+        }
+
+        &.loading {
+            >.icon {
+                .svg-loading();
+            }
+        }
+
+        // Media queries.
+
+        .r-max(@break-sm, {
+            --fontsize: 14px;
+            --height: 36px;
+        });
+    }
+};

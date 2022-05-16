@@ -1,0 +1,44 @@
+import appm from 'js/app-manager'
+
+class {
+    onMount() {
+        if(!appm.isSidebarVisible()) {
+            appm.emit('toggleSidebar')
+        }
+    }
+
+    createChatRequested() {
+        appm.showPopup('createChat')
+    }
+}
+
+$ const trChats = appm.tr('chats') || {}
+$ const trNoChat = trChats.noChat || {}
+
+<pane-default.pane-nochat
+    key='root'
+    allowBack
+    class=input.class
+    disableRefresh
+    idPage='chats'
+    title=trChats.title
+>
+    <@contents>
+        <contents-empty
+            icon='chat'
+            iconButton='plus'
+            text=trNoChat.text
+            textButton=trChats.buttonCreateChat
+            title=trNoChat.title
+            on-click('createChatRequested')
+        />
+    </@contents>
+</pane-default>
+
+style.less {
+    .pane-nochat {
+        >.contents {
+            .flex-center();
+        }
+    }
+}

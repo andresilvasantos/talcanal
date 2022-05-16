@@ -1,0 +1,414 @@
+import appm from 'js/app-manager'
+
+class {
+    onCreate(input) {
+        this.state = {
+            index: input.index || 0,
+            options: input.options || [],
+            optionsVisible: false,
+            valid: true
+        }
+
+        this.closeOptions = this.closeOptions.bind(this)
+    }
+
+    onInput(input) {
+        if(!input.noExternalUpdate) {
+            this.state.options = input.options || []
+
+            if(input.hasOwnProperty('index')) {
+                this.setIndex(input.index)
+            }
+
+            if(this.mounted) {
+                this.setStateDirty('options')
+            }
+        }
+    }
+
+    onMount() {
+        this.mounted = true
+    }
+
+    onDestroy() {
+        appm.off('resize', this.closeOptions)
+        appm.off('scroll', this.closeOptions)
+    }
+
+    // Getters & Setters.
+
+    getIndex() {
+        return this.state.index
+    }
+
+    getOption() {
+        return this.state.options[this.state.index]
+    }
+
+    setIndex(index) {
+        if(index >= this.state.options.length) {
+            return
+        }
+
+        this.state.index = index
+    }
+
+    setOption(idOption) {
+        for(const [index, option] of (this.state.options || []).entries()) {
+            const isObject = typeof option === 'object' && option !== null
+
+            if((isObject && idOption == option.id) || idOption == option) {
+                return this.setIndex(index)
+            }
+        }
+    }
+
+    setValid(valid) {
+        this.state.valid = valid
+    }
+
+    // Functions.
+
+    clearOption() {
+        this.setIndex(-1)
+        this.closeOptions()
+        this.setValid(true)
+
+        this.emit('optionChanged', this.state.index, '')
+    }
+
+    closeOptions() {
+        this.state.optionsVisible = false
+
+        this.update()
+
+        const buttonMain = this.getEl('buttonMain')
+
+        if(window.innerWidth > 480) {
+            buttonMain.style.width = 'unset'
+        }
+    }
+
+    optionSelected(index, option) {
+        this.setIndex(index)
+        this.closeOptions()
+        this.setValid(true)
+
+        this.emit('optionChanged', this.state.index, option)
+    }
+
+    toggleOptions() {
+        this.setValid(true)
+
+        this.state.optionsVisible = !this.state.optionsVisible
+
+        if(this.state.optionsVisible) {
+            this.update()
+
+            const buttonMain = this.getEl('buttonMain')
+            const options = this.getEl('options')
+            const bbButton = buttonMain.getBoundingClientRect()
+            const bbOptions = options.getBoundingClientRect()
+            const higherThanWindow = bbButton.y + bbButton.height + bbOptions.height > window.innerHeight
+            const widerThanWindow = bbButton.x + bbOptions.width > window.innerWidth
+
+            if(higherThanWindow) {
+                this.getEl().classList.add('invert')
+            }
+            else {
+                this.getEl().classList.remove('invert')
+            }
+
+            options.style.minWidth = `${bbButton.width}px`
+            options.style.top = (
+                higherThanWindow ?
+                `${bbButton.y - bbOptions.height}px` :
+                `${bbButton.y + bbButton.height}px`
+            )
+
+            if(bbButton.x + bbButton.width > window.innerWidth * 0.75) {
+                options.style.left = 'unset'
+                options.style.right = `${window.innerWidth - bbButton.x - bbButton.width}px`
+            }
+            else {
+                options.style.right = 'unset'
+                //options.style.left = `${bbButton.x}px`
+            }
+
+            if(bbButton.width < bbOptions.width && window.innerWidth > 480) {
+                buttonMain.style.width = `${bbOptions.width}px`
+            }
+
+            appm.on('resize', this.closeOptions)
+            appm.on('scroll', this.closeOptions)
+        }
+        else {
+            this.closeOptions()
+
+            appm.off('resize', this.closeOptions)
+            appm.off('scroll', this.closeOptions)
+        }
+    }
+}
+
+<div.dropdown
+    class=[
+        input.class,
+        state.optionsVisible ? 'options-visible' : '',
+        state.valid ? '' : 'invalid'
+    ]
+    tabindex='-1'
+    on-focusout('closeOptions')
+>
+    $ const optionCurrent = state.index < 0 ? '' : state.options[state.index]
+    $ const isObject = typeof optionCurrent === 'object' && optionCurrent !== null
+    $ const icon = isObject ? (optionCurrent.icon || input.icon) : input.icon
+    $ const iconAfter = isObject && optionCurrent.icon
+    $ const text = isObject ? (optionCurrent.text || optionCurrent.id) : optionCurrent
+    $ const validOption = state.options.length && state.index >= 0
+
+    <button-text.button-main.align-left
+        key='buttonMain'
+        class=[
+            input.class, validOption ? 'valid-option' : '',
+            iconAfter ? 'icon-after' : '',
+            input.sort ? 'iconarrow-big' : ''
+        ]
+        icon=icon
+        text=text
+        tooltip=input.tooltip
+        on-click('toggleOptions')
+    >
+        <if(input.text && (!input.hideLabel || !validOption))>
+            <span.label>
+                <if(validOption)>
+                    ${input.text}:
+                </if>
+                <else>
+                    ${input.text}
+                </else>
+            </span>
+        </if>
+
+        <if(input.isTag && validOption && optionCurrent.color)>
+            <div.tag-indicator
+                style=`background-color: var(--color-tags-${optionCurrent.color})`
+            />
+        </if>
+        <else-if(input.isChannel && validOption)>
+            <image-circle.small image=optionCurrent.image />
+        </else-if>
+
+        <icon.arrow
+            name=(input.sort ? 'sort' : 'arrow')
+            rotation=(input.sort ? 0 : 90)
+        />
+    </button-text>
+
+    <if(state.optionsVisible)>
+        <div.wrapper-options key='options'>
+            <div.overlay on-click('closeOptions') />
+
+            <div.options>
+                <if(validOption && input.allowClear)>
+                    <button-text.button-clear.button-option.align-left
+                        class=input.class
+                        icon='bin'
+                        text='Limpar'
+                        on-click('clearOption')
+                    />
+                </if>
+                <for|option, index| of=input.options>
+                    $ const isObject = typeof option === 'object' && option !== null
+                    $ const icon = isObject ? option.icon : ''
+                    $ const selected = validOption && state.index == index
+                    $ const text = isObject ? (option.text || option.id) : option
+
+                    <button-text.button-option.align-left
+                        class=[input.class, selected ? 'selected' : '']
+                        icon=icon
+                        text=text
+                        on-click('optionSelected', index, isObject ? option.id : option)
+                    >
+                        <if(input.isTag && option.color)>
+                            <div.tag-indicator
+                                style=`background-color: var(--color-tags-${option.color})`
+                            />
+                        </if>
+                        <else-if(input.isChannel)>
+                            <image-circle.small image=option.image />
+                        </else-if>
+                    </button-text>
+                </for>
+            </div>
+        </div>
+    </if>
+</div>
+
+style.less {
+    .dropdown {
+        --iconarrow-size: 14px;
+        --iconoption-size: 20px;
+        --options-maxheight: 350px;
+        --tagindicator-size: 20px;
+
+        display: flex;
+        flex-direction: column;
+        position: relative;
+
+        .tag-indicator() {
+            border-radius: 50%;
+            flex-shrink: 0;
+            order: -1;
+            .size(var(--tagindicator-size));
+        }
+
+        .image-circle {
+            flex-shrink: 0;
+            order: -1;
+        }
+
+        >.button-main {
+            >.label {
+                color: var(--color-text2);
+                font-size: var(--fontsize);
+                order: -1;
+            }
+
+            >.text {
+                white-space: nowrap;
+            }
+
+            >.arrow {
+                color: var(--icon-color);
+                display: flex;
+                margin-left: auto;
+                pointer-events: none;
+                .size(var(--icon-size));
+            }
+
+            &:not(.valid-option) {
+                --color: rgba(var(--color-text4-rgb), 0.5);
+                --fontfamily: @font;
+            }
+
+            &:not(.icon-after) {
+                >.icon:not(.arrow) {
+                    order: -1;
+                }
+            }
+
+            >.tag-indicator {
+                .tag-indicator();
+            }
+        }
+
+        >.wrapper-options {
+            border: 1px solid var(--color-border1);
+            border-radius: var(--app-borderradius);
+            opacity: 0;
+            overflow: hidden;
+            position: fixed;
+            z-index: 3;
+            .box-shadow(0 4px 10px 0 fade(@color-black, 15));
+            .transition(opacity 0.2s ease-out);
+
+            >.overlay {
+                pointer-events: none;
+                .fixed-fill();
+            }
+
+            >.options {
+                background-color: var(--color-background2);
+                max-height: var(--options-maxheight);
+                pointer-events: none;
+                position: relative;
+                z-index: 2;
+                .scroll-custom();
+
+                >.button-option {
+                    --backgroundcolor: transparent;
+                    --icon-size: var(--iconoption-size);
+
+                    border: none;
+                    border-radius: 0;
+                    flex-shrink: 0;
+                    pointer-events: none;
+                    white-space: nowrap;
+
+                    &.button-clear {
+                        --icon-size: 16px;
+                    }
+
+                    &.selected {
+                        --backgroundcolor: var(--color-button1);
+                    }
+
+                    &:hover {
+                        --backgroundcolor: var(--color-button2);
+                    }
+
+                    >.tag-indicator {
+                        .tag-indicator();
+                    }
+                }
+            }
+        }
+
+        &.options-visible {
+            >.button-main {
+                --backgroundcolor: var(--color-button1);
+            }
+
+            >.wrapper-options {
+                opacity: 1;
+
+                >.overlay {
+                    pointer-events: auto;
+                }
+
+                >.options {
+                    pointer-events: auto;
+
+                    >.button-option {
+                        pointer-events: auto;
+                    }
+                }
+            }
+
+            &:not(.invert) {
+                >.button-main {
+                    border-bottom-color: transparent;
+                    border-bottom-left-radius: 0;
+                    border-bottom-right-radius: 0;
+                }
+
+                >.wrapper-options {
+                    border-top: 1px solid var(--color-border1);
+                    border-top-left-radius: 0;
+                    border-top-right-radius: 0;
+                }
+            }
+
+            &.invert {
+                >.button-main {
+                    border-top-color: transparent;
+                    border-top-left-radius: 0;
+                    border-top-right-radius: 0;
+                }
+
+                >.wrapper-options {
+                    border-bottom: 1px solid var(--color-border1);
+                    border-bottom-left-radius: 0;
+                    border-bottom-right-radius: 0;
+                }
+            }
+        }
+
+        &.invalid {
+            >.button-main {
+                --bordercolor: var(--color-warning);
+            }
+        }
+    }
+};

@@ -1,0 +1,173 @@
+import { getIndexFromId, processObjectsTr } from 'js/utils'
+import { modActionOptions, modTriggerDataTypes, modTriggerTypes } from 'js/default-vars'
+
+class {
+    onCreate(input) {
+        this.state = {
+            indexNumberCompare: 0,
+            trigger: input.trigger || {}
+        }
+    }
+
+    onInput(input) {
+        this.state.trigger = input.trigger || {}
+
+        const trigger = this.state.trigger || {}
+
+        if(['karma', 'age'].includes(trigger.type)) {
+            this.state.indexNumberCompare = trigger && trigger.value.slice(0, 1) == '>' ? 1 : 0
+        }
+    }
+
+    onMount() {
+        const trigger = this.state.trigger || {}
+
+        if(['karma', 'age'].includes(trigger.type)) {
+            this.state.indexNumberCompare = trigger && trigger.value.slice(0, 1) == '>' ? 1 : 0
+        }
+    }
+
+    // Functions.
+
+    actionChanged(index, idAction) {
+        this.state.trigger.action = idAction
+
+        this.setStateDirty('trigger')
+    }
+
+    numberCompareChanged(index) {
+        let comparisonString = '<'
+
+        if(index == 1) {
+            comparisonString = '>'
+        }
+
+        this.state.trigger.value = comparisonString + this.state.trigger.value.slice(1)
+    }
+
+    typeChanged(index, idTrigger) {
+        this.state.trigger.type = idTrigger
+        this.state.trigger.value = ''
+
+        this.setStateDirty('trigger')
+    }
+
+    typeDataChanged(index, typeData) {
+        this.state.trigger.typeData = typeData
+
+        this.setStateDirty('trigger')
+    }
+
+    valueChanged(value) {
+        const trigger = this.state.trigger
+
+        if(['karma', 'age'].includes(trigger.type)) {
+            if(['<', '>'].includes(trigger.value.slice(0, 1))) {
+                trigger.value = trigger.value.slice(0, 1) + value
+            }
+            else {
+                const compareType = this.state.indexNumberCompare ? '>' : '<'
+
+                trigger.value = `${compareType}${value}`
+            }
+        }
+        else {
+            trigger.value = value
+        }
+    }
+}
+
+$ const trAutoMod = input.trAutoMod || {}
+$ const trigger = state.trigger || {}
+$ const typeNumber = ['karma', 'age'].includes(state.trigger.type)
+
+<div.trigger-automod class=[input.class, typeNumber ? 'type-number' : '']>
+    <dropdown
+        key='dropdownTypeData'
+        index=getIndexFromId(modTriggerDataTypes, trigger.typeData)
+        options=processObjectsTr(modTriggerDataTypes, trAutoMod.typesData)
+        on-optionChanged('typeDataChanged')
+    />
+
+    <dropdown
+        key='dropdownType'
+        index=getIndexFromId(modTriggerTypes, trigger.type)
+        options=processObjectsTr(modTriggerTypes, trAutoMod.types)
+        on-optionChanged('typeChanged')
+    />
+
+    <dropdown
+        key='dropdownAction'
+        index=getIndexFromId(modActionOptions, trigger.action)
+        options=processObjectsTr(modActionOptions, trAutoMod.actions)
+        text='Ação'
+        on-optionChanged('actionChanged')
+    />
+
+    <button-icon.button-remove.light.danger
+        icon='bin'
+        on-click('emit', 'removeRequested')
+    />
+
+    <div.wrapper-inputvalue>
+        <if(typeNumber)>
+            <dropdown
+                key='dropdownNumberCompare'
+                index=state.indexNumberCompare
+                options=['Inferior a', 'Superior a']
+                on-optionChanged('numberCompareChanged')
+            />
+        </if>
+
+        <input-text.input-value
+            key='inputValue'
+            maxlength=1000
+            number=typeNumber
+            placeholder=trAutoMod.inputs[trigger.type]
+            text=(typeNumber ? trigger.value.slice(1) : trigger.value)
+            on-valueChanged('valueChanged')
+        />
+    </div>
+</div>
+
+style.less {
+    .trigger-automod {
+        --inputnumber-width: 100px;
+        --padding: 10px;
+        --spacing: 10px;
+
+        //background-color: var(--color-background4);
+        border: 1px solid var(--color-border1);
+        border-radius: var(--app-borderradius);
+        display: flex;
+        gap: var(--spacing);
+        padding: var(--padding);
+        .transition(background-color 0.2s ease-out, border-color 0.2s ease-out;);
+
+        >.button-remove {
+            margin-left: auto;
+        }
+
+        >.wrapper-inputvalue {
+            display: flex;
+            gap: var(--spacing);
+            flex-grow: 1;
+
+            >.input-number {
+                width: var(--inputnumber-width);
+            }
+
+            >.input-text {
+                flex-grow: 1;
+            }
+        }
+
+        &:hover {
+            border-color: var(--color-border2);
+        }
+
+        //&:not(.type-number) {
+            flex-wrap: wrap;
+        //}
+    }
+};

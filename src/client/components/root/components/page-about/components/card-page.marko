@@ -1,0 +1,160 @@
+import appm from 'js/app-manager'
+
+$ const page = input.page || {}
+$ const text = input.customText ? input.text : appm.tr(`${page.id}.description`)
+$ const title = input.customText ? input.title : appm.tr(`${page.id}.title`)
+
+<button-default.card-page class=input.class on-click('emit', 'click')>
+    <div.wrapper-image>
+        <image.cover lazyload src=`/assets/images/banners/pages/${page.id}.jpg` />
+
+        <div.outline />
+    </div>
+
+    <div.bar-info>
+        <icon name=page.icon />
+
+        <div.wrapper-text>
+            <if(title)>
+                <span.title>
+                    ${title}
+                </span>
+            </if>
+
+            <if(text)>
+                <text-p.description.small>
+                    ${text}
+                </text-p>
+            </if>
+        </div>
+    </div>
+
+    <div.outline />
+</button-default>
+
+style.less {
+    .card-page {
+        --barinfo-height: 90px;
+        --barinfo-padding-h: 30px;
+        --barinfo-spacing: 20px;
+        --borderradius: var(--app-borderradius3);
+        --height: 300px;
+        --icon-height: 36px;
+        --icon-width: 45px;
+        --outline-size: 2px;
+        --title-fontsize: 25px;
+        --wrappertext-spacing: 5px;
+
+        background-color: var(--color-background2);
+        border-radius: var(--borderradius);
+        border: 1px solid var(--color-border1);
+        display: flex;
+        flex-direction: column;
+        height: var(--height);
+        position: relative;
+        .transition(background-color 0.2s ease-out, border-color 0.2s ease-out;);
+
+        >.wrapper-image {
+            flex: 1 1 0;
+            margin: 10px 10px 0;
+            opacity: 0.9;
+            position: relative;
+            .transition(opacity 0.2s ease-out);
+
+            >.image {
+                border-radius: var(--app-borderradius2);
+                overflow: hidden;
+                .absolute-fill();
+            }
+
+            >.outline {
+                border-radius: var(--app-borderradius2);
+                .absolute-fill();
+                .box-shadow(0 0 0 1px var(--color-border2));
+            }
+        }
+
+        >.bar-info {
+            align-items: center;
+            display: flex;
+            gap: var(--barinfo-spacing);
+            height: var(--barinfo-height);
+            padding: 0 var(--barinfo-padding-h);
+            position: relative;
+            .transition(background-color 0.2s ease-out);
+
+            >.icon {
+                color: var(--color-icon2);
+                flex-shrink: 0;
+                .size(var(--icon-width), var(--icon-height));
+                .transition(color 0.2s ease-out);
+            }
+
+            >.wrapper-text {
+                display: flex;
+                flex-direction: column;
+                gap: var(--wrappertext-spacing);
+
+                >.title {
+                    color: var(--color-text3);
+                    font-family: @font-semibold;
+                    font-size: var(--title-fontsize);
+                    line-height: 1;
+                    .transition(color 0.2s ease-out);
+                }
+
+                >.description {
+                    color: var(--color-text1);
+                    .transition(color 0.2s ease-out);
+                }
+            }
+        }
+
+        >.outline {
+            border-radius: var(--borderradius);
+            opacity: 0;
+            .absolute-fill();
+            .box-shadow(0 0 0 var(--outline-size) var(--color-accent1));
+            .transition(opacity 0.2s ease-out);
+        }
+
+        &.big {
+            --height: 430px;
+        }
+
+        &:hover {
+            background-color: var(--color-button1);
+            border-color: var(--color-accent1);
+            .box-shadow(0 4px 10px 0 fade(@color-black, 5));
+
+            >.wrapper-image {
+                opacity: 1;
+
+                >.outline {
+                    .box-shadow(0 0 0 1px var(--color-border1));
+                }
+            }
+
+            >.bar-info {
+                >.icon {
+                    color: var(--color-accent1);
+                    .scale(1.05);
+                }
+
+                >.wrapper-text {
+                    >.title {
+                        color: var(--color-text4);
+                    }
+
+                    >.description {
+                        color: var(--color-text3);
+                    }
+                }
+            }
+
+            >.outline {
+                opacity: 1;
+            }
+        }
+    }
+};

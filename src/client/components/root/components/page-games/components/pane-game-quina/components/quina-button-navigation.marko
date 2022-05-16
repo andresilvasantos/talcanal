@@ -1,0 +1,90 @@
+import appm from 'js/app-manager'
+
+class {
+    onCreate() {
+        this.menuClosed = this.menuClosed.bind(this)
+    }
+
+    onMount() {
+        this.rootComponent = this.getComponent('root')
+
+        this.rootComponent.on('menuClosed', this.menuClosed)
+    }
+
+    // Functions.
+
+    menuClosed() {
+        this.getComponent('buttonMain').getEl().classList.remove('selected')
+    }
+
+    showMenu() {
+        this.getComponent('buttonMain').getEl().classList.add('selected')
+        this.rootComponent.showMenu()
+
+        appm.addAnalyticsEvent('quinaButtonNavigation', 'showMenu')
+    }
+}
+
+<button-menu.quina-button-navigation key='root' class=input.class>
+    <@button>
+        <button-icon
+            key='buttonMain'
+            disabled=input.disabled
+            icon=input.icon
+            tooltip=input.tooltip
+            on-click('showMenu')
+        />
+    </@button>
+
+    <@menu>
+        <button-icon
+            disabled=(input.numberChallenge <= 1)
+            icon='arrowDouble'
+            iconRotation=180
+            on-click('emit', 'previousChallengeRequested', 10)
+        />
+
+        <button-icon
+            disabled=(input.numberChallenge <= 1)
+            icon='arrow'
+            iconRotation=180
+            on-click('emit', 'previousChallengeRequested', 1)
+        />
+
+        <input-text.input-challenge
+            number
+            text=input.numberChallenge
+            on-valueChanged('emit', 'challengeRequested')
+        />
+
+        <button-icon
+            disabled=(input.numberChallenge >= input.maxNumberChallenge)
+            icon='arrow'
+            on-click('emit', 'nextChallengeRequested', 1)
+        />
+
+        <button-icon
+            disabled=(input.numberChallenge >= input.maxNumberChallenge)
+            icon='arrowDouble'
+            on-click('emit', 'nextChallengeRequested', 10)
+        />
+    </@menu>
+</button-menu>
+
+style.less {
+    .quina-button-navigation {
+        --inputchallenge-width: 70px;
+        --menu-padding: 15px;
+
+        >.menu {
+            align-items: center;
+            display: flex;
+            gap: var(--controls-spacing);
+            padding: var(--menu-padding);
+
+            >.input-challenge {
+                width: var(--inputchallenge-width);
+            }
+        }
+    }
+};

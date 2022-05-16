@@ -1,0 +1,198 @@
+$ const option = input.option || {}
+
+<button-default.button-optionpoll
+    class=[
+        input.class,
+        input.isWinner ? 'winner' : '',
+        input.selected ? 'selected' : '',
+        option.hasUserVoted ? 'voted' : ''
+    ]
+    disabled=input.disabled
+    on-click('emit', 'selectRequested')
+>
+    <div.circle-selection />
+
+    <div.wrapper>
+        <div.info>
+            <div.wrapper-name>
+                <if(option.hasUserVoted)>
+                    <div.wrapper-iconvoted>
+                        <icon name='check' />
+                    </div>
+                </if>
+
+                <span.name>
+                    ${option.name}
+                </span>
+            </div>
+
+            <span.count-votes>
+                ${option.countVotes}
+            </span>
+        </div>
+
+        <div.bar-votespercentage>
+            <div.fill style=`width: ${input.percentage}%;` />
+        </div>
+    </div>
+</button-default>
+
+style.less {
+    .button-optionpoll {
+        --barpercentage-height: 5px;
+        --circleselection-size: 20px;
+        --countvotes-fontsize: 16px;
+        --iconvoted-size: 14px;
+        --info-spacing: 20px;
+        --name-fontsize: 16px;
+        --spacing: 10px;
+        --wrapper-spacing: 10px;
+        --wrappericonvoted-size: 20px;
+        --wrappername-spacing: 10px;
+
+        align-items: center;
+        background-color: var(--color-background2);
+        border: 1px solid var(--color-border1);
+        border-radius: var(--app-borderradius);
+        display: flex;
+        gap: var(--spacing);
+        padding: var(--app-padding);
+        .transition(border-color 0.2s ease-out);
+
+        >.circle-selection {
+            border: 1px solid var(--color-border1);
+            border-radius: 50%;
+            .flex-center();
+            .size(var(--circleselection-size));
+            .transition(background-color 0.2s ease-out, border-color 0.2s ease-out;);
+        }
+
+        >.wrapper {
+            display: flex;
+            flex-direction: column;
+            flex-grow: 1;
+            gap: var(--wrapper-spacing);
+
+            >.info {
+                align-items: center;
+                display: flex;
+                gap: var(--info-spacing);
+                justify-content: space-between;
+
+                >.wrapper-name {
+                    align-items: center;
+                    display: flex;
+                    gap: var(--wrappername-spacing);
+
+                    >.wrapper-iconvoted {
+                        background-color: var(--color-accent1);
+                        border-radius: 50%;
+                        flex-shrink: 0;
+                        .size(var(--wrappericonvoted-size));
+                        .flex-center();
+
+                        >.icon {
+                            color: var(--color-background1);
+                            display: flex;
+                            .size(var(--iconvoted-size));
+                        }
+                    }
+
+                    >.name {
+                        color: var(--color-text3);
+                        font-family: @font-medium;
+                        font-size: var(--name-fontsize);
+                        line-height: 1.2;
+                        .transition(color 0.2s ease-out);
+                    }
+                }
+
+                >.count-votes {
+                    color: var(--color-text3);
+                    font-size: var(--countvotes-fontsize);
+                    line-height: 1.2;
+                }
+            }
+
+            >.bar-votespercentage {
+                background-color: var(--color-background3);
+                border-radius: 3px;
+                .size(100%, var(--barpercentage-height));
+
+                >.fill {
+                    background-color: var(--color-icon1);
+                    border-radius: 3px;
+                    height: 100%;
+                    .transition(background-color 0.2s ease-out, width 0.2s ease-out;);
+                }
+            }
+        }
+
+        &:hover {
+            border-color: var(--color-border3);
+
+            >.circle-selection {
+                border-color: var(--color-border3);
+            }
+
+            >.wrapper {
+                >.info {
+                    >.name {
+                        color: var(--color-text4);
+                    }
+                }
+            }
+        }
+
+        &.selected {
+            border-color: var(--color-accent1);
+        }
+
+        &.selected {
+            >.circle-selection {
+                background-color: var(--color-accent1);
+                border: none;
+            }
+        }
+
+        &.voted {
+            >.wrapper {
+                >.bar-votespercentage {
+                    >.fill {
+                        background-color: var(--color-accent1);
+                    }
+                }
+            }
+        }
+
+        &.winner {
+            >.wrapper {
+                >.bar-votespercentage {
+                    >.fill {
+                        background-color: var(--color-voteup);
+                    }
+                }
+            }
+        }
+
+        &.disabled {
+            opacity: 1;
+
+            >.circle-selection {
+                display: none;
+            }
+        }
+
+        // Media queries.
+
+        .r-max(@break-xs, {
+            --circleselection-size: 18px;
+            --countvotes-fontsize: 14px;
+            --info-spacing: 15px;
+            --name-fontsize: 14px;
+            --wrapper-spacing: 8px;
+            --wrappericonvoted-size: 18px;
+            --wrappername-spacing: 8px;
+        });
+    }
+};

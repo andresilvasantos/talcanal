@@ -1,0 +1,110 @@
+$ const rule = input.rule || {}
+
+<button-default.card-rule
+    class=(input.opened ? 'opened' : '')
+    draggable=input.draggable
+    on-click('emit', 'click')
+    on-dragend('emit', 'dragEnd')
+    on-dragover('emit', 'dragOver')
+    on-dragstart('emit', 'dragStart')
+>
+    <div.bar-title>
+        <text-p.title.big>
+            ${input.number}. ${rule.title}
+        </text-p>
+
+        <div.controls>
+            <if(rule.text && rule.text.length)>
+                <icon name=(input.opened ? 'minus' : 'plus') />
+            </if>
+
+            <${data.renderBody} />
+        </div>
+    </div>
+
+    <if(input.opened && rule.text.length)>
+        <text-p.text>
+            $!{rule.text}
+        </text-p>
+    </if>
+</button-default>
+
+style.less {
+    .card-rule {
+        --icon-size: 18px;
+        --padding: 10px 15px;
+        --spacing: 15px;
+
+        border: 1px solid var(--color-border1);
+        border-radius: var(--app-borderradius);
+        display: flex;
+        flex-direction: column;
+        gap: var(--spacing);
+        padding: var(--padding);
+
+        >.bar-title {
+            align-items: center;
+            display: flex;
+            gap: var(--controls-spacing);
+            justify-content: space-between;
+
+            >.title {
+                color: var(--color-text2);
+                font-family: @font-medium;
+                .transition(color 0.2s ease-out);
+            }
+
+            >.controls {
+                align-items: center;
+                display: flex;
+                gap: var(--controls-spacing);
+
+                >.icon {
+                    color: var(--color-icon2);
+                    .size(var(--icon-size));
+                }
+            }
+        }
+
+        >.text {
+            .text-rich(var(--color-text3));
+        }
+
+        &:hover {
+            background-color: var(--color-button1);
+
+            >.bar-title {
+                >.title {
+                    color: var(--color-text4);
+                }
+
+                >.icon {
+                    color: var(--color-icon3);
+                    .scale(1.1);
+                }
+            }
+        }
+
+        &.opened {
+            background-color: var(--color-button1);
+
+            >.bar-title {
+                >.title {
+                    color: var(--color-text4);
+                }
+            }
+        }
+
+        // Media queries.
+
+        .r-max(@break-sm, {
+            --icon-size: 17px;
+            --padding: 5px 10px;
+            --spacing: 10px;
+        });
+
+        .r-max(@break-xs, {
+            --icon-size: 16px;
+        });
+    }
+};

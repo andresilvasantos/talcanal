@@ -1,0 +1,103 @@
+import appm from 'js/app-manager'
+import quinam from 'js/quina-manager'
+import { setCookie } from 'js/utils'
+
+class {
+    onCreate() {
+        this.syncedAccount = this.syncedAccount.bind(this)
+    }
+
+    onMount() {
+        this.popupComponent = this.getComponent('popup')
+
+        quinam.on('syncAccountSuccess', this.syncedAccount)
+    }
+
+    onDestroy() {
+        quinam.off('syncAccountSuccess', this.syncedAccount)
+    }
+
+    // Getters & Setters.
+
+    hide() {
+        if(!this.visible) {
+            return
+        }
+
+        this.popupComponent.hide()
+    }
+
+    hidden() {
+        this.visible = false
+
+        setCookie('quinaSyncId', true)
+    }
+
+    show(args) {
+        if(this.visible) {
+            return
+        }
+
+        this.visible = true
+
+        this.popupComponent.show()
+    }
+
+    syncAccount() {
+        const inputId = this.getComponent('inputId')
+        const id = inputId.getValue()
+
+        if(id.length != 24) {
+            inputId.setValid(false)
+        }
+
+        quinam.syncAccount(id)
+    }
+
+    syncedAccount() {
+        this.hide()
+    }
+}
+
+$ const trSync = appm.tr('games.quina.sync') || {}
+
+<popup.popup-quina-sync
+    key='popup'
+    class=input.class
+    title=trSync.title
+    on-hidden('hidden')
+>
+    <@form>
+        <text-p.text>
+            $!{trSync.text}
+        </text-p>
+
+        <input-text.big key='inputId' placeholder=trSync.inputId />
+
+        <div.controls>
+            <button-text icon='close' text=trSync.buttonCancel on-click('hide') />
+
+            <button-text icon='sync' text=trSync.buttonSync on-click('syncAccount') />
+        </div>
+    </@form>
+</popup>
+
+style.less {
+    .popup-quina-sync {
+        >.wrapper>.panel {
+            max-width: 700px; // TODO
+
+            >.form {
+                >.text {
+                    color: var(--color-text2);
+                }
+
+                >.controls {
+                    align-self: center;
+                    display: flex;
+                    gap: var(--controls-spacing);
+                }
+            }
+        }
+    }
+};

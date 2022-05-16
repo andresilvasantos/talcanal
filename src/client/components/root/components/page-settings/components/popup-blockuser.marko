@@ -1,0 +1,55 @@
+import appm from 'js/app-manager'
+
+class {
+    onCreate() {
+        this.state = {
+            status: 0
+        }
+    }
+
+    onMount() {
+        this.popupComponent = this.getComponent('popup')
+    }
+
+    // Functions.
+
+    hide() {
+        this.popupComponent.hide()
+    }
+
+    hidden() {
+        this.state.status = 0
+    }
+
+    show(args) {
+        if(this.popupComponent.isVisible()) {
+            return
+        }
+
+        this.popupComponent.show(args[0])
+    }
+
+    submitRequested(user) {
+        if(this.state.status == 1) {
+            return
+        }
+
+        this.state.status = 1
+
+        appm.emit('userBlocked', user)
+        this.hide()
+    }
+}
+
+$ const trBlockUser = appm.tr('settings.tabs.account.usersBlocked.blockUser') || {}
+
+<popup-users
+    key='popup'
+    danger
+    iconButton='block'
+    status=state.status
+    title=trBlockUser.title
+    textButton=trBlockUser.buttonBlock
+    on-hidden('hidden')
+    on-submitRequested('submitRequested')
+/>

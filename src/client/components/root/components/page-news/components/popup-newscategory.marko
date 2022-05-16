@@ -1,0 +1,245 @@
+import appm from 'js/app-manager'
+import { validateNewsCategoryId } from 'js/utils'
+
+class {
+    onCreate() {
+        this.state = {
+            category: {},
+            edit: false,
+            status: 0
+        }
+
+        this.created = this.created.bind(this)
+        this.createError = this.createError.bind(this)
+        this.updated = this.updated.bind(this)
+        this.updateError = this.updateError.bind(this)
+    }
+
+    onMount() {
+        this.popupComponent = this.getComponent('popup')
+
+        appm.on('createItemError', this.createError)
+        appm.on('createItemSuccess', this.created)
+        appm.on('updateItemError', this.updateError)
+        appm.on('updateItemSuccess', this.updated)
+    }
+
+    onDestroy() {
+        appm.off('createItemError', this.createError)
+        appm.off('createItemSuccess', this.created)
+        appm.off('updateItemError', this.updateError)
+        appm.off('updateItemSuccess', this.updated)
+    }
+
+    // Getters & Setters.
+
+    getData() {
+        return this.data
+    }
+
+    setData(category) {
+        this.state.edit = true
+        this.state.category = category
+
+        this.idComponent.setValue(category.id)
+        this.nameComponent.setValue(category.name)
+        this.namesMatchComponent.setValue(category.namesMatch.join(','))
+    }
+
+    // Functions.
+
+    created(type, idRequest, category) {
+        if(idRequest != this.idRequest) {
+            return
+        }
+
+        this.state.status = 0
+
+        this.hide()
+        appm.openPage('news', 'category', false, category)
+    }
+
+    createError(idRequest) {
+        if(idRequest != this.idRequest) {
+            return
+        }
+
+        this.state.status = -1
+    }
+
+    hide() {
+        if(!this.visible || this.state.status == 1) {
+            return
+        }
+
+        this.popupComponent.hide()
+    }
+
+    hidden() {
+        this.state.status = 0
+        this.visible = false
+    }
+
+    keyPressed(event) {
+        switch(event.keyCode) {
+            case 13: // Enter
+                this.submitRequested()
+                break
+            case 27:
+                this.hide()
+        }
+    }
+
+    show(args) {
+        if(this.visible) {
+            return
+        }
+
+        this.visible = true
+
+        this.popupComponent.show()
+
+        this.idComponent = this.getComponent('inputId')
+        this.nameComponent = this.getComponent('inputName')
+        this.namesMatchComponent = this.getComponent('inputNamesMatch')
+
+        if(args[0]) {
+            this.setData(args[0])
+        }
+    }
+
+    submitRequested() {
+        if(this.state.status == 1) {
+            return
+        }
+
+        if(!this.validate()) {
+            return
+        }
+
+        this.state.status = 1
+
+        if(this.state.edit) {
+            appm.updateItem('newsCategory', this.state.category.id, this.data)
+        }
+        else{
+            this.idRequest = appm.createItem('newsCategory', this.data)
+        }
+    }
+
+    updated(type, id, category) {
+        if(id != this.state.category.id) {
+            return
+        }
+
+        this.state.status = 0
+
+        this.hide()
+        appm.openPage('news', 'category', false, category)
+    }
+
+    updateError(type, id) {
+        if(type != 'newsCategory' || id != this.state.category.id) {
+            return
+        }
+
+        this.state.status = -1
+    }
+
+    validate() {
+        const id = this.idComponent.getValue()
+        const name = this.nameComponent.getValue()
+        const namesMatch = this.namesMatchComponent.getValue()
+
+        let validData = true
+
+        if(!validateNewsCategoryId(id)) {
+            this.idComponent.setValid(false)
+            validData = false
+        }
+
+        if(!name.length) {
+            this.nameComponent.setValid(false)
+            validData = false
+        }
+
+        if(!validData) {
+            return false
+        }
+
+        this.data = {
+            id,
+            name,
+            namesMatch
+        }
+
+        return true
+    }
+}
+
+$ const trFormCategory = appm.tr('news.formCategory') || {}
+$ const trInputs = trFormCategory.inputs || {}
+
+<popup.popup-newscategory
+    key='popup'
+    class=input.class
+    title=(state.edit ? trFormCategory.titleEdit : trFormCategory.titleCreate)
+    on-hidden('hidden')
+    on-keyPressed('keyPressed')
+>
+    <@form>
+        <div.inputs>
+            <input-text.big
+                key='inputName'
+                icon='title'
+                maxlength=50
+                noExternalUpdate
+                placeholder=trInputs.name
+                on-keyup('keyPressed')
+            />
+
+            <input-text.big
+                key='inputId'
+                icon='folder'
+                maxlength=20
+                noExternalUpdate
+                placeholder=trInputs.id
+                on-keyup('keyPressed')
+            />
+
+            <input-text.input-namesmatch.big
+                key='inputNamesMatch'
+                icon='folder'
+                noExternalUpdate
+                placeholder=trInputs.namesMatch
+                on-keyup('keyPressed')
+            />
+        </div>
+
+        <button-submit.big
+            loading=(state.status == 1)
+            text=trFormCategory[state.edit ? 'buttonSave' : 'buttonCreate']
+            on-click('submitRequested')
+        />
+    </@form>
+</popup>
+
+style.less {
+    .popup-newscategory {
+        --inputs-spacing: 15px;
+
+        >.wrapper>.panel>.form {
+            >.inputs {
+                .grid(2, var(--inputs-spacing), var(--inputs-spacing));
+
+                >.input-namesmatch {
+                    grid-column: span 2;
+                }
+            }
+
+            >.button-submit {
+                align-self: center;
+            }
+        }
+    }
+};

@@ -1,0 +1,162 @@
+import appm from 'js/app-manager'
+import { getCookie, setCookie } from 'js/utils'
+
+class {
+    onCreate(input) {
+        this.state = {
+            list: input.list || []
+        }
+
+        this.idSidebar = input.id
+        this.setupList()
+    }
+
+    onInput(input) {
+        this.idSidebar = input.id
+        this.state.list = input.list || []
+
+        this.setupList()
+
+        if(this.mounted) {
+            this.setStateDirty('list')
+        }
+    }
+
+    onMount() {
+        this.mounted = true
+    }
+
+    // Functions
+
+    setupList() {
+        if(appm.isUserSignedIn()) {
+            const id = this.idSidebar
+            this.keyCookie = `sidebar${
+                id ? id.charAt(0).toUpperCase() + id.slice(1) : ''
+            }`
+
+            // Load collapsed states from cookies (only if signed in).
+            for(const group of this.state.list) {
+                const value = getCookie(`${this.keyCookie}.${group.id}`)
+
+                switch(value) {
+                    case 'true':
+                        group.collapsed = false
+                        break
+                    case 'false':
+                        group.collapsed = true
+                        break
+                }
+            }
+        }
+    }
+
+    toggleCollapse(group) {
+        group.collapsed = !group.collapsed
+
+        if(appm.isUserSignedIn()) {
+            setCookie(`${this.keyCookie}.${group.id}`, !group.collapsed)
+        }
+
+        this.setStateDirty('list')
+        this.emit('groupCollapsed', group)
+        appm.addAnalyticsEvent(
+            this.keyCookie,
+            group.collapsed ? 'groupCollapse' : 'groupExpand',
+            group.id
+        )
+    }
+}
+
+<div.list-items class=input.class>
+    <for|group, index| of=state.list>
+        $ const hasItems = group.items && group.items.length
+        $ const selected = group.id && group.id == input.idSelection
+
+        <div.group>
+            <button-group
+                class=(selected ? 'selected' : '')
+                group=group
+                on-click('emit', 'clickGroup', group.id, false)
+                on-middleClick('emit', 'clickGroup', group.id, true)
+            >
+                <if(hasItems)>
+                    <button-icon.button-collapse.light.small.bg-transparent.icon-only
+                        icon=(group.collapsed ? 'plus' : 'minus')
+                        on-click('toggleCollapse', group)
+                    />
+                </if>
+            </button-group>
+
+            <if(hasItems && !group.collapsed)>
+                <div.items class=(group.hideGroupButton ? 'full-width' : '')>
+                    <for|item, index| of=group.items>
+                        $ const selected = item.id && item.id == input.idSelection
+
+                        <button-item
+                            class=(selected ? 'selected' : '')
+                            isChannelMod=(group.type == 'channelsMod')
+                            isTopic=(group.type == 'topics')
+                            item=item
+                            number=(index + 1)
+                            showImage=group.showImages
+                            on-click('emit', 'clickItem', item.id, item, group.id, false)
+                            on-middleClick('emit', 'clickItem', item.id, item, group.id, true)
+                        />
+                    </for>
+                </div>
+            </if>
+        </div>
+    </for>
+</div>
+
+style.less {
+    .list-items {
+        --group-spacing: 5px;
+        --groups-spacing: 5px;
+        --item-marginleft: 10px;
+        --items-spacing: 2px;
+
+        display: flex;
+        flex-direction: column;
+        gap: var(--groups-spacing);
+
+        >.group {
+            display: flex;
+            flex-direction: column;
+            gap: var(--group-spacing);
+
+            >.button-group {
+                >.button-collapse {
+                    margin-left: auto;
+                }
+            }
+
+            >.items {
+                display: flex;
+                flex-direction: column;
+                gap: var(--items-spacing);
+
+                >.button-item {
+                    padding-left: calc(var(--padding-h) + var(--item-marginleft));
+                }
+
+                &.full-width {
+                    --items-margin: 0;
+
+                    >.button-item {
+                        --height: 40px;
+
+                        width: 100%;
+                    }
+                }
+            }
+        }
+
+        // Media queries
+
+        .r-max(@break-lg, {
+            --item-marginleft: 8px;
+        });
+    }
+};

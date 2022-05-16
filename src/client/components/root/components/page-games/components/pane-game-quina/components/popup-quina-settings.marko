@@ -1,0 +1,302 @@
+import appm from 'js/app-manager'
+import quinam from 'js/quina-manager'
+import { updateThemeCss } from 'js/utils'
+import { urls } from 'js/default-vars'
+
+class {
+    onCreate(input) {
+        this.state = {
+            clearProgressEnabled: false,
+            daltonicMode: false,
+            easyMode: false,
+            status: 0,
+            syncAccountEnabled: false,
+            user: appm.getUser() || {}
+        }
+
+        this.state.daltonicMode = this.state.user.preferences.games.quina.daltonicMode
+        this.state.easyMode = this.state.user.preferences.games.quina.easyMode
+
+        this.clearedProgress = this.clearedProgress.bind(this)
+        this.syncedAccount = this.syncedAccount.bind(this)
+        this.updateAccountError = this.updateAccountError.bind(this)
+        this.userUpdated = this.userUpdated.bind(this)
+    }
+
+    onMount() {
+        this.popupComponent = this.getComponent('popup')
+
+        updateThemeCss(quinam.getThemeProperties(), this.popupComponent.getEl())
+
+        quinam.on('resetProgressSuccess', this.clearedProgress)
+        quinam.on('syncAccountSuccess', this.syncedAccount)
+        appm.on('updateAccountError', this.updateAccountError)
+        appm.on('userUpdated', this.userUpdated)
+    }
+
+    onDestroy() {
+        quinam.off('resetProgressSuccess', this.clearedProgress)
+        quinam.off('syncAccountSuccess', this.syncedAccount)
+        appm.off('updateAccountError', this.updateAccountError)
+        appm.off('userUpdated', this.userUpdated)
+    }
+
+    // Getters & Setters.
+
+    // Functions.
+
+    changeId() {
+        const inputId = this.getComponent('inputId')
+        const id = inputId.getValue()
+
+        if(id.length != 24) {
+            inputId.setValid(false)
+        }
+
+        quinam.syncAccount(id)
+    }
+
+    clearedProgress() {
+        this.state.clearProgressEnabled = false
+        this.state.syncAccountEnabled = false
+    }
+
+    clearProgress() {
+        quinam.resetProgress()
+    }
+
+    hide() {
+        if(!this.visible) {
+            return
+        }
+
+        this.popupComponent.hide()
+    }
+
+    hidden() {
+        this.visible = false
+    }
+
+    show(args) {
+        if(this.visible) {
+            return
+        }
+
+        this.visible = true
+
+        this.popupComponent.show()
+    }
+
+    submitRequested() {
+        if(this.state.status == 1) {
+            return
+        }
+
+        this.state.status = 1
+
+        const daltonicMode = this.getComponent('checkboxDaltonicMode').isChecked()
+        const easyMode = this.getComponent('checkboxEasyMode').isChecked()
+
+        if(daltonicMode != this.state.daltonicMode) {
+            quinam.setDaltonicMode(daltonicMode)
+        }
+
+        appm.updateAccount({ preferences: { games: { quina: {
+            daltonicMode: daltonicMode,
+            easyMode: easyMode
+        }}}})
+
+        appm.addAnalyticsEvent('quinaSettings', 'update')
+    }
+
+    syncedAccount(user) {
+        this.state.clearProgressEnabled = false
+        this.state.syncAccountEnabled = false
+
+        this.state.daltonicMode = user.preferences.games.quina.daltonicMode
+        this.state.easyMode = user.preferences.games.quina.easyMode
+
+        this.getComponent('checkboxDaltonicMode').setChecked(this.state.daltonicMode)
+        this.getComponent('checkboxEasyMode').setChecked(this.state.easyMode)
+    }
+
+    toggleClearProgress() {
+        this.state.clearProgressEnabled = !this.state.clearProgressEnabled
+
+        appm.addAnalyticsEvent('settings', 'toggleClear', this.state.clearProgressEnabled)
+    }
+
+    toggleSync() {
+        this.state.syncAccountEnabled = !this.state.syncAccountEnabled
+
+        appm.addAnalyticsEvent('settings', 'toggleSync', this.state.syncAccountEnabled)
+    }
+
+    updateAccountError() {
+        this.state.status = -1
+    }
+
+    userUpdated(user) {
+        this.state.status = 0
+
+        if(user.preferences.games.quina.easyMode && !this.state.easyMode) {
+            appm.showNotification(appm.tr('games.quina.settings.easyModeActivated'))
+        }
+
+        this.state.user = user || {}
+        this.state.clearProgressEnabled = false
+        this.state.daltonicMode = user.preferences.games.quina.daltonicMode
+        this.state.easyMode = user.preferences.games.quina.easyMode
+        this.state.syncAccountEnabled = false
+
+        this.setStateDirty('user')
+    }
+}
+
+$ const trSettings = appm.tr('games.quina.settings') || {}
+$ const trAccount = trSettings.account || {}
+
+<popup.popup-quina-settings.align-top
+    key='popup'
+    class=input.class
+    title=trSettings.title
+    on-hidden('hidden')
+>
+    <@form>
+        <div.wrapper-options>
+            <checkbox.big
+                key='checkboxEasyMode'
+                checked=state.easyMode
+                noExternalUpdate
+                text=trSettings.easyMode
+                explanation=trSettings.easyModeExplain
+            />
+
+            <checkbox.big
+                key='checkboxDaltonicMode'
+                checked=state.daltonicMode
+                noExternalUpdate
+                text=trSettings.daltonicMode
+            />
+        </div>
+
+        <button-submit.big
+            loading=(state.status == 1)
+            text=trSettings.buttonSave
+            on-click('submitRequested')
+        />
+
+        <div.separator />
+
+        <div.wrapper-account>
+            <if(state.syncAccountEnabled)>
+                <input-text.big key='inputId' placeholder=trAccount.placeholderId />
+            </if>
+            <else-if(state.clearProgressEnabled)>
+                <text-title.clear-question>
+                    ${trAccount.clearProgressQuestion}
+                </text-title>
+            </else-if>
+
+            <div.controls>
+                <if(state.syncAccountEnabled)>
+                    <button-text icon='close' text=trAccount.cancel on-click('toggleSync') />
+
+                    <button-text icon='sync' text=trAccount.sync on-click('changeId') />
+                </if>
+                <else-if(state.clearProgressEnabled)>
+                    <button-text
+                        icon='close'
+                        text=trAccount.cancel
+                        on-click('toggleClearProgress')
+                    />
+
+                    <button-text.danger
+                        icon='bin'
+                        text=trAccount.clearProgress
+                        on-click('clearProgress')
+                    />
+                </else-if>
+                <else>
+                    <button-text
+                        icon='sync'
+                        text=trAccount.toggleSync
+                        on-click('toggleSync')
+                    />
+
+                    <button-text.danger
+                        icon='bin'
+                        text=trAccount.toggleClearProgress
+                        on-click('toggleClearProgress')
+                    />
+                </else>
+            </div>
+        </div>
+    </@form>
+</popup>
+
+style.less {
+    .popup-quina-settings {
+        --id-fontsize: 20px;
+        --wrapperoptions-spacing: 30px;
+
+        >.wrapper>.panel>.form {
+            >.wrapper-options {
+                display: flex;
+                flex-direction: column;
+                gap: var(--wrapperoptions-spacing);
+            }
+
+            >.button-submit {
+                align-self: center;
+            }
+
+            >.separator {
+                background-color: var(--color-border1);
+                .size(100%, 1px);
+            }
+
+            >.wrapper-account {
+                align-items: center;
+                display: flex;
+                flex-direction: column;
+                gap: 25px; // TODO
+
+                >.clear-question {
+                    color: var(--color-text3);
+                }
+
+                >.controls {
+                    display: flex;
+                    flex-wrap: wrap;
+                    gap: var(--controls-spacing);
+                }
+            }
+        }
+
+        // Media queries.
+
+        .r-max(@break-ms, {
+            --id-fontsize: 16px;
+            --wrapperoptions-spacing: 25px;
+        });
+
+        .r-max(@break-sm, {
+            --id-fontsize: 15px;
+            --wrapperoptions-spacing: 20px;
+
+            >.wrapper>.panel>.form {
+                >.wrapper-account {
+                    >.controls {
+                        justify-content: center;
+                    }
+                }
+            }
+        });
+
+        .r-max(@break-xs, {
+            --id-fontsize: 14px;
+            --wrapperoptions-spacing: 15px;
+        });
+    }
+};

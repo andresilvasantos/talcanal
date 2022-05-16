@@ -1,0 +1,320 @@
+import appm from 'js/app-manager'
+import { maxRules } from 'js/default-vars'
+
+class {
+    onCreate(input) {
+        this.state = {
+            indexOpened: -1,
+            indexRuleEdit: -1,
+            rules: input.rules || []
+        }
+    }
+
+    // Getters & Setters.
+
+    getRules() {
+        return this.state.rules
+    }
+
+    setRules(rules) {
+        this.state.rules = rules
+    }
+
+    // Functions.
+
+    add() {
+        this.state.rules.push({ text: '', title: ''})
+        this.state.indexRuleEdit = this.state.rules.length - 1
+
+        this.setStateDirty('rules')
+        appm.addAnalyticsEvent('channelSettings', 'addRule')
+    }
+
+    delete() {
+        if(this.state.indexRuleEdit == -1) {
+            return
+        }
+
+        this.state.rules.splice(this.state.indexRuleEdit, 1)
+        this.state.indexRuleEdit = -1
+
+        this.setStateDirty('rules')
+        appm.addAnalyticsEvent('channelSettings', 'deleteRule')
+    }
+
+    dragEnd(event) {
+        if(!this.dragging) {
+            return
+        }
+
+        this.dragging = false
+
+        // In Chrome dataTransfer is only set on drop, so it won't work here.
+        /* const type = event.dataTransfer.getData('type')
+
+        if(type != 'rule') {
+            return
+        } */
+
+        this.componentsRule[this.indexDragged].getEl().classList.remove('dragging')
+
+        /* if(this.indexDragged == this.indexDragToPosition) {
+            return
+        } */
+
+        for(const rule of this.componentsRule) {
+            rule.getEl().style.order = 'unset'
+        }
+
+        const ruleTarget = this.state.rules.splice(this.indexDragged, 1)
+        this.state.rules.splice(this.indexDragToPosition, 0, ruleTarget[0])
+
+        this.setStateDirty('rules')
+
+        this.mapRulesOrder = new Map()
+
+        appm.addAnalyticsEvent('channelSettings', 'dragRule')
+    }
+
+    dragOver(index, event) {
+        if(!this.dragging) {
+            return
+        }
+
+        const order = this.mapRulesOrder.has(index) ? this.mapRulesOrder.get(index) : index
+        const orderRuleDragged = (
+            this.mapRulesOrder.has(this.indexDragged) ?
+            this.mapRulesOrder.get(this.indexDragged) :
+            this.indexDragged
+        )
+
+        if(this.indexDragged == index) {
+            if(order != orderRuleDragged) {
+                return
+            }
+        }
+
+        if(this.indexDragToPosition == order) {
+            return
+        }
+
+        this.indexDragToPosition = order
+
+        for(const [indexRule, rule] of this.componentsRule.entries()) {
+            const orderRule = (
+                this.mapRulesOrder.has(indexRule) ?
+                this.mapRulesOrder.get(indexRule) :
+                indexRule
+            )
+
+            let orderNew
+
+            if(indexRule == this.indexDragged) {
+                orderNew = this.indexDragToPosition
+            }
+            else {
+                orderNew = (
+                    orderRule < orderRuleDragged &&
+                    orderRule >= this.indexDragToPosition ? orderRule + 1 :
+                    (
+                        orderRule > orderRuleDragged &&
+                        orderRule <= this.indexDragToPosition ?
+                        orderRule - 1 : orderRule
+                    )
+                )
+            }
+
+            rule.getEl().style.order = orderNew
+
+            this.mapRulesOrder.set(indexRule, orderNew)
+        }
+    }
+
+    dragStart(index, event) {
+        //event.dataTransfer.setData('type', 'rule')
+
+        this.componentsRule = this.getComponents('rules')
+        this.dragging = true
+        this.indexDragged = index
+        this.mapRulesOrder = new Map()
+
+        this.componentsRule[index].getEl().classList.add('dragging')
+    }
+
+    edit(index) {
+        this.state.indexRuleEdit = index
+        this.state.indexOpened = -1
+        appm.addAnalyticsEvent('channelSettings', 'editRule')
+    }
+
+    editFinished() {
+        const inputTitle = this.getComponent('inputTitle')
+        const title = inputTitle.getValue().trim()
+
+        if(!title.length) {
+            inputTitle.setValid(false)
+        }
+        else {
+            const inputText = this.getComponent('inputText')
+            const text = inputText.getValue().trim()
+            const rule = this.state.rules[this.state.indexRuleEdit]
+
+            rule.title = title
+            rule.text = text
+            this.state.indexRuleEdit = -1
+
+            this.setStateDirty('rules')
+        }
+    }
+
+    editKeyPressed(event) {
+        switch(event.keyCode) {
+            /*case 13: // Enter.
+                this.editFinished()
+                break*/
+            case 27: // Escape.
+                const rule = this.state.rules[this.state.indexRuleEdit]
+
+                if(!rule.title.trim().length) {
+                    const inputTitle = this.getComponent('inputTitle')
+
+                    inputTitle.setValid(false)
+                }
+                else {
+                    this.state.indexRuleEdit = -1
+                }
+
+                break
+        }
+    }
+
+    toggleRule(index) {
+        if(this.state.indexRuleEdit != -1) {
+            return
+        }
+
+        this.state.indexOpened = this.state.indexOpened == index ? -1 : index
+        appm.addAnalyticsEvent('channelSettings', 'toggleRule')
+    }
+}
+
+$ const trRules = appm.tr('channels.settings.sectionRules') || {}
+
+<section-settings.settings-rules class=input.class title=trRules.title>
+    <if(state.rules.length)>
+        <div.rules>
+            <for|rule, index| of=state.rules>
+                $ const editing = index == state.indexRuleEdit
+                $ const opened = index == state.indexOpened
+
+                <if(editing)>
+                    <div.rule-edit>
+                        <!-- <div.wrapper-title> -->
+                            <input-text.input-title
+                                key='inputTitle'
+                                maxlength=100
+                                placeholder=trRules.inputRuleTitle
+                                text=rule.title
+                                on-keydown('editKeyPressed')
+                            />
+
+                            <!-- <div.controls> -->
+                                <button-icon
+                                    icon='bin'
+                                    on-click('delete')
+                                />
+
+                                <button-icon
+                                    icon='check'
+                                    on-click('editFinished')
+                                />
+                            <!-- </div> -->
+                        <!-- </div> -->
+
+                        <input-textrich
+                            key='inputText'
+                            maxlength=500
+                            placeholder=trRules.inputRuleText
+                            text=rule.text
+                            on-keydown('editKeyPressed')
+                        />
+                    </div>
+                </if>
+                <else>
+                    <card-rule
+                        key='rules[]'
+                        draggable=(state.indexRuleEdit == -1)
+                        number=(index + 1)
+                        opened=opened
+                        rule=rule
+                        on-click('toggleRule', index)
+                        on-dragEnd('dragEnd', index)
+                        on-dragOver('dragOver', index)
+                        on-dragStart('dragStart', index)
+                    >
+                        <button-icon
+                            icon='pencil'
+                            on-click('edit', index)
+                        />
+                    </card-rule>
+                </else>
+            </for>
+        </div>
+    </if>
+
+    <if(state.indexRuleEdit == -1 && state.rules.length < maxRules)>
+        <button-text
+            icon='plus'
+            text=trRules.buttonAdd
+            on-click('add')
+        />
+    </if>
+</section-settings>
+
+style.less {
+    .settings-rules {
+        --rules-spacing: 10px;
+
+        >.contents {
+            >.rules {
+                display: flex;
+                flex-wrap: wrap;
+                gap: var(--rules-spacing);
+
+                /*>.rule {
+                    &.editing {
+                        outline: 2px dashed var(--color-border3);
+                    }
+
+                    &.dragging {
+                        outline: 2px dashed var(--color-border3);
+                    }
+                }*/
+
+                >.card-rule {
+                    width: 100%;
+                }
+
+                >.rule-edit {
+                    border: 1px solid var(--color-border1);
+                    border-radius: var(--app-borderradius);
+                    display: flex;
+                    //flex-direction: column;
+                    flex-wrap: wrap;
+                    gap: 15px; // TODO
+                    padding: 15px; // TODO
+                    width: 100%;
+
+                    >.input-title,
+                    >.input-textrich {
+                        flex-grow: 1;
+                    }
+                }
+            }
+
+            >.button-text {
+                align-self: flex-start;
+            }
+        }
+    }
+};

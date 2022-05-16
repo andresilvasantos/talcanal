@@ -1,0 +1,869 @@
+import appm from 'js/app-manager'
+import { abbreviateNumber, getCookie, getIndexFromId, processObjectsTr, scrollReachBottom, setCookie } from 'js/utils'
+import { timers, viewModes } from 'js/default-vars'
+
+static const sortOptions = ['new', 'trending', 'topDay', 'topWeek', 'topMonth', 'topYear', 'topAllTime']
+
+class {
+    onCreate() {
+        this.state = {
+            channel: {},
+            countPosts: 0,
+            fetchingChannel: true,
+            fetchingPosts: true,
+            filterTag: null,
+            indexSort: 1,
+            indexTab: 0,
+            indexViewMode: 0,
+            posts: [],
+            user: appm.getUser()
+        }
+
+        this.filter = ''
+        this.pageCurrent = 0
+
+        this.channelsModPinged = this.channelsModPinged.bind(this)
+        this.channelSubscribed = this.channelSubscribed.bind(this)
+        this.channelUpdated = this.channelUpdated.bind(this)
+        this.itemCreated = this.itemCreated.bind(this)
+        this.itemsFetched = this.itemsFetched.bind(this)
+        this.postDeleted = this.postDeleted.bind(this)
+        this.postPinned = this.postPinned.bind(this)
+        this.userChanged = this.userChanged.bind(this)
+        this.userUpdated = this.userUpdated.bind(this)
+    }
+
+    onMount() {
+        appm.on('createItemSuccess', this.itemCreated)
+        appm.on('deleteItemSuccess', this.postDeleted)
+        appm.on('fetchItemsSuccess', this.itemsFetched)
+        appm.on('pingChannelsModSuccess', this.channelsModPinged)
+        appm.on('pinItemSuccess', this.postPinned)
+        appm.on('subscribeChannelSuccess', this.channelSubscribed)
+        appm.on('updateItemSuccess', this.channelUpdated)
+        appm.on('userChanged', this.userChanged)
+        appm.on('userUpdated', this.userUpdated)
+    }
+
+    onDestroy() {
+        clearTimeout(this.timeoutBetweenFetches)
+
+        appm.off('createItemSuccess', this.itemCreated)
+        appm.off('deleteItemSuccess', this.postDeleted)
+        appm.off('fetchItemsSuccess', this.itemsFetched)
+        appm.off('pingChannelsModSuccess', this.channelsModPinged)
+        appm.off('pinItemSuccess', this.postPinned)
+        appm.off('subscribeChannelSuccess', this.channelSubscribed)
+        appm.off('updateItemSuccess', this.channelUpdated)
+        appm.off('userChanged', this.userChanged)
+        appm.off('userUpdated', this.userUpdated)
+    }
+
+    // Getters & Setters
+
+    setData(channel, tag) {
+        this.state.channel = Object.assign({}, channel)
+        this.filter = ''
+        this.pageCurrent = 0
+        this.state.filterTag = tag
+
+        // Set sort if it was saved in cookies.
+        const indexSort = sortOptions.indexOf(getCookie('sortChannel'))
+
+        if(indexSort >= 0) {
+            this.state.indexSort = indexSort
+        }
+
+        // This validates if channel received is already data populated.
+        if(!this.state.channel.type) {
+            this.fetchChannel()
+        }
+        else if(this.state.channel.isUserModerator) {
+            this.channelsModPinged(appm.getDataChannelsMod())
+        }
+
+        if(this.state.indexTab != 0) {
+            // Fetch is triggered in tabChanged.
+            // Setting first index through tabs component, so it won't trigger duplicate change event.
+            const tabs = this.getComponent('tabs')
+
+            if(tabs) {
+                tabs.setIndex(0)
+                this.tabChanged(0)
+            }
+
+            return
+        }
+
+        const searchSort = this.getComponent('searchSort')
+
+        if(searchSort) {
+            searchSort.clearSearch()
+        }
+
+        this.calculateViewMode()
+
+        if(this.state.channel.type) {
+            this.state.fetchingChannel = false
+
+            this.fetchPosts()
+        }
+    }
+
+    // Functions.
+
+    calculateViewMode() {
+        const preferences = this.state.channel.preferences || {}
+
+        this.state.indexViewMode = getIndexFromId(
+            viewModes,
+            appm.isUserSignedIn() ? appm.getUser().preferences.viewMode : [],
+            preferences.viewMode,
+            getCookie('viewMode')
+        )
+    }
+
+    channelsModPinged(data) {
+        if(!this.state.channel.isUserModerator) {
+            return
+        }
+
+        if(data[this.state.channel.id]) {
+            const info = data[this.state.channel.id]
+
+            this.state.channel.countCommentsQueue = info.countCommentsQueue || 0
+            this.state.channel.countMemberRequests = info.countMemberRequests || 0
+            this.state.channel.countPostsQueue = info.countPostsQueue || 0
+
+            this.setStateDirty('channel')
+        }
+        else {
+            this.state.channel.countCommentsQueue = 0
+            this.state.channel.countMemberRequests = 0
+            this.state.channel.countPostsQueue = 0
+        }
+
+        this.setStateDirty('channel')
+    }
+
+    channelsRequested(newTab = false) {
+        appm.openPage('channels', '', { newTab })
+    }
+
+    channelSubscribed(idChannel, subscribed) {
+        if(idChannel != this.state.channel.id) {
+            return
+        }
+
+        this.state.channel.countSubscribers += subscribed ? 1 : -1
+        this.state.channel.isUserSubscribed = subscribed
+
+        this.setStateDirty('channel')
+    }
+
+    channelUpdated(type, id, channel) {
+        if(type != 'channels' || id != this.state.channel.id) {
+            return
+        }
+
+        this.state.channel = channel
+
+        if(this.state.channel.isUserModerator) {
+            this.channelsModPinged(appm.getDataChannelsMod())
+        }
+    }
+
+    /* chatModsRequested() {
+        this.idRequestChat = appm.createItem('chats', { channel: this.state.channel.id })
+    } */
+
+    checkLoadMore() {
+        if(
+            this.state.indexTab != 0 ||
+            this.state.fetchingPosts ||
+            !this.state.posts.length ||
+            this.state.posts.length >= this.state.countPosts ||
+            !scrollReachBottom(this.getEl())
+        ) {
+            return
+        }
+
+        ++this.pageCurrent
+
+        this.fetchPosts()
+        appm.addAnalyticsEvent('channel', 'loadMore', this.state.channel.id)
+    }
+
+    clearTag() {
+        this.state.filterTag = null
+        this.pageCurrent = 0
+
+        this.fetchPosts()
+        appm.addAnalyticsEvent('channel', 'clearTag', this.state.channel.id)
+    }
+
+    createPostRequested() {
+        appm.showPopup('createPost', this.state.channel)
+        appm.addAnalyticsEvent('channel', 'createPost', this.state.channel.id)
+    }
+
+    deletePostRequested(post) {
+        appm.showPopup('deleteItem', 'posts', post.id)
+    }
+
+    fetchChannel() {
+        this.state.fetchingChannel = true
+
+        this.idFetchChannel = appm.fetchItems('channels', '', { id: this.state.channel.id })
+    }
+
+    fetchPosts() {
+        this.state.fetchingPosts = true
+
+        if(!this.pageCurrent) {
+            this.state.countPosts = 0
+            this.state.posts = []
+        }
+
+        if(this.timeoutBetweenFetches) {
+            clearTimeout(this.timeoutBetweenFetches)
+        }
+
+        this.timeoutBetweenFetches = setTimeout(() => {
+            const filtersExtra = { channel: this.state.channel._id }
+
+            if(this.state.filterTag) {
+                filtersExtra.tag = this.state.filterTag
+            }
+
+            this.idFetchPosts = appm.fetchItems(
+                'posts', this.filter, filtersExtra, this.pageCurrent,
+                sortOptions[this.state.indexSort]
+            )
+        }, timers.betweenFetches)
+    }
+
+    itemCreated(type, idRequest, item) {
+        if(type != 'posts'/*  && (type != 'chats' || idRequest != this.idRequestChat) */) {
+            return
+        }
+
+        if(type == 'posts') {
+            const channel = item.channel || {}
+
+            if(channel.id != this.state.channel.id) {
+                return
+            }
+
+            ++this.state.countPosts
+            this.state.posts.splice(0, 0, item)
+            this.setStateDirty('posts')
+        }
+        /* else if(type == 'chats') {
+            appm.openPage('chats', 'chat', true, item)
+        } */
+    }
+
+    itemsFetched(idFetch, items, count) {
+        if(idFetch != this.idFetchPosts && idFetch != this.idFetchChannel) {
+            return
+        }
+
+        if(idFetch == this.idFetchPosts) {
+            this.state.fetchingPosts = false
+
+            if(this.pageCurrent > 0) {
+                const itemsUnique = items.filter(item => !this.idsItems.includes(item.id))
+
+                this.state.posts = this.state.posts.concat(itemsUnique)
+                this.idsItems = this.idsItems.concat(itemsUnique.map(item => item.id ))
+            }
+            else {
+                this.state.posts = items
+                this.idsItems = items.map(item => item.id )
+            }
+
+            this.state.countPosts = count
+        }
+        else if(idFetch == this.idFetchChannel) {
+            this.state.fetchingChannel = false
+
+            if(!items.length) {
+                appm.openPage('error')
+                return
+            }
+
+            this.state.channel = items[0]
+
+            this.calculateViewMode()
+            this.fetchPosts()
+
+            if(this.state.channel.isUserModerator) {
+                this.channelsModPinged(appm.getDataChannelsMod())
+            }
+        }
+    }
+
+    modRequested(newTab = false) {
+        appm.openPage('channels', 'channelMod', { allowBack: true, newTab }, this.state.channel)
+    }
+
+    pinRequested(post) {
+        appm.pinItem('posts', post.id, 'channel')
+    }
+
+    postDeleted(type, id) {
+        if(type != 'posts') {
+            return
+        }
+
+        for(const [index, post] of this.state.posts.entries()) {
+            if(post.id == id) {
+                --this.state.countPosts
+                this.state.posts.splice(index, 1)
+                this.setStateDirty('posts')
+                break
+            }
+        }
+    }
+
+    postPinned(type, id, pinned) {
+        if(type != 'posts') {
+            return
+        }
+
+        for(const post of this.state.posts) {
+            if(post.id == id) {
+                post.pinnedToChannel = pinned
+
+                this.setStateDirty('posts')
+                break
+            }
+        }
+    }
+
+    postRequested(post, newTab = false) {
+        appm.openPage('channels', 'post', { allowBack: true, newTab }, post)
+        appm.addAnalyticsEvent('channel', 'openPost', this.state.channel.id)
+    }
+
+    refresh() {
+        if(this.state.indexTab != 0) {
+            return
+        }
+
+        this.pageCurrent = 0
+
+        this.fetchPosts()
+        appm.addAnalyticsEvent('channel', 'refresh', this.state.channel.id)
+    }
+
+    requestAccess() {
+        if(this.state.channel.type != 'private') {
+            return
+        }
+
+        appm.showPopup('requestAccess', this.state.channel.id)
+    }
+
+    searchChanged(search) {
+        if(search == this.filter) {
+            return
+        }
+
+        this.pageCurrent = 0
+        this.filter = search
+
+        this.fetchPosts()
+        appm.addAnalyticsEvent('channel', 'search', `${this.state.channel.id} - ${this.filter}`)
+    }
+
+    searchTag(idTag, channel, newTab) {
+        if(newTab) {
+            return appm.openPage('channels', 'channel', { allowBack: true, newTab }, channel, idTag)
+        }
+
+        this.state.indexTab = 0
+        this.state.filterTag = idTag
+        this.pageCurrent = 0
+
+        this.fetchPosts()
+        appm.addAnalyticsEvent('channel', 'searchTag', `${channel.id} #${idTag}`)
+    }
+
+    settingsRequested(newTab = false) {
+        appm.openPage(
+            'channels',
+            'channelSettings',
+            { allowBack: true, newTab },
+            this.state.channel
+        )
+    }
+
+    sortChanged(index) {
+        this.pageCurrent = 0
+        this.state.indexSort = index
+
+        const idSort = sortOptions[this.state.indexSort]
+
+        setCookie('sortChannel', idSort)
+
+        this.fetchPosts()
+        appm.addAnalyticsEvent('channel', 'sort', `${this.state.channel.id} - ${idSort}`)
+    }
+
+    tabChanged(index) {
+        this.state.indexTab = index
+
+        if(index == 0) {
+            this.filter = ''
+            this.pageCurrent = 0
+            this.calculateViewMode()
+            this.fetchPosts()
+            this.update()
+
+            const searchSort = this.getComponent('searchSort')
+
+            if(searchSort) {
+                searchSort.clearSearch()
+            }
+        }
+
+        window.scrollTo({ top: 0 })
+        appm.addAnalyticsEvent('channel', 'tabChange', (
+            this.state.channel.id - this.state.indexTab == 1 ? 'about' : 'posts'
+        ))
+    }
+
+    toggleSubscription() {
+        appm.subscribeChannel(this.state.channel.id)
+    }
+
+    viewModeChanged(index) {
+        this.state.indexViewMode = index
+        this.pageCurrent = 0
+
+        const idViewMode = viewModes[this.state.indexViewMode].id
+
+        setCookie('viewMode', idViewMode)
+        this.fetchPosts()
+        appm.addAnalyticsEvent('channel', 'viewMode', `${this.state.channel.id} - ${idViewMode}`)
+    }
+
+    userChanged(user) {
+        this.state.user = user
+
+        this.refresh()
+        this.setStateDirty('user')
+    }
+
+    userUpdated(user) {
+        this.state.user = user
+
+        this.setStateDirty('user')
+    }
+}
+
+$ const processTag = (idTag, channel) => {
+    for(const tag of channel.tags) {
+        if(tag.id == idTag) {
+            return tag
+        }
+    }
+
+    return {}
+}
+
+$ const channel = state.channel || {}
+$ const preferences = channel.preferences || {}
+$ const isSuper = state.user && state.user.super && state.user.superActive
+$ const accessViewGranted = (
+    isSuper ||
+    (channel.status == 'active' &&
+    (channel.type != 'private' || channel.isUserMember || channel.isUserModerator))
+)
+$ const accessPostGranted = (
+    channel.status == 'active' &&
+    (!channel.isUserBanned && (channel.type == 'public' ||
+        (channel.type == 'restricted' && (channel.isUserModerator || channel.isUserMember)) ||
+        (channel.type == 'private' && (channel.isUserModerator || channel.isUserMember))) || isSuper
+    )
+)
+$ const image = channel.image && channel.image.length ? channel.image : null
+$ const posts = state.posts || []
+$ const viewMode = viewModes[state.indexViewMode].id
+$ const trChannels = appm.tr('channels') || {}
+$ const trAbout = trChannels.about || {}
+$ const trTooltips = trChannels.tooltips || {}
+
+$ const tabs = [{
+    id: 'posts',
+    icon: 'post'
+}, {
+    id: 'about',
+    icon: 'book'
+}]
+
+<pane-default.pane-channel
+    key='root'
+    breakBarMobile
+    class=[
+        input.class,
+        accessViewGranted ? '' : 'no-access',
+        posts.length ? '' : 'no-posts'
+    ]
+    on-refreshRequested('refresh')
+>
+    <@barTitleCustom>
+        <image-circle image=image />
+
+        <div.column>
+            <span.name>
+                ${channel.name || channel.id}
+            </span>
+
+            <div.wrapper-id>
+                <icon-text.light icon='channel' text=channel.id />
+
+                <if(channel.type == 'restricted')>
+                    <icon.icon-restricted name='eyePeek' />
+                </if>
+                <else-if(channel.type == 'private')>
+                    <icon.icon-private name='lock' />
+                </else-if>
+
+                <if(channel.adultContent)>
+                    <icon.icon-adultcontent name='circle' />
+                </if>
+            </div>
+        </div>
+
+        <if(accessViewGranted)>
+            <icon-text.fill icon='user' text=channel.countSubscribers />
+        </if>
+    </@barTitleCustom>
+
+    <@barControls>
+        <if(state.fetchingChannel)>
+            <icon.icon-loading name='loading' />
+        </if>
+        <else>
+            <if(channel.status == 'active' || isSuper)>
+                <if(channel.isUserModerator || isSuper)>
+                    $ const countComments = channel.countCommentsQueue || 0
+                    $ const countMemberRequests = channel.type == 'private' ? channel.countMemberRequests || 0 : 0
+                    $ const countPosts = channel.countPostsQueue || 0
+                    $ const countTotal = countComments + countMemberRequests + countPosts
+
+                    <button-icon
+                        icon='shield'
+                        tooltip=trChannels.moderation.title
+                        on-click('modRequested', false)
+                        on-middleClick('modRequested', true)
+                    >
+                        <counter-button count=abbreviateNumber(countTotal) />
+                    </button-icon>
+                </if>
+
+                <if(channel.isUserAdmin || isSuper)>
+                    <button-icon
+                        icon='settings'
+                        tooltip=trChannels.settings.title
+                        on-click('settingsRequested', false)
+                        on-middleClick('settingsRequested', true)
+                    />
+                </if>
+            </if>
+
+            <if(channel.status == 'active')>
+                <if(accessPostGranted)>
+                    <button-text.strong
+                        icon='pencil'
+                        text=trChannels.buttonCreatePost
+                        on-click('createPostRequested')
+                    />
+                </if>
+                <else-if(channel.type == 'private' && preferences.acceptRequests)>
+                    <button-text.strong
+                        icon='userPlus'
+                        text=trChannels.buttonRequestAccess
+                        on-click('requestAccess')
+                    />
+                </else-if>
+
+                <if(accessViewGranted)>
+                    <button-text.strong.special
+                        class=(channel.isUserSubscribed ? 'selected' : '')
+                        icon=(channel.isUserSubscribed ? 'userMinus' : 'userPlus')
+                        text=(channel.isUserSubscribed ? 'Sair' : 'Entrar')
+                        tooltip=(
+                            channel.isUserSubscribed ?
+                            trTooltips.unsubscribe :
+                            trTooltips.subscribe
+                        )
+                        on-click('toggleSubscription')
+                    />
+                </if>
+            </if>
+        </else>
+    </@barControls>
+
+    <if(accessViewGranted && channel.description)>
+        <@barNonSticky>
+            <text-p.description>
+                $!{channel.description}
+            </text-p>
+        </@barNonSticky>
+    </if>
+
+    <if(accessViewGranted)>
+        <@barExtension>
+            <tabs.full-height.hidetext-whensmall
+                key='tabs'
+                index=state.indexTab
+                tabs=processObjectsTr(tabs, trChannels.tabs)
+                on-tabChanged('tabChanged')
+            />
+
+            <if(state.indexTab == 0)>
+                <combo-searchsort
+                    key='searchSort'
+                    countItems=state.countPosts
+                    indexSort=state.indexSort
+                    indexViewMode=state.indexViewMode
+                    loading=state.fetchingPosts
+                    sortOptions=sortOptions
+                    viewModes=viewModes
+                    on-searchChanged('searchChanged')
+                    on-sortChanged('sortChanged')
+                    on-viewModeChanged('viewModeChanged')
+                >
+                    <if(state.filterTag)>
+                        <tag.big tag=processTag(state.filterTag, channel)>
+                            <button-icon.small.icon-only
+                                icon='close'
+                                on-click('clearTag')
+                            />
+                        </tag>
+                    </if>
+                </combo-searchsort>
+            </if>
+            <else-if(state.indexTab == 1)>
+                <button-text.button-chatmods
+                    disabled
+                    icon='chat'
+                    text=trAbout.buttonMessageMods
+                    on-click('chatModsRequested')
+                />
+            </else-if>
+        </@barExtension>
+    </if>
+
+    <if(state.indexTab == 0)>
+        <@contents class=(!accessViewGranted || !posts.length ? 'center' : viewMode)>
+            <if(accessViewGranted)>
+                <if(posts.length || state.fetchingPosts)>
+                    <for|post| of=posts>
+                        <card-post
+                            allowPin=(channel.isUserModerator || isSuper)
+                            hideChannelInfo
+                            isPinned=post.pinnedToChannel
+                            post=post
+                            viewMode=viewMode
+                            on-deleteRequested('deletePostRequested', post)
+                            on-openRequested('postRequested', post)
+                            on-pinRequested('pinRequested', post)
+                            on-searchTagRequested('searchTag')
+                        />
+                    </for>
+                </if>
+                <else-if(!channel.countPosts && accessPostGranted)>
+                    $ const trNoFirstPost = appm.tr('channels.noPosts.firstPost') || {}
+
+                    <contents-empty
+                        icon='post'
+                        iconButton='pencil'
+                        textButton=trNoFirstPost.button
+                        text=trNoFirstPost.text
+                        title=trNoFirstPost.title
+                        on-click('createPostRequested')
+                    />
+                </else-if>
+                <else>
+                    $ const trNoPosts = appm.tr('channels.noPosts.generic') || {}
+
+                    <contents-empty
+                        icon='search'
+                        iconButton='pencil'
+                        noButton=!accessPostGranted
+                        textButton=trNoPosts.button
+                        text=(accessPostGranted ? trNoPosts.text : trNoPosts.textPostNotAllowed)
+                        title=trNoPosts.title
+                        on-click('createPostRequested')
+                    />
+                </else>
+            </if>
+            <else-if(channel.status == 'banned')>
+                $ const trBanned = appm.tr('channels.banned') || {}
+
+                <contents-empty
+                    icon='block'
+                    iconButton='channel'
+                    textButton=trBanned.button
+                    text=trBanned.text
+                    title=trBanned.title
+                    on-click('channelsRequested', false)
+                    on-middleClick('channelsRequested', true)
+                />
+            </else-if>
+            <else-if(channel.status == 'removed')>
+                $ const trRemoved = appm.tr('channels.removed') || {}
+
+                <contents-empty
+                    icon='search'
+                    noButton
+                    iconButton='channel'
+                    textButton=trRemoved.button
+                    text=trRemoved.text
+                    title=trRemoved.title
+                    on-click('channelsRequested', false)
+                    on-middleClick('channelsRequested', true)
+                />
+            </else-if>
+            <else-if(channel.type == 'private')>
+                $ const trPrivateChannel = appm.tr('channels.privateNoAccess') || {}
+
+                <contents-empty
+                    icon='lock'
+                    iconButton='channel'
+                    text=trPrivateChannel.text
+                    textButton=trPrivateChannel.button
+                    title=trPrivateChannel.title
+                    on-click('channelsRequested', false)
+                    on-middleClick('channelsRequested', true)
+                />
+            </else-if>
+        </@contents>
+
+        <@footer>
+            <loading-finder show=state.fetchingPosts />
+        </@footer>
+    </if>
+    <else>
+        <@contents>
+            <section-channel-about
+                channel=channel
+                on-searchTagRequested('searchTag')
+            />
+        </@contents>
+    </else>
+</pane-default>
+
+style.less {
+    .pane-default.pane-channel {
+        --loading-iconsize: 20px;
+        --name-fontsize: 22px;
+        --wrapperid-spacing: 10px;
+
+        >.bar {
+            >.wrapper-title {
+                >.column {
+                    display: flex;
+                    flex-direction: column;
+
+                    >.name {
+                        color: var(--color-text4);
+                        font-family: @font-medium;
+                        font-size: var(--name-fontsize);
+                    }
+
+                    >.wrapper-id {
+                        align-items: center;
+                        display: flex;
+                        gap: var(--wrapperid-spacing);
+
+                        >.icon {
+                            display: flex;
+                            color: var(--color-text1);
+                            .size(16px);
+                        }
+
+                        >.icon-adultcontent {
+                            color: var(--color-warning);
+                        }
+                    }
+                }
+            }
+        }
+
+        >.bar-nonsticky {
+            //display: flex;
+            padding: 10px var(--app-padding);
+
+            >.description {
+                color: var(--color-text2);
+                word-wrap: break-word;
+            }
+        }
+
+        >.bar,
+        >.bar-nonsticky {
+            >.controls {
+                >.icon-loading {
+                    color: var(--color-icon2);
+                    .size(var(--loading-iconsize));
+                    .svg-loading();
+                }
+            }
+        }
+
+        >.bar-extension {
+            >.combo-searchsort {
+                >.tag {
+                    order: -1;
+
+                    >.button-icon {
+                        --color: @color-darkcontrast;
+                    }
+                }
+            }
+
+            >.button-chatmods {
+                align-self: center;
+            }
+        }
+
+        >.contents {
+            >.section-channel-about {
+                align-self: flex-start;
+                width: 100%;
+            }
+        }
+
+        // Media queries.
+
+        .r-max(@break-lg, {
+            --name-fontsize: 20px;
+        });
+
+        .r-max(@break-md, {
+            //--name-fontsize: 20px;
+        });
+
+        .r-max(@break-ms, {
+            --name-fontsize: 19px;
+
+            >.bar-extension {
+                >.combo-searchsort {
+                    >.tag {
+                        order: unset;
+                    }
+                }
+            }
+        });
+
+        .r-max(@break-xs, {
+            --name-fontsize: 18px;
+        });
+    }
+};

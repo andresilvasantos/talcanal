@@ -1,0 +1,266 @@
+import appm from 'js/app-manager'
+import { imageSizeLimitMb } from 'js/default-vars'
+
+class {
+    onCreate(input) {
+        this.state = {
+            changed: false,
+            needsUpload: false,
+            image: '',
+            sufix: input.sufix,
+            valid: true
+        }
+
+        if(input.image) {
+            this.setImage(input.image)
+        }
+
+        this.loadFile = this.loadFile.bind(this)
+        this.uploadImageError = this.uploadImageError.bind(this)
+        this.uploadImageSuccess = this.uploadImageSuccess.bind(this)
+    }
+
+    onInput(input) {
+        if(!input.noExternalUpdate) {
+            this.setImage(input.image || '')
+        }
+    }
+
+    onMount() {
+        this.inputFile = this.getEl('inputFile')
+
+        this.inputFile.addEventListener('change', this.loadFile)
+        appm.on('uploadImagesError', this.uploadImageError)
+        appm.on('uploadImagesSuccess', this.uploadImageSuccess)
+    }
+
+    onDestroy() {
+        this.inputFile.removeEventListener('change', this.loadFile)
+        appm.off('uploadImagesError', this.uploadImageError)
+        appm.off('uploadImagesSuccess', this.uploadImageSuccess)
+    }
+
+    // Getters & Setters.
+
+    getFile() {
+        return this.file
+    }
+
+    isChanged() {
+        return this.state.changed
+    }
+
+    needsUpload() {
+        return this.state.needsUpload
+    }
+
+    setImage(image) {
+        const sufix = this.state.sufix ? `-${this.state.sufix}` : ''
+
+        this.state.image = image.length ? `${appm.getUrlCdn()}/${image}${sufix}.jpg` : ''
+        this.state.changed = false
+        this.state.needsUpload = false
+    }
+
+    setValid(valid) {
+        this.state.valid = valid
+    }
+
+    // Functions.
+
+    loadFile() {
+        const files = this.inputFile.files
+
+        if(!files.length) {
+            return
+        }
+
+        this.file = files[0]
+        const sizeMb = this.file.size / (1000 * 1000)
+        const type = this.file.type
+
+        if(!type.startsWith('image')) {
+            appm.showNotification('Ficheiro escolhido não é do tipo imagem.', -1)
+            return
+        }
+
+        if(sizeMb > imageSizeLimitMb) {
+            appm.showNotification(`Tamanho máx. de imagem: ${imageSizeLimitMb}MB.`, -1)
+            return
+        }
+
+        this.state.changed = true
+        this.state.needsUpload = true
+        this.state.image = URL.createObjectURL(this.file)
+
+        this.emit('imageChanged', this.state.image, this.file)
+    }
+
+    removeImage(event) {
+        event.stopPropagation()
+
+        this.setValid(true)
+
+        this.state.image = ''
+        this.state.needsUpload = false
+        this.state.changed = true
+
+        this.emit('imageChanged', this.state.image)
+    }
+
+    selectImage() {
+        this.setValid(true)
+
+        this.getEl('inputFile').click()
+        this.emit('click')
+    }
+
+    upload(size) {
+        if(this.uploading || !this.state.needsUpload) {
+            return false
+        }
+
+        this.uploading = true
+
+        const formData = new FormData()
+
+        formData.append('media', this.file)
+
+        this.idUpload = appm.uploadImages(size, formData)
+    }
+
+    uploadImageError(idUpload, error) {
+        if(this.idUpload != idUpload) {
+            return
+        }
+
+        this.uploading = false
+        this.emit('uploadError', error)
+    }
+
+    uploadImageSuccess(idUpload, ids) {
+        if(this.idUpload != idUpload) {
+            return
+        }
+
+        const idImage = ids[0]
+
+        this.uploading = false
+        this.setImage(idImage)
+        this.emit('uploaded', idImage)
+    }
+}
+
+<button-default.input-image
+    class=[input.class, state.valid ? '' : 'invalid']
+    on-click('selectImage')
+>
+    <input.input-file key='inputFile' accept='.png, .jpg, .jpeg' type='file' />
+
+    <if(state.image.length)>
+        <image.cover
+            key='image'
+            lazyload
+            noPlaceholder
+            src=state.image
+        />
+
+        <button-icon.button-remove.small icon='bin' on-click('removeImage') />
+    </if>
+    <else>
+        <div.wrapper-empty>
+            <icon name=input.icon />
+
+            <span.text>
+                ${input.text}
+            </span>
+        </div>
+    </else>
+</button-default>
+
+style.less {
+    .input-image {
+        --buttonremove-margin: 5px;
+        --wrapperempty-fontsize: 18px;
+        --wrapperempty-icon-size: 60px;
+        --wrapperempty-spacing: 10px;
+
+        background-color: var(--color-input1);
+        border: 1px solid var(--color-border1);
+        border-radius: var(--app-borderradius);
+        overflow: hidden;
+        position: relative;
+        .flex-center();
+        .transition(border-color 0.2s ease-out);
+
+        >.input-file {
+            display: none;
+        }
+
+        >.image {
+            .absolute-fill();
+        }
+
+        >.wrapper-empty {
+            align-items: center;
+            display: flex;
+            flex-direction: column;
+            gap: var(--wrapperempty-spacing);
+            justify-content: center;
+            width: 60%; // TODO
+            .absolute-center();
+
+            >.icon {
+                color: var(--color-icon2);
+                .size(var(--wrapperempty-icon-size));
+                .transition(color 0.2s ease-out);
+            }
+
+            >.text {
+                color: rgba(var(--color-text4-rgb), 0.5);
+                font-size: var(--wrapperempty-fontsize);
+                text-align: center;
+                .transition(color 0.2s ease-out);
+            }
+        }
+
+        >.button-remove {
+            background-color: rgba(var(--color-background3-rgb), 0.9);
+            opacity: 0;
+            position: absolute;
+            right: var(--buttonremove-margin);
+            top: var(--buttonremove-margin);
+            .transition(opacity 0.2s ease-out);
+        }
+
+        &.small {
+            --wrapperempty-fontsize: 16px;
+            --wrapperempty-icon-size: 25px;
+            --wrapperempty-spacing: 5px;
+        }
+
+        &.invalid {
+            border-color: var(--color-warning);
+        }
+
+        &:hover {
+            background-color: var(--color-input2);
+            border: 2px dashed var(--color-border3);
+
+            >.wrapper-empty {
+                >.icon {
+                    color: var(--color-icon3);
+                    .scale(1.05);
+                }
+
+                >.text {
+                    color: var(--color-text3);
+                }
+            }
+
+            >.button-remove {
+                opacity: 1;
+            }
+        }
+    }
+};

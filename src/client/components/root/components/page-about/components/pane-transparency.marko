@@ -1,0 +1,233 @@
+import appm from 'js/app-manager'
+import { abbreviateNumber, processObjectsTr } from 'js/utils'
+import { urls } from 'js/default-vars'
+
+class {
+    onCreate(input, out) {
+        this.state = {
+            counters: {},
+            indexTab: 0
+            // TODO status, and show loading when not fetched and error message.
+        }
+
+        this.transparencyFetched = this.transparencyFetched.bind(this)
+    }
+
+    onMount() {
+        appm.fetchTransparency()
+
+        //appm.on('fetchTransparencyError', this.fetchTransparencyError)
+        appm.on('fetchTransparencySuccess', this.transparencyFetched)
+    }
+
+    onDestroy() {
+        appm.off('fetchTransparencySuccess', this.transparencyFetched)
+    }
+
+    // Getters & Setters
+
+    setData(counters) {
+        this.state.counters = counters || {}
+    }
+
+    // Functions.
+
+    tabChanged(index) {
+        this.state.indexTab = index
+    }
+
+    transparencyFetched(transparency) {
+        this.state.counters = transparency
+    }
+}
+
+$ const counters = [{
+    id: 'channels',
+    icon: 'channel'
+}, {
+    id: 'posts',
+    icon: 'post'
+}, {
+    id: 'comments',
+    icon: 'comment'
+}, {
+    id: 'visits',
+    icon: 'marker'
+}, {
+    id: 'users',
+    icon: 'user'
+}, {
+    id: 'randomChats',
+    icon: 'comments'
+}]
+
+$ const tabs = [{
+    id: 'allTime'
+}, {
+    id: 'today'
+}, {
+    id: 'days7'
+}, {
+    id: 'days30'
+}]
+
+$ const idTab = tabs[state.indexTab].id
+$ const trTransparency = appm.tr('about.transparency') || {}
+$ const trCounters = trTransparency.counters || {}
+$ const trInfo = trTransparency.info || {}
+
+<pane-default.pane-transparency
+    key='root'
+    allowBack
+    class=input.class
+    disableRefresh
+    title=trTransparency.title
+>
+    <@barControls>
+        <button-text
+            link
+            href=`mailto:${urls.social.email}`
+            icon='envelope'
+            text=trTransparency.buttonContact
+        />
+    </@barControls>
+
+    <@contents>
+        <section-imagetext.big
+            srcImage='/assets/images/about/transparency.jpg'
+            text=trInfo.text
+            title=trInfo.title
+        />
+
+        <div.wrapper-counters>
+            <tabs
+                index=state.indexTab
+                tabs=processObjectsTr(tabs, trTransparency.tabs)
+                on-tabChanged('tabChanged')
+            />
+
+            <div.counters>
+                <for|counter| of=counters>
+                    <div.card-counter>
+                        <icon
+                            class=(['channel', 'comments'].includes(counter.icon) ? 'grow' : '')
+                            name=counter.icon
+                        />
+
+                        <span.name>
+                            ${trCounters[counter.id]}
+                        </span>
+
+                        <div.value>
+                            <if(state.counters[counter.id])>
+                                ${abbreviateNumber(state.counters[counter.id][idTab]) || 0}
+                            </if>
+                            <else>
+                                0
+                            </else>
+                        </div>
+                    </div>
+                </for>
+            </div>
+        </div>
+    </@contents>
+
+    <@footerNonSticky>
+        <footer />
+    </@footerNonSticky>
+</pane-default>
+
+style.less {
+    .pane-default.pane-transparency {
+        --cardcounter-padding: 50px 20px;
+        --cardcounter-spacing: 20px;
+        --counters-gridcount: 3;
+        //--counters-padding-h: 50px;
+        --counters-spacing: 20px;
+        --icon-size: 40px;
+        --name-fontsize: 20px;
+        --spacing: 50px;
+        --value-fontsize: 42px;
+
+        >.contents {
+            display: flex;
+            flex-direction: column;
+            gap: var(--spacing);
+
+            >.wrapper-counters {
+                >.tabs {
+                    border-bottom: 1px solid var(--color-border1);
+                    padding: 0 var(--app-padding);
+                }
+
+                >.counters {
+                    padding: var(--app-padding-bigger);
+                    .grid(var(--counters-gridcount), var(--counters-spacing), var(--counters-spacing));
+
+                    >.card-counter {
+                        background-color: var(--color-background4);
+                        border: 1px solid var(--color-border1);
+                        border-radius: 30px; // TODO
+                        padding: var(--cardcounter-padding);
+                        display: flex;
+                        flex-direction: column;
+                        align-items: center;
+                        gap: var(--cardcounter-spacing);
+                        justify-content: center;
+
+                        >.icon {
+                            color: var(--color-icon3);
+                            .size(var(--icon-size));
+
+                            &.grow {
+                                height: unset;
+                                width: calc(var(--icon-size) + 4px);
+                            }
+                        }
+
+                        >.name {
+                            color: var(--color-text3);
+                            font-family: @font-semibold;
+                            font-size: var(--name-fontsize);
+                            text-align: center;
+                            text-transform: uppercase;
+                        }
+
+                        >.value {
+                            color: var(--color-text3);
+                            font-family: @font-semibold;
+                            font-size: var(--value-fontsize);
+                        }
+                    }
+                }
+            }
+        }
+
+        // Media queries.
+
+        .r-max(@break-ms, {
+            --cardcounter-padding: 35px 20px;
+            --name-fontsize: 16px;
+        });
+
+        .r-max(@break-sm, {
+            --cardcounter-padding: 20px;
+            --cardcounter-spacing: 15px;
+            --icon-size: 36px;
+            --name-fontsize: 14px;
+            --spacing: 30px;
+            --value-fontsize: 36px;
+        });
+
+        .r-max(@break-xs, {
+            --cardcounter-spacing: 10px;
+            //--counters-padding-h: 20px;
+            --counters-gridcount: 2;
+            --counters-spacing: 10px;
+            --icon-size: 30px;
+            --name-fontsize: 13px;
+            --spacing: 25px;
+            --value-fontsize: 32px;
+        });
+    }
+};

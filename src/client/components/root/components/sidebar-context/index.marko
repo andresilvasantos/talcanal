@@ -1,0 +1,48 @@
+import appm from 'js/app-manager'
+
+class {
+    onCreate() {
+        this.state = {
+            id: ''
+        }
+
+        this.pageChanged = this.pageChanged.bind(this)
+    }
+
+    onMount() {
+        this.sidebarLoader = this.getComponent('sidebarLoader')
+
+        appm.on('pageChanged', this.pageChanged)
+    }
+
+    onDestroy() {
+        appm.off('pageChanged', this.pageChanged)
+    }
+
+    // Functions.
+
+    pageChanged(idPage, idPane, args) {
+        const updateData = () => {
+            const component = this.sidebarLoader.getComponentLoaded()
+
+            if(component) {
+                if(component.setData) {
+                    component.setData(idPane, args)
+                }
+            }
+        }
+
+        if(this.state.id == idPage) {
+            updateData()
+        }
+        else {
+            this.state.id = idPage
+
+            this.sidebarLoader.once('loaded', () => {
+                updateData()
+            })
+        }
+    }
+}
+
+<dynamic.sidebar key='sidebarLoader' cName=`sidebar-${state.id}` />

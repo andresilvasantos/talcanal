@@ -1,0 +1,239 @@
+import appm from 'js/app-manager'
+import { flags } from 'js/default-vars'
+
+class {
+    onCreate() {
+        this.state = {
+            flagSelected: '',
+            showInputText: false,
+            status: 0,
+            type: 'posts'
+        }
+
+        this.reported = this.reported.bind(this)
+        this.reportError = this.reportError.bind(this)
+    }
+
+    onMount() {
+        this.popupComponent = this.getComponent('popup')
+    }
+
+    onDestroy() {
+        appm.off('reportItemError', this.reportError)
+        appm.off('reportItemSuccess', this.reported)
+    }
+
+    // Functions.
+
+    hide() {
+        if(!this.visible) {
+            return
+        }
+
+        this.popupComponent.hide()
+    }
+
+    hidden() {
+        this.state.status = 0
+        this.visible = false
+    }
+
+    keyPressed(event) {
+        if(event.keyCode == 13) {
+            //this.submitRequested()
+        }
+    }
+
+    reported(type, id) {
+        if(type != this.state.type || id != this.idItem) {
+            return
+        }
+
+        this.hide()
+    }
+
+    reportError(type, id) {
+        if(type != this.state.type || id != this.idItem) {
+            return
+        }
+
+        this.state.status = -1
+    }
+
+    selectFlag(flag) {
+        if(flag == this.state.flagSelected) {
+            this.state.flagSelected = ''
+            this.state.showInputText = false
+            return
+        }
+
+        this.state.flagSelected = flag
+    }
+
+    show(args) {
+        if(this.visible) {
+            return
+        }
+
+        this.state.type = args[0]
+        this.idItem = args[1]
+        this.visible = true
+
+        this.popupComponent.show()
+    }
+
+    showInputText() {
+        this.state.showInputText = true
+    }
+
+    submitRequested() {
+        if(this.state.status == 1 || !this.state.flagSelected.length) {
+            return
+        }
+
+        const flag = this.state.flagSelected
+        let text
+
+        if(this.state.showInputText) {
+            text = this.getComponent('inputDetails').getValue()
+        }
+
+        this.state.status = 1
+
+        appm.on('reportItemError', this.reportError)
+        appm.on('reportItemSuccess', this.reported)
+
+        appm.reportItem(this.state.type, this.idItem, flag, text)
+    }
+}
+
+$ const trReport = appm.tr('channels.report') || {}
+$ const trFlags = trReport.flags || {}
+$ const trText = trReport.text || {}
+$ const trTitle = trReport.title || {}
+
+<popup.popup-report
+    key='popup'
+    class=input.class
+    title=trTitle[state.type]
+    on-hidden('hidden')
+    on-keyPressed('keyPressed')
+>
+    <div.contents>
+        <text-p.text.medium>
+            ${trText[state.type]}
+        </text-p>
+
+        <div.flags>
+            <for|flag| of=flags[state.type]>
+                $ const selected = state.flagSelected == flag
+
+                <button-default.button-flag
+                    class=(selected ? 'selected' : '')
+                    on-click('selectFlag', flag)
+                >
+                    <checkbox checked=selected on-checked('selectFlag', flag) />
+
+                    <span.text>
+                        ${trFlags[flag]}
+                    </span>
+                </button-default>
+            </for>
+        </div>
+
+        <if(state.showInputText)>
+            <input-textmulti
+                key='inputDetails'
+                icon='details'
+                noExternalUpdate
+                placeholder=trReport.inputDetails
+            />
+        </if>
+        <else-if(state.flagSelected.length)>
+            <button-text.button-addtext
+                icon='plus'
+                text=trReport.buttonDetails
+                on-click('showInputText')
+            />
+        </else-if>
+    </div>
+
+    <div.bar-submit>
+        <button-submit.big
+            disabled=(!state.flagSelected.length)
+            icon='flag'
+            loading=(state.status == 1)
+            text=trReport.buttonSubmit
+            on-click('submitRequested')
+        />
+    </div>
+</popup>
+
+style.less {
+    .popup.popup-report {
+        --buttonflag-height: 50px;
+        --buttonflag-spacing: 15px;
+        --buttonflag-text-fontsize: 17px;
+        --contents-spacing: 20px;
+        --padding-v: var(--padding-h);
+        //--panel-width: 480px;
+
+        >.wrapper {
+            >.panel {
+                max-width: 480px; // TODO
+
+                >.contents {
+                    display: flex;
+                    flex-direction: column;
+                    gap: var(--contents-spacing);
+                    padding: var(--padding-v) var(--padding-h);
+
+                    >.text {
+                        color: var(--color-text2);
+                    }
+
+                    >.flags {
+                        display: flex;
+                        flex-direction: column;
+
+                        >.button-flag {
+                            align-items: center;
+                            display: flex;
+                            gap: var(--buttonflag-spacing);
+                            height: var(--buttonflag-height);
+                            margin: 0 calc(-1 * var(--padding-h));
+                            padding: 0 var(--padding-h);
+                            .transition(background-color 0.2s ease-out);
+
+                            >.text {
+                                color: var(--color-text2);
+                                font-family: @font-medium;
+                                font-size: var(--buttonflag-text-fontsize);
+                                .transition(color 0.2s ease-out);
+                            }
+
+                            &:hover,
+                            &.selected {
+                                background-color: var(--color-button1);
+
+                                >.text {
+                                    color: var(--color-text4);
+                                }
+                            }
+                        }
+                    }
+
+                    >.button-addtext {
+                        align-self: center;
+                    }
+                }
+
+                >.bar-submit {
+                    border-top: 1px solid var(--color-border2);
+                    padding: var(--padding-v) var(--padding-h);
+                    .flex-center();
+                }
+            }
+        }
+    }
+};

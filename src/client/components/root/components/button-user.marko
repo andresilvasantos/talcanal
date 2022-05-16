@@ -1,0 +1,75 @@
+$ const user = input.user || {}
+
+<button-default.button-user
+    class=input.class
+    on-click('emit', 'click')
+    on-middleClick('emit', 'middleClick')
+>
+    <image-circle.medium image=user.image />
+
+    <span.username>
+        ${user.username}
+    </span>
+
+    <if(input.isAdmin)>
+        <icon.icon-admin name='key' />
+    </if>
+</button-default>
+
+style.less {
+    .button-user {
+        --height: 40px;
+        --iconadmin-size: 16px;
+        --padding: 10px;
+        --spacing: 10px;
+        --username-fontsize: 15px;
+
+        background-color: var(--color-button1);
+        border-radius: var(--app-borderradius);
+        gap: var(--spacing);
+        height: var(--height);
+        padding: var(--padding);
+        .flex-center();
+        .transition(background-color 0.2s ease-out);
+
+        >.username {
+            color: var(--color-text2);
+            font-family: @font-medium;
+            font-size: var(--username-fontsize);
+            .transition(color 0.2s ease-out);
+        }
+
+        >.icon-admin {
+            color: var(--color-icon2);
+            display: flex;
+            .size(var(--iconadmin-size));
+            .transition(color 0.2s ease-out);
+        }
+
+        &:hover {
+            background-color: var(--color-button2);
+
+            >.username {
+                color: var(--color-text4);
+            }
+
+            >.icon-admin {
+                color: var(--color-icon3);
+                .scale(1.1);
+            }
+        }
+
+        &.selected {
+            background-color: var(--color-button2);
+            outline: 2px solid var(--color-accent1);
+
+            >.username {
+                color: var(--color-text4);
+            }
+
+            >.icon-admin {
+                color: var(--color-icon3);
+            }
+        }
+    }
+};

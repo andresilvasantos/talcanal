@@ -1,0 +1,178 @@
+class {
+    onCreate(input) {
+        this.state = {
+            index: input.index || 0,
+            tabs: input.tabs || []
+        }
+    }
+
+    onInput(input) {
+        if(!input.noExternalUpdate) {
+            if(this.mounted) {
+                const indexOld = this.state.index
+                const tabsOld = this.state.tabs
+
+                this.state.tabs = input.tabs || []
+
+                if(input.hasOwnProperty('index')) {
+                    this.setIndex(input.index)
+                }
+                else {
+                    if(this.state.index >= this.state.tabs.length) {
+                        this.setIndex(0)
+                    }
+                }
+
+                const index = this.state.index
+                const tabs = this.state.tabs
+
+                const idOld = (
+                    tabsOld.length && indexOld >= 0 ? tabsOld[indexOld].id || tabsOld[indexOld] : ''
+                )
+                const id = tabs.length && index >= 0 ? tabs[index].id || tabs[index] : ''
+
+                if(tabs.length && idOld != id) {
+                    this.emit('tabChanged', this.state.index, id)
+                }
+            }
+        }
+    }
+
+    onMount() {
+        this.mounted = true
+    }
+
+    // Getters & Setters.
+
+    getIndex() {
+        return this.state.index
+    }
+
+    setIndex(index) {
+        if(index >= this.state.tabs.length) {
+            this.state.index = 0
+            return
+        }
+
+        this.state.index = index
+    }
+
+    setOption(id) {
+        for(const [index, tab] of this.state.tabs.entries()) {
+            if(id == (tab.id || tab)) {
+                this.state.index = index
+                break
+            }
+        }
+    }
+
+    // Functions.
+
+    tabSelected(index, idTab) {
+        this.setIndex(index)
+
+        this.emit('tabChanged', index, idTab)
+    }
+}
+
+<div.tabs class=input.class>
+    <for|tab, index| of=state.tabs>
+        $ const selected = index == state.index
+
+        <button-text.tab
+            class=(selected ? 'selected' : '')
+            icon=tab.icon
+            text=(tab.text || tab)
+            on-click('tabSelected', index, tab.id || tab)
+        >
+            <div.selection />
+        </button-text>
+    </for>
+</div>
+
+style.less {
+    .tabs {
+        --tab-fontsize: 19px;
+        --tab-iconsize: 20px;
+        --tabselection-height: 2px;
+
+        height: var(--barpane-height);
+        display: flex;
+
+        &.full-height {
+            height: 100%;
+        }
+
+        >.tab {
+            --color: var(--color-text1);
+            --fontfamily: @font;
+            --fontsize: var(--tab-fontsize);
+            --height: 100%;
+            --icon-color: var(--color-icon1);
+            --icon-size: var(--tab-iconsize);
+
+            border: none;
+            border-bottom-left-radius: 0;
+            border-bottom-right-radius: 0;
+            flex: 1 1 0;
+            position: relative;
+            .flex-center();
+
+            >.selection {
+                background-color: var(--color-icon3);
+                border-top-left-radius: 2px;
+                border-top-right-radius: 2px;
+                bottom: 0;
+                left: 50%;
+                position: absolute;
+                .size(0, var(--tabselection-height));
+                .transition(width 0.2s ease-out);
+                .translateX(-50%);
+            }
+
+            &.selected {
+                --backgroundcolor: transparent;
+                --color: var(--color-text3);
+                --fontfamily: @font-medium;
+                --icon-color: var(--color-icon3);
+
+                >.selection {
+                    width: 100%;
+                }
+            }
+
+            &:hover {
+                --backgroundcolor: var(--color-button1);
+            }
+        }
+
+        // Media queries
+
+        .r-max(@break-md, {
+            --tab-fontsize: 18px;
+            --tab-iconsize: 19px;
+        });
+
+        .r-max(@break-ms, {
+            --tab-fontsize: 17px;
+            --tab-iconsize: 18px;
+        });
+
+        .r-max(@break-sm, {
+            --tab-fontsize: 15px;
+            --tab-iconsize: 16px;
+        });
+
+        .r-max(@break-xs, {
+            &.hidetext-whensmall {
+                >.tab {
+                    &:not(.selected) {
+                        >.text {
+                            display: none;
+                        }
+                    }
+                }
+            }
+        });
+    }
+};

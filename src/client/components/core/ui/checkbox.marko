@@ -1,0 +1,198 @@
+class {
+    onCreate(input, out) {
+        this.state = {
+            checked: input.checked || false
+        }
+    }
+
+    onInput(input) {
+        if(!input.noExternalUpdate) {
+            this.setChecked(input.checked || false)
+        }
+    }
+
+    isChecked() {
+        return this.state.checked
+    }
+
+    setChecked(checked) {
+        if(checked == this.state.checked) {
+            return
+        }
+
+        this.state.checked = checked
+    }
+
+    toggleCheck() {
+        this.state.checked = !this.state.checked
+
+        this.emit('checked', this.state.checked)
+    }
+}
+
+<button-default.checkbox
+    class=[input.class, state.checked ? 'checked': '' ]
+    disabled=input.disabled
+    tooltip=input.tooltip
+    on-click('toggleCheck')
+>
+    <div.wrapper>
+        <div.wrapper-icon>
+            <icon name='check' />
+        </div>
+
+        <${data.renderBody} />
+
+        <if(input.text)>
+            <span.label>
+                ${input.text}
+            </span>
+        </if>
+    </div>
+
+    <if(input.explanation)>
+        <text-p.explanation.small>
+            ${input.explanation}
+        </text-p>
+    </if>
+</button-default>
+
+style.less {
+    .checkbox {
+        --font-size: 17px;
+        --icon-size: 17px;
+        --size: 30px;
+        --spacing: 0;
+        --wrapper-spacing: 15px;
+
+        display: flex;
+        flex-direction: column;
+        gap: var(--spacing);
+        position: relative;
+
+        >.wrapper {
+            align-items: center;
+            display: flex;
+            gap: var(--wrapper-spacing);
+
+            >.wrapper-icon {
+                background-color: var(--color-input1);
+                border: 1px solid var(--color-border1);
+                border-radius: var(--app-borderradius);
+                flex-shrink: 0;
+                pointer-events: none;
+                .flex-center();
+                .size(var(--size));
+                .transition(background-color 0.2s ease-out, border-color 0.2s ease-out;);
+
+                >.icon {
+                    color: var(--color-icon2);
+                    display: flex;
+                    opacity: 0;
+                    .size(var(--icon-size));
+                    .transition(color 0.2s ease-out, opacity 0.2s ease-out;);
+                }
+            }
+
+            >.label {
+                color: var(--color-text2);
+                font-size: var(--font-size);
+                .transition(color 0.2s ease-out);
+                .user-select(none);
+            }
+
+            &:hover {
+                >.wrapper-icon {
+                    background-color: var(--color-input2);
+                    border-color: var(--color-border3);
+
+                    >.icon {
+                        color: var(--color-icon2);
+                    }
+                }
+
+                >.label {
+                    color: var(--color-text3);
+                }
+            }
+        }
+
+        &.checked {
+            >.wrapper {
+                >.wrapper-icon {
+                    >.icon {
+                        opacity: 1;
+                    }
+                }
+            }
+        }
+
+        >.explanation {
+            color: var(--color-text2);
+            pointer-events: none;
+            margin-left: calc(var(--size) + var(--wrapper-spacing));
+        }
+
+        &.big {
+            --font-size: 23px;
+            --icon-size: 20px;
+            --size: 36px;
+            --wrapper-spacing: 20px;
+
+            >.wrapper>.label {
+                font-family: @font-semibold;
+            }
+        }
+
+        // Media queries.
+
+        /*.r-max(@break-md, {
+            --font-size: 20px;
+            --icon-size: 18px;
+            --size: 32px;
+            --wrapper-spacing: 16px;
+        });*/
+
+        .r-max(@break-ms, {
+            --font-size: 16px;
+            --icon-size: 16px;
+            --size: 28px;
+            --wrapper-spacing: 12px;
+
+            &.big {
+                --font-size: 20px;
+                --icon-size: 18px;
+                --size: 32px;
+                --wrapper-spacing: 18px;
+            }
+        });
+
+        .r-max(@break-sm, {
+            --font-size: 15px;
+            --icon-size: 16px;
+            --size: 26px;
+            --wrapper-spacing: 12px;
+
+            &.big {
+                --font-size: 18px;
+                --icon-size: 16px;
+                --size: 30px;
+                --wrapper-spacing: 16px;
+            }
+        });
+
+        .r-max(@break-xs, {
+            --font-size: 14px;
+            --icon-size: 15px;
+            --size: 25px;
+            --wrapper-spacing: 10px;
+
+            &.big {
+                --font-size: 17px;
+                --icon-size: 15px;
+                --size: 30px;
+                --wrapper-spacing: 15px;
+            }
+        });
+    }
+};

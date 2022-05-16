@@ -1,0 +1,157 @@
+import appm from 'js/app-manager'
+
+class {
+    onMount() {
+        this.popupComponent = this.getComponent('popup')
+    }
+
+    // Functions.
+
+    hide() {
+        if(!this.visible) {
+            return
+        }
+
+        this.popupComponent.hide()
+    }
+
+    hidden() {
+        this.visible = false
+    }
+
+    keyPressed(event) {
+        if(event.keyCode == 13) {
+
+        }
+    }
+
+    show() {
+        if(this.visible) {
+            return
+        }
+
+        this.visible = true
+
+        this.popupComponent.show()
+    }
+}
+
+$ const trActivated = appm.tr('activated') || {}
+
+<popup.popup-activated
+    key='popup'
+    class=input.class
+    title=trActivated.title
+    on-hidden('hidden')
+    on-keyPressed('keyPressed')
+>
+    <div.contents>
+        <div.wrapper-image>
+            <breakpoint-condition break='ms' min>
+                <image.banner.cover src=`/assets/images/auth/welcome.jpg` />
+
+                <@else>
+                    <image.banner.cover src=`/assets/images/auth/welcome-h.jpg` />
+                </@else>
+            </breakpoint-condition>
+        </div>
+
+        <div.wrapper>
+            <div.wrapper-text>
+                <span.heading>
+                    $!{trActivated.heading}
+                </span>
+
+                <text-p.text>
+                    $!{trActivated.text}
+                </text-p>
+            </div>
+
+            <button-text.button-agree.big.strong text=trActivated.buttonAgree on-click('hide') />
+        </div>
+    </div>
+</popup>
+
+style.less {
+    .popup-activated {
+        --heading-fontsize: 20px;
+        --image-height: unset;
+        --image-width: 280px;
+        --wrappertext-spacing: 20px;
+        --wrapper-spacing: 30px;
+
+        >.wrapper {
+            >.panel {
+                >.contents {
+                    display: flex;
+
+                    >.wrapper-image {
+                        flex-shrink: 0;
+                        position: relative;
+                        .size(var(--image-width), var(--image-height));
+
+                        >.banner {
+                            .absolute-fill();
+                        }
+                    }
+
+                    >.wrapper {
+                        align-items: flex-start;
+                        display: flex;
+                        flex-direction: column;
+                        gap: var(--wrapper-spacing);
+                        padding: var(--app-padding-bigger);
+                        width: 100%;
+
+                        >.wrapper-text {
+                            display: flex;
+                            flex-direction: column;
+                            gap: var(--wrappertext-spacing);
+
+                            >.heading {
+                                color: var(--color-text2);
+                                font-size: var(--heading-fontsize);
+                            }
+
+                            >.text {
+                                color: var(--color-text2);
+
+                                >a {
+                                    color: var(--color-accent1);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Media queries.
+
+        .r-max(@break-ms, {
+            >.wrapper {
+                >.panel {
+                    >.contents {
+                        flex-direction: column;
+                    }
+                }
+            }
+
+            --heading-fontsize: 19px;
+            --image-height: 200px;
+            --image-width: 100%;
+            //--wrapper-spacing: 30px;
+        });
+
+        .r-max(@break-sm, {
+            --heading-fontsize: 18px;
+            //--wrapper-spacing: 20px;
+        });
+
+        .r-max(@break-xs, {
+            --heading-fontsize: 17px;
+            --wrappertext-spacing: 15px;
+            //--wrapper-spacing: 15px;
+        });
+    }
+};

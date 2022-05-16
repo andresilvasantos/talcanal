@@ -1,0 +1,59 @@
+import { abbreviateNumber } from 'js/utils'
+
+<if(input.count)>
+    <span.counter-button class=input.class>
+        ${abbreviateNumber(input.count)}
+    </span>
+</if>
+
+style.less {
+    .counter-button {
+        --fontsize: 12px;
+        --minwidth: 15px;
+        --padding: 2px;
+        --right: -5px;
+        --bottom: -7px;
+
+        background-color: var(--color-accent1);
+        border-radius: 4px; // TODO
+        bottom: var(--bottom);
+        color: var(--color-background1);
+        font-family: @font-semibold;
+        font-size: var(--fontsize);
+        line-height: 1;
+        min-width: var(--minwidth);
+        padding: var(--padding);
+        pointer-events: none;
+        position: absolute;
+        right: var(--right);
+        z-index: 2;
+        .flex-center();
+
+        &.big {
+            --fontsize: 15px;
+            --minwidth: 16px;
+            --padding: 2px 5px;
+        }
+
+        // Media queries.
+
+        .r-max(@break-sm, {
+            --padding: 1px;
+
+            &.big {
+                --fontsize: 13px;
+                --minwidth: 15px;
+                --padding: 2px;
+            }
+        });
+
+        .r-max(@break-xs, {
+            --fontsize: 11px;
+            --minwidth: 13px;
+
+            &.big {
+                --fontsize: 12px;
+            }
+        });
+    }
+};

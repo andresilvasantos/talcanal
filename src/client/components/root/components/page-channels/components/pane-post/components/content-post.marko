@@ -1,0 +1,253 @@
+import appm from 'js/app-manager'
+import { extractHostName } from 'js/utils'
+
+class {
+    onCreate(input) {
+        this.state = {
+            isPageVisible: true,
+            post: input.post || {}
+        }
+
+        this.pageChanged = this.pageChanged.bind(this)
+    }
+
+    onInput(input) {
+        this.state.post = input.post || {}
+    }
+
+    onMount() {
+        appm.on('pageChanged', this.pageChanged)
+    }
+
+    onDestroy() {
+        appm.off('pageChanged', this.pageChanged)
+    }
+
+    // Functions.
+
+    imageSliderChanged() {
+        appm.addAnalyticsEvent('post', 'slideImage')
+    }
+
+    lightboxToggled(toggled) {
+        appm.addAnalyticsEvent('post', 'toggleLightbox', toggled)
+    }
+
+    linkClick(link) {
+        appm.addAnalyticsEvent('post', 'clickLink', link)
+    }
+
+    listImagesClick() {
+        appm.addAnalyticsEvent('post', 'clickSlidersListMini')
+    }
+
+    pageChanged(idPage, idPane, args) {
+        if(this.state.isPageVisible) {
+            this.state.isPageVisible = false
+        }
+        else if(this.getEl().offsetParent !== null) {
+            this.state.isPageVisible = true
+        }
+    }
+}
+
+$ const getGfycatEmbedUrl = (url) => {
+    const regExp = /^.*(gfycat\.com\/)([A-z0-9]+)/
+    const match = url.match(regExp)
+
+    return (match ?
+        `https://gfycat.com/ifr/${match[2]}` :
+        null
+    )
+}
+
+$ const getSoundCloudEmbedUrl = (url) => {
+    const regExp = /^.*(soundcloud\.com\/)([A-z0-9]+)\/([A-z0-9]+)/
+    const match = url.match(regExp)
+
+    return (match ?
+        `https://w.soundcloud.com/player/?url=${url}&color=222222&auto_play=false&hide_related=false&show_comments=true&show_user=true&show_reposts=false` :
+        null
+    )
+}
+
+$ const getStreamableEmbedUrl = (url) => {
+    const regExp = /^.*(streamable\.com\/|e\/)([A-z0-9]+)/
+    const match = url.match(regExp)
+
+    return (match ?
+        `https://streamable.com/e/${match[2]}` :
+        null
+    )
+}
+
+$ const getStreamGgEmbedUrl = (url) => {
+    const regExp = /^.*(streamgg\.com\/v\/)([A-z0-9]+)/
+    const match = url.match(regExp)
+
+    return (match ?
+        `https://streamgg.com/v/${match[2]}` :
+        null
+    )
+}
+
+$ const getTwitterEmbedUrl = (url) => {
+    const regExp = /^.*(twitter\.com\/)([A-z0-9]+)\/(status+)\/([0-9]+)/
+    const match = url.match(regExp)
+
+    return (match ?
+        `https://twitter.com/x/status/${match[4]}` :
+        null
+    )
+}
+
+$ const getVimeoEmbedUrl = (url) => {
+    const regExp = /^.*(vimeo\.com\/)((channels\/[A-z]+\/)|(groups\/[A-z]+\/videos\/))?([0-9]+)/
+    const match = url.match(regExp)
+
+    return (match ?
+        `https://player.vimeo.com/video/${match[5]}` :
+        null
+    )
+}
+
+$ const getYouTubeEmbedUrl = (url) => {
+    const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|&v=)([^#&?]*).*/
+    const match = url.match(regExp)
+
+    return (match && match[2].length === 11)
+      ? `https://www.youtube.com/embed/${match[2]}?autoplay=0&rel=0`
+      : null
+}
+
+$ const processUrlEmbed = (url) => {
+    if(!url || !url.length) {
+        return null
+    }
+
+    const hostname = extractHostName(url)
+
+    for(const allowedSource of ['youtube', 'youtu.be', 'vimeo', 'soundcloud', 'streamable', 'twitter', 'streamgg', 'gfycat']) {
+        if(hostname.includes(allowedSource)) {
+            switch(allowedSource) {
+                case 'youtube':
+                case 'youtu.be': {
+                    return getYouTubeEmbedUrl(url)
+                }
+                case 'vimeo': {
+                    return getVimeoEmbedUrl(url)
+                }
+                case 'soundcloud': {
+                    return getSoundCloudEmbedUrl(url)
+                }
+                case 'streamable': {
+                    return getStreamableEmbedUrl(url)
+                }
+                case 'streamgg': {
+                    return getStreamGgEmbedUrl(url)
+                }
+                case 'twitter': {
+                    return getTwitterEmbedUrl(url)
+                }
+                case 'gfycat': {
+                    return getGfycatEmbedUrl(url)
+                }
+            }
+        }
+    }
+
+    return null
+}
+
+$ const post = state.post || {}
+
+<div.content-post class=input.class>
+    <if(!input.editMode && post.text && post.text.length)>
+        <text-p.text>
+            <if(post.edited && input.showOriginal)>
+                $!{post.textOriginal}
+            </if>
+            <else>
+                $!{post.text}
+            </else>
+        </text-p>
+    </if>
+
+    <if(post.type == 'link')>
+        $ const urlEmbedded = processUrlEmbed(post.link)
+
+        <if(urlEmbedded)>
+            <if(state.isPageVisible)>
+                <webframe url=urlEmbedded />
+            </if>
+        </if>
+        <else>
+            $ const image = post.images.length ? post.images[0] : null
+
+            <image-link
+                image=image
+                link=post.link
+                on-click('linkClick', post.link)
+                on-middleClick('linkClick', post.link)
+            />
+        </else>
+    </if>
+    <else-if(post.type == 'image')>
+        <gallery
+            images=post.images
+            on-imageSliderChanged('imageSliderChanged')
+            on-lightboxToggled('lightboxToggled')
+            on-listImagesClick('listImagesClick')
+        />
+    </else-if>
+    <else-if(post.type == 'poll')>
+        <poll post=post />
+    </else-if>
+</div>
+
+style.less {
+    .content-post {
+        --imagelink-height: 350px;
+        --spacing: 20px;
+
+        display: flex;
+        flex-direction: column;
+        gap: var(--spacing);
+
+        >.text {
+            .text-rich(var(--color-text3));
+        }
+
+        >.image-link,
+        >.webframe {
+            height: var(--imagelink-height);
+        }
+
+        >.poll {
+            align-self: center;
+        }
+
+        // Media queries
+
+        .r-max(@break-md, {
+            --icon-size: 24px;
+
+            >.image {
+                min-height: 100px;
+            }
+        });
+
+        .r-max(@break-ms, {
+            --imagelink-height: 320px;
+            --spacing: 15px;
+        });
+
+        .r-max(@break-sm, {
+            --imagelink-height: 250px;
+        });
+
+        .r-max(@break-xs, {
+            --imagelink-height: 200px;
+        });
+    }
+};

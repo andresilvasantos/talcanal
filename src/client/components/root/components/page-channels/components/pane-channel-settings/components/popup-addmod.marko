@@ -1,0 +1,56 @@
+import appm from 'js/app-manager'
+
+class {
+    onCreate() {
+        this.state = {
+            status: 0
+        }
+    }
+
+    onMount() {
+        this.popupComponent = this.getComponent('popup')
+    }
+
+    // Functions.
+
+    hide() {
+        this.popupComponent.hide()
+    }
+
+    hidden() {
+        this.state.status = 0
+    }
+
+    show(args) {
+        if(this.popupComponent.isVisible()) {
+            return
+        }
+
+        const channel = args[1] || {}
+
+        this.popupComponent.show(args[0], { channel: channel.id, toMod: true })
+    }
+
+    submitRequested(user) {
+        if(this.state.status == 1) {
+            return
+        }
+
+        this.state.status = 1
+
+        appm.emit('modAdded', user)
+        this.hide()
+    }
+}
+
+$ const trAddMod = appm.tr('channels.settings.addMod') || {}
+
+<popup-users
+    key='popup'
+    iconButton='plus'
+    status=state.status
+    title=trAddMod.title
+    textButton=trAddMod.buttonAdd
+    on-hidden('hidden')
+    on-submitRequested('submitRequested')
+/>

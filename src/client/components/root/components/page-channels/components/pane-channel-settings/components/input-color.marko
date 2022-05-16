@@ -1,0 +1,83 @@
+class {
+    onCreate(input) {
+        this.state = {
+            color: input.color || 1,
+            opened: false
+        }
+    }
+
+    onInput(input) {
+        this.state.color = input.color
+    }
+
+    // Getters & Setters.
+
+    getColor() {
+        return this.state.color
+    }
+
+    // Functions.
+
+    applyColor(color) {
+        this.state.color = color
+
+        this.hidePopup()
+    }
+
+    hidePopup() {
+        this.state.opened = false
+    }
+
+    togglePopup() {
+        this.state.opened = !this.state.opened
+    }
+}
+
+<div.input-color class=input.class>
+    <button-icon.input-color
+        style=`background-color: var(--color-tags-${state.color})`
+        on-click('togglePopup')
+    />
+
+    <if(state.opened)>
+        <div.overlay on-click('hidePopup') />
+
+        <div.popup-colors>
+            <for|index| from=0 to=9>
+                <button-default.button-color
+                    style=`background-color: var(--color-tags-${index + 1})`
+                    on-click('applyColor', index + 1)
+                />
+            </for>
+        </div>
+    </if>
+</div>
+
+style.less {
+    .input-color {
+        position: relative;
+
+        >.overlay {
+            pointer-events: auto;
+            .fixed-fill();
+        }
+
+        >.popup-colors {
+            background-color: var(--color-background2);
+            border: 1px solid var(--color-border1);
+            border-radius: var(--app-borderradius2);
+            bottom: calc(100% + 5px);
+            left: 0;
+            padding: 10px; // TODO
+            position: absolute;
+            z-index: 2;
+            .grid(5, 5px, 5px); // TODO
+
+            >.button-color {
+                border-radius: var(--app-borderradius);
+                .flex-center();
+                .size(35px); // TODO
+            }
+        }
+    }
+};

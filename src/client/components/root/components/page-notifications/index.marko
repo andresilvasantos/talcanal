@@ -1,0 +1,155 @@
+import appm from 'js/app-manager'
+import { scrollReachBottom } from 'js/utils'
+import { timers } from 'js/default-vars'
+
+class {
+    onCreate() {
+        this.state = {
+            countNotifications: 0,
+            countNotificationsNew: 0,
+            fetchingNotifications: true,
+            notifications: []
+        }
+
+        this.pageCurrent = 0
+
+        this.notificationsFetched = this.notificationsFetched.bind(this)
+    }
+
+    onMount() {
+        appm.on('fetchItemsSuccess', this.notificationsFetched)
+    }
+
+    onDestroy() {
+        clearTimeout(this.timeoutBetweenFetches)
+
+        appm.off('fetchItemsSuccess', this.notificationsFetched)
+    }
+
+    // Getters & Setters.
+
+    setData(args) {
+        this.pageCurrent = 0
+
+        if(appm.isUserSignedIn()) {
+            this.state.countNotificationsNew = appm.getUser().countNotificationsNew
+        }
+
+        this.fetchNotifications()
+    }
+
+    // Functions.
+
+    checkLoadMore() {
+        if(
+            this.state.fetchingNotifications ||
+            !this.state.notifications.length ||
+            this.state.notifications.length >= this.state.countNotifications ||
+            !scrollReachBottom(this.getEl())
+        ) {
+            return
+        }
+
+        ++this.pageCurrent
+
+        this.fetchNotifications()
+    }
+
+    fetchNotifications() {
+        this.state.fetchingNotifications = true
+
+        if(!this.pageCurrent) {
+            this.state.countNotifications = 0
+            this.state.notifications = []
+        }
+
+        if(this.timeoutBetweenFetches) {
+            clearTimeout(this.timeoutBetweenFetches)
+        }
+
+        this.timeoutBetweenFetches = setTimeout(() => {
+            this.idFetch = appm.fetchItems('notifications', '', null, this.pageCurrent)
+        }, timers.betweenFetches)
+    }
+
+    // Functions.
+
+    createPostRequested() {
+        appm.showPopup('createPost')
+    }
+
+    handleScroll() {
+        const paneDefault = this.getComponent('root')
+
+        if(paneDefault) {
+            paneDefault.handleScroll()
+        }
+
+        this.checkLoadMore()
+    }
+
+    notificationsFetched(idFetch, items, count) {
+        if(idFetch != this.idFetch) {
+            return
+        }
+
+        this.state.fetchingNotifications = false
+
+        if(this.pageCurrent > 0) {
+            const itemsUnique = items.filter(item => !this.idsItems.includes(item._id))
+
+            this.state.notifications = this.state.notifications.concat(itemsUnique)
+            this.idsItems = this.idsItems.concat(itemsUnique.map(item => item._id ))
+        }
+        else {
+            this.state.notifications = items
+            this.idsItems = items.map(item => item._id)
+        }
+
+        this.state.countNotifications = count
+    }
+
+    refresh() {
+        this.pageCurrent = 0
+
+        this.fetchNotifications()
+    }
+}
+
+$ const notifications = state.notifications || []
+$ const trNotifications = appm.tr('notifications') || {}
+
+<pane-default.pane-notifications
+    key='root'
+    allowBack
+    class=input.class
+    idPage='notifications'
+    title=trNotifications.title
+    on-refreshRequested('refresh')
+>
+    <@contents class=(!notifications.length ? 'center' : 'list')>
+        <if(notifications.length || state.fetchingNotifications)>
+            <for|notification, index| of=notifications>
+                $ const unseen = state.countNotificationsNew > index
+
+                <card-notification class=(unseen ? 'unseen' : '') notification=notification />
+            </for>
+        </if>
+        <else>
+            $ const trNoNotifications = trNotifications.noNotifications || {}
+
+            <contents-empty
+                icon='bell'
+                iconButton='pencil'
+                textButton=trNoNotifications.button
+                text=trNoNotifications.text
+                title=trNoNotifications.title
+                on-click('createPostRequested')
+            />
+        </else>
+    </@contents>
+
+    <@footer>
+        <loading-finder show=state.fetchingNotifications />
+    </@footer>
+</pane-default>

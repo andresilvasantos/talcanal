@@ -1,0 +1,165 @@
+import appm from 'js/app-manager'
+import { processObjectsTr } from 'js/utils'
+
+class {
+    onCreate() {
+        this.state = {
+            showSearch: false
+        }
+    }
+
+    // Getters & Setters.
+
+    setSearch(value) {
+        this.getComponent('inputSearch').setValue(value || '')
+    }
+
+    // Functions.
+
+    clearSearch() {
+        if(this.state.showSearch) {
+            this.setSearch('')
+            this.state.showSearch = false
+        }
+    }
+
+    searchFocusOut() {
+        const inputSearch = this.getComponent('inputSearch')
+
+        if(!inputSearch.getValue().length) {
+            this.state.showSearch = false
+        }
+    }
+
+    toggleSearch() {
+        this.state.showSearch = !this.state.showSearch
+
+        if(this.state.showSearch) {
+            this.update()
+
+            const inputSearch = this.getComponent('inputSearch')
+
+            inputSearch.focusInput()
+            appm.addAnalyticsEvent('search', 'toggleSearch', this.filter)
+        }
+    }
+}
+
+$ const id = input.id
+$ const item = input.item || {}
+
+$ const trGeneric = appm.tr('generic') || {}
+$ const trTooltips = trGeneric.tooltips || {}
+
+<div.combo-searchsort class=input.class>
+    <if(state.showSearch)>
+        <input-search
+            key='inputSearch'
+            count=input.countItems
+            loading=input.loading
+            placeholder=trGeneric.search
+            on-cleared('searchFocusOut')
+            on-focusOut('searchFocusOut')
+            on-searchChanged('emit', 'searchChanged')
+        />
+    </if>
+    <else>
+        <button-icon
+            icon='search'
+            tooltip=trTooltips.search
+            on-click('toggleSearch')
+        />
+    </else>
+
+    <if(input.viewModes && input.viewModes.length)>
+        <button-viewmodes
+            index=(input.indexViewMode || 0)
+            modes=input.viewModes
+            on-viewModeChanged('emit', 'viewModeChanged')
+        />
+    </if>
+
+    <if(input.sortOptions && input.sortOptions.length)>
+        $ const trSort = trGeneric.sort || {}
+
+        <dropdown.dropdown-sort
+            index=(input.indexSort || 0)
+            options=processObjectsTr(input.sortOptions,  trSort)
+            sort
+            tooltip=trTooltips.sort
+            on-optionChanged('emit', 'sortChanged')
+        />
+    </if>
+
+    <${data.renderBody} />
+</div>
+
+style.less {
+    .combo-searchsort {
+        --search-width: 250px;
+        --spacing: 10px;
+
+        align-items: center;
+        display: flex;
+        gap: var(--spacing);
+
+        >.input-search {
+            width: var(--search-width);
+        }
+
+        // Media queries
+
+        .r-max(@break-lg, {
+        });
+
+        .r-max(@break-ms, {
+            --search-width: 200px;
+            --spacing: 8px;
+        });
+
+        .r-max(@break-sm, {
+            --search-width: 150px;
+            --spacing: 5px;
+        });
+
+        .r-max(@break-xs, {
+
+            >.dropdown-sort {
+                >.button-main {
+                    padding: 0;
+                    width: var(--height);
+                    .flex-center();
+
+                    >.text {
+                        display: none;
+                    }
+
+                    >.arrow {
+                        margin-left: 0;
+                    }
+                }
+
+                >.wrapper-options {
+                    left: unset;
+                    min-width: 100%;
+                }
+
+                &.options-visible {
+                    >.button-main {
+                        padding: 10px;
+                        width: unset;
+
+                        >.text {
+                            display: unset;
+                        }
+                    }
+                }
+            }
+        });
+
+        .r-max(@break-ms, {
+            flex-wrap: wrap;
+            justify-content: flex-end;
+        });
+    }
+};

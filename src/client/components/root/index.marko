@@ -1,0 +1,14 @@
+import appm from 'js/app-manager'
+import { metadataFromPage } from 'js/composer'
+
+$ const metadata = metadataFromPage(input.page, input.pane, [input.data], appm)
+
+<main-layout
+    description=((metadata.description || '').replace(/<(.|\n)*?>/g, ''))
+    ogImage=metadata.image
+    title=metadata.title
+>
+    <@body>
+        <composer data=input.data info=input.info page=input.page pane=input.pane />
+    </@body>
+</main-layout>

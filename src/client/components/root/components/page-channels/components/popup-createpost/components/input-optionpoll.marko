@@ -1,0 +1,83 @@
+class {
+    onCreate(input) {
+        this.state = {
+            name: input.name || ''
+        }
+    }
+
+    onInput(input) {
+        this.state.name = input.name || ''
+
+        if(this.mounted) {
+            this.setStateDirty('name')
+        }
+    }
+
+    onMount() {
+        this.mounted = true
+    }
+}
+
+<div.input-optionpoll class=input.class on-dragover('emit', 'dragOver')>
+    <div.wrapper>
+        <input-text.big
+            class=(input.valid || state.name.length ? '' : 'invalid')
+            maxlength=50
+            placeholder=input.placeholder
+            text=state.name
+            on-valueChanged('emit', 'nameChanged')
+        />
+
+        <button-icon.button-drag.icon-only.light
+            draggable
+            icon='grip'
+            on-dragend('emit', 'dragEnd')
+            on-dragstart('emit', 'dragStart')
+        />
+
+        <if(input.allowRemove)>
+            <button-icon.button-removeoption.light
+                icon='bin'
+                on-click('emit', 'removeRequested')
+            />
+        </if>
+    </div>
+</div>
+
+style.less {
+    .input-optionpoll {
+        --buttondrag-marginright: 10px;
+        --buttonremove-marginleft: 10px;
+        --input-width: 400px;
+
+        padding: 0 30px;
+
+        >.wrapper {
+            position: relative;
+
+            >.input-text {
+                width: var(--input-width);
+            }
+
+            >.button-drag {
+                right: calc(100% + var(--buttondrag-marginright));
+                position: absolute;
+                top: 50%;
+                .translateY(-50%);
+            }
+
+            >.button-removeoption {
+                left: calc(100% + var(--buttonremove-marginleft));
+                position: absolute;
+                top: 50%;
+                .translateY(-50%);
+            }
+        }
+
+        // Media queries
+
+        .r-max(@break-md, {
+            --input-width: unset;
+        });
+    }
+};

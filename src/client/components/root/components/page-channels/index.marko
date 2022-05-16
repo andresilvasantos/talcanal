@@ -1,0 +1,63 @@
+class {
+    // Getters & Setters.
+
+    setData(args, allowBack = false) {
+        const pane = this.getComponent('pane')
+
+        if(!pane) {
+            return
+        }
+
+        const paneDefault = pane.getComponent('root')
+
+        if(pane.setData) {
+            pane.setData(...args)
+        }
+
+        if(paneDefault) {
+            paneDefault.setAllowBack(allowBack)
+        }
+    }
+
+    // Functions.
+
+    handleScroll() {
+        const pane = this.getComponent('pane')
+
+        if(!pane) {
+            return
+        }
+
+        const paneDefault = pane.getComponent('root')
+
+        if(paneDefault) {
+            paneDefault.handleScroll()
+        }
+
+        if(pane.checkLoadMore) {
+            pane.checkLoadMore()
+        }
+    }
+}
+
+<if(input.id == 'post' || input.id == 'comment')>
+    <pane-post key='pane' />
+</if>
+<else-if(input.id == 'user')>
+    <pane-user key='pane' />
+</else-if>
+<else-if(input.id == 'channel')>
+    <pane-channel key='pane' />
+</else-if>
+<else-if(input.id == 'channelMod')>
+    <pane-channel-mod key='pane' />
+</else-if>
+<else-if(input.id == 'channelSettings')>
+    <pane-channel-settings key='pane' />
+</else-if>
+<else-if(input.id == 'explore')>
+    <pane-explore key='pane' />
+</else-if>
+<else>
+    <pane-channels key='pane' />
+</else>

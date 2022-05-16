@@ -1,0 +1,379 @@
+import appm from 'js/app-manager'
+import { getCookie, getIndexFromId, processObjectsTr, scrollReachBottom, setCookie } from 'js/utils'
+import { timers, viewModes } from 'js/default-vars'
+
+static const sortOptions = ['new', 'trending', 'topDay', 'topWeek', 'topMonth', 'topYear', 'topAllTime']
+
+class {
+    onCreate() {
+        this.state = {
+            countItems: 0,
+            fetchingItems: true,
+            idChannels: 'popular',
+            indexSort: 1,
+            indexViewMode: 0,
+            items: [],
+            typeData: 'posts'
+        }
+
+        this.filter = ''
+        this.pageCurrent = 0
+
+        this.itemDeleted = this.itemDeleted.bind(this)
+        this.itemsFetched = this.itemsFetched.bind(this)
+        this.userChanged = this.userChanged.bind(this)
+    }
+
+    onMount() {
+        appm.on('deleteItemSuccess', this.itemDeleted)
+        appm.on('fetchItemsSuccess', this.itemsFetched)
+        appm.on('userChanged', this.userChanged)
+    }
+
+    onDestroy() {
+        clearTimeout(this.timeoutBetweenFetches)
+
+        appm.off('deleteItemSuccess', this.itemDeleted)
+        appm.off('fetchItemsSuccess', this.itemsFetched)
+        appm.off('userChanged', this.userChanged)
+    }
+
+    // Getters & Setters
+
+    setData(idChannels) {
+        const channelsDefault = appm.isUserSignedIn() ? 'sub' : 'popular'
+
+        this.state.idChannels = idChannels || channelsDefault
+        this.state.typeData = 'posts'
+        this.pageCurrent = 0
+
+        // Set sort if it was saved in cookies.
+        const indexSort = sortOptions.indexOf(getCookie('sortChannel'))
+
+        if(indexSort >= 0) {
+            this.state.indexSort = indexSort
+        }
+
+        this.getComponent('searchSort').clearSearch()
+        this.calculateViewMode()
+        this.fetchItems()
+
+        if(this.state.idChannels == 'favorites') {
+            this.update()
+            this.getComponent('tabs').setIndex(0)
+        }
+    }
+
+    // Functions.
+
+    calculateViewMode() {
+        switch(this.state.typeData) {
+            case 'comments':
+                this.state.indexViewMode = 1
+                break
+            case 'posts':
+                this.state.indexViewMode = getIndexFromId(
+                    viewModes,
+                    appm.isUserSignedIn() ? appm.getUser().preferences.viewMode : [],
+                    getCookie('viewMode')
+                )
+                break
+        }
+    }
+
+    channelsRequested(newTab = false) {
+        appm.openPage('channels', 'channels', { newTab })
+    }
+
+    checkLoadMore() {
+        if(
+            this.state.fetchingItems ||
+            !this.state.items.length ||
+            this.state.items.length >= this.state.countItems ||
+            !scrollReachBottom(this.getEl())
+        ) {
+            return
+        }
+
+        ++this.pageCurrent
+
+        this.fetchItems()
+        appm.addAnalyticsEvent('channels', 'loadMore', this.state.idChannels)
+    }
+
+    commentRequested(comment, newTab = false) {
+        const post = comment.post || {}
+        const channel = post.channel || {}
+
+        appm.openPage('channels', 'comment', { allowBack: true, newTab },
+            { id: post.id, channel: { id: channel.id }}, comment.id)
+        appm.addAnalyticsEvent('channels', 'openComment', this.state.idChannels)
+    }
+
+    createPostRequested() {
+        appm.showPopup('createPost')
+    }
+
+    deleteCommentRequested(comment) {
+        appm.showPopup('deleteItem', 'comments', comment.id)
+    }
+
+    deleteItem(idItem) {
+        for(const [index, item] of this.state.items.entries()) {
+            if(item.id == idItem) {
+                this.state.items.splice(index, 1)
+                this.setStateDirty('items')
+                return
+            }
+        }
+    }
+
+    deletePostRequested(post) {
+        appm.showPopup('deleteItem', 'posts', post.id)
+    }
+
+    fetchItems() {
+        this.state.fetchingItems = true
+
+        if(!this.pageCurrent) {
+            this.state.countItems = 0
+            this.state.items = []
+        }
+
+        if(this.timeoutBetweenFetches) {
+            clearTimeout(this.timeoutBetweenFetches)
+        }
+
+        this.timeoutBetweenFetches = setTimeout(() => {
+            this.idFetch = appm.fetchItems(
+                this.state.typeData, this.filter, { channels: this.state.idChannels },
+                this.pageCurrent, sortOptions[this.state.indexSort]
+            )
+        }, timers.betweenFetches)
+    }
+
+    itemDeleted(type, id) {
+        if(type != 'posts' && type != 'comments') {
+            return
+        }
+
+        this.deleteItem(id)
+    }
+
+    itemsFetched(idFetch, items, count) {
+        if(idFetch != this.idFetch) {
+            return
+        }
+
+        this.state.fetchingItems = false
+
+        if(this.pageCurrent > 0) {
+            const itemsUnique = items.filter(item => !this.idsItems.includes(item.id))
+
+            this.state.items = this.state.items.concat(itemsUnique)
+            this.idsItems = this.idsItems.concat(itemsUnique.map(item => item.id ))
+        }
+        else {
+            this.state.items = items
+            this.idsItems = items.map(item => item.id )
+        }
+
+        this.state.countItems = count
+    }
+
+    postRequested(post, newTab = false) {
+        appm.openPage('channels', 'post', { allowBack: true, newTab }, post)
+        appm.addAnalyticsEvent('channels', 'openPost', this.state.idChannels)
+    }
+
+    refresh() {
+        this.pageCurrent = 0
+
+        this.fetchItems()
+        appm.addAnalyticsEvent('channels', 'refresh', this.state.idChannels)
+    }
+
+    searchChanged(search) {
+        this.pageCurrent = 0
+        this.filter = search
+
+        this.fetchItems()
+        appm.addAnalyticsEvent('channels', 'search', `${this.state.idChannels} - ${this.filter}`)
+    }
+
+    searchTag(idTag, channel, newTab) {
+        appm.openPage('channels', 'channel', { allowBack: true, newTab }, channel, idTag)
+        appm.addAnalyticsEvent('channels', 'searchTag', `${this.state.idChannels} #${idTag}`)
+    }
+
+    sortChanged(index) {
+        this.pageCurrent = 0
+        this.state.indexSort = index
+
+        const idSort = sortOptions[this.state.indexSort]
+
+        setCookie('sortChannel', idSort)
+
+        this.fetchItems()
+        appm.addAnalyticsEvent('channels', 'sort', `${this.state.idChannels} - ${idSort}`)
+    }
+
+    tabFavoritesChanged(index, id) {
+        this.pageCurrent = 0
+        this.state.typeData = id
+
+        this.getComponent('searchSort').clearSearch()
+        this.calculateViewMode()
+        this.fetchItems()
+
+        appm.addAnalyticsEvent('channels', 'tabFavorites', `${this.state.idChannels} - ${id}`)
+    }
+
+    userChanged(user) {
+        this.refresh()
+    }
+
+    viewModeChanged(index) {
+        this.state.indexViewMode = index
+        this.pageCurrent = 0
+
+        const idViewMode = viewModes[this.state.indexViewMode].id
+
+        setCookie('viewMode', idViewMode)
+        this.fetchItems()
+        appm.addAnalyticsEvent('channel', 'viewMode', `${this.state.idChannels} - ${idViewMode}`)
+    }
+}
+
+$ const icons = {
+    all: 'atom',
+    favorites: 'heart',
+    mod: 'shield',
+    popular: 'fire',
+    sub: 'user'
+}
+
+$ const tabsFavorites = [{
+    id: 'posts',
+    icon: 'post'
+}, {
+    id: 'comments',
+    icon: 'comment'
+}]
+
+$ const items = state.items || []
+$ const trChannels = appm.tr('channels') || {}
+$ const trFavorites = trChannels.favorites || {}
+$ const trAggregators = trChannels.aggregators || {}
+$ const trNoPosts = trChannels.noPosts || {}
+$ const viewMode = viewModes[state.indexViewMode].id
+
+$ const isFavorites = state.idChannels == 'favorites'
+
+<pane-default.pane-channels
+    key='root'
+    class=[
+        input.class,
+        isFavorites ? 'favorites' : '',
+        items.length ? '' : 'no-items'
+    ]
+    icon=icons[state.idChannels]
+    title=trAggregators[state.idChannels]
+    on-refreshRequested('refresh')
+>
+
+    <if(!isFavorites)>
+        <@barControls>
+            <combo-searchsort
+                key='searchSort'
+                countItems=state.countItems
+                indexSort=state.indexSort
+                indexViewMode=state.indexViewMode
+                loading=state.fetchingItems
+                sortOptions=sortOptions
+                viewModes=(state.typeData == 'posts' ? viewModes : null)
+                on-searchChanged('searchChanged')
+                on-sortChanged('sortChanged')
+                on-viewModeChanged('viewModeChanged')
+            />
+        </@barControls>
+    </if>
+
+    <if(isFavorites)>
+        <@barExtension>
+            <tabs.full-height.hidetext-whensmall
+                key='tabs'
+                tabs=processObjectsTr(tabsFavorites, trFavorites.tabs)
+                on-tabChanged('tabFavoritesChanged')
+            />
+
+            <combo-searchsort
+                key='searchSort'
+                countItems=state.countItems
+                indexSort=state.indexSort
+                indexViewMode=state.indexViewMode
+                loading=state.fetchingItems
+                sortOptions=sortOptions
+                viewModes=(state.typeData == 'posts' ? viewModes : null)
+                on-searchChanged('searchChanged')
+                on-sortChanged('sortChanged')
+                on-viewModeChanged('viewModeChanged')
+            />
+        </@barExtension>
+    </if>
+
+    <@contents class=(!items.length ? 'center' : viewMode)>
+        <if(items.length || state.fetchingItems)>
+            <if(state.typeData == 'posts')>
+                <for|post| of=items>
+                    <card-post
+                        post=post
+                        viewMode=viewMode
+                        on-deleteRequested('deletePostRequested', post)
+                        on-openRequested('postRequested', post)
+                        on-searchTagRequested('searchTag')
+                    />
+                </for>
+            </if>
+            <else-if(state.typeData == 'comments')>
+                <for|comment| of=items>
+                    <card-comment
+                        comment=comment
+                        viewMode=viewMode
+                        on-deleteRequested('deleteCommentRequested', comment)
+                        on-openRequested('commentRequested', comment)
+                    />
+                </for>
+            </else-if>
+        </if>
+        <else-if(isFavorites)>
+            $ const trNoFavorites = trNoPosts.favorites
+
+            <contents-empty
+                icon='search'
+                iconButton='channel'
+                textButton=trNoFavorites.button
+                text=trNoFavorites[state.typeData == 'posts' ? 'textPosts' : 'textComments']
+                title=trNoFavorites.title
+                on-click('channelsRequested', false)
+                on-middleClick('channelsRequested', true)
+            />
+        </else-if>
+        <else>
+            $ const trNoPostsGeneric = trNoPosts.generic
+
+            <contents-empty
+                icon='search'
+                iconButton='plus'
+                textButton=trNoPostsGeneric.button
+                text=trNoPostsGeneric.text
+                title=trNoPostsGeneric.title
+                on-click('createPostRequested')
+            />
+        </else>
+    </@contents>
+
+    <@footer>
+        <loading-finder show=state.fetchingItems />
+    </@footer>
+</pane-default>

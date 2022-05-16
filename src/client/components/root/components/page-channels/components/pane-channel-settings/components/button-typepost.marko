@@ -1,0 +1,90 @@
+$ const type = input.type || {}
+
+<button-default.button-typepost class=input.class on-click('emit', 'click')>
+    <icon name=type.icon />
+
+    <span.text>
+        ${type.text}
+    </span>
+</button-default>
+
+style.less {
+    .button-typepost {
+        --icon-size: 20px;
+        --minwidth: 120px;
+        --padding: 15px;
+        --spacing: 5px;
+        --text-fontsize: 14px;
+
+        border-radius: var(--app-borderradius);
+        border: 1px solid var(--color-border1);
+        gap: var(--spacing);
+        min-width: var(--minwidth);
+        padding: var(--padding);
+        .flex-center(column);
+        .transition(background-color 0.2s ease-out, border-color 0.2s ease-out;);
+
+        >.icon {
+            color: var(--color-icon1);
+            .size(var(--icon-size));
+            .transition(color 0.2s ease-out);
+        }
+
+        >.text {
+            color: var(--color-text1);
+            font-family: @font-medium;
+            font-size: var(--text-fontsize);
+            .transition(color 0.2s ease-out);
+        }
+
+        &:hover {
+            background-color: var(--color-button1);
+
+            >.icon {
+                color: var(--color-icon2);
+                .scale(1.1);
+            }
+
+            >.text {
+                color: var(--color-text2);
+            }
+        }
+
+        &.selected {
+            background-color: var(--color-button2);
+            border-color: var(--color-border3);
+
+            >.icon {
+                color: var(--color-icon3);
+            }
+
+            >.text {
+                color: var(--color-text3);
+            }
+        }
+
+        // Media queries.
+
+        .r-max(@break-ms, {
+            --icon-size: 18px;
+            --minwidth: 100px;
+            //--padding: 15px;
+            //--spacing: 5px;
+            //--text-fontsize: 14px;
+        });
+
+        .r-max(@break-sm, {
+            --icon-size: 17px;
+            --minwidth: 90px;
+            --padding: 10px;
+            --text-fontsize: 13px;
+        });
+
+        .r-max(@break-xs, {
+            --icon-size: 16px;
+            --minwidth: 60px;
+            --padding: 6px;
+            --text-fontsize: 12px;
+        });
+    }
+};

@@ -1,0 +1,174 @@
+import appm from 'js/app-manager'
+
+class {
+    onCreate() {
+        this.state = {
+            id: '',
+            idSelection: 'all',
+            item: {},
+            list: [],
+            user: appm.getUser()
+        }
+
+        this.itemChange = this.itemChange.bind(this)
+        this.userUpdated = this.userUpdated.bind(this)
+    }
+
+    onMount() {
+        appm.on('createItemSuccess', this.itemChange)
+        appm.on('deleteItemSuccess', this.itemChange)
+        appm.on('updateItemSuccess', this.itemChange)
+        appm.on('userChanged', this.userUpdated)
+        appm.on('userUpdated', this.userUpdated)
+
+        this.setupList()
+    }
+
+    onDestroy() {
+        appm.off('createItemSuccess', this.itemChange)
+        appm.off('deleteItemSuccess', this.itemChange)
+        appm.off('updateItemSuccess', this.itemChange)
+        appm.off('userChanged', this.userUpdated)
+        appm.off('userUpdated', this.userUpdated)
+    }
+
+    // Getters & Setters.
+
+    setData(idPane, args) {
+        if(idPane == 'source' || idPane == 'category') {
+            const item = args[0] || {}
+
+            this.state.idSelection = (item || {}).id
+            this.state.item = item
+        }
+        else {
+            this.state.idSelection = idPane || 'all'
+        }
+
+        this.state.id = idPane
+    }
+
+    // Functions.
+
+    itemChange(type) {
+        if(type != 'newsCategory' && type != 'newsSource') {
+            return
+        }
+
+        this.setupList()
+    }
+
+    selectItem(id, item, idGroup, newTab = false) {
+        if(!newTab) {
+            this.state.idSelection = id
+            this.state.item = item
+        }
+
+        switch(idGroup) {
+            case 'all':
+                if(!newTab) {
+                    this.state.id = 'source'
+                }
+
+                appm.openPage('news', 'source', { allowBack: false, newTab }, item)
+                appm.addAnalyticsEvent('sidebarNews', 'selectSource', item.id)
+                break
+            case 'categories':
+                if(!newTab) {
+                    this.state.id = 'category'
+                }
+
+                appm.openPage('news', 'category', { allowBack: false, newTab }, item)
+                appm.addAnalyticsEvent('sidebarNews', 'selectCategory', item.id)
+                break
+        }
+    }
+
+    selectGroup(id, newTab = false) {
+        if(id == 'settings') {
+            appm.showPopup('newsSettings')
+            return
+        }
+
+        if(!newTab) {
+            this.state.idSelection = id
+        }
+
+        this.state.id = id
+
+        appm.openPage('news', id, { allowBack: false, newTab })
+        appm.addAnalyticsEvent('sidebarNews', 'selectGroup', id)
+    }
+
+    setupList() {
+        const categories = []
+        const list = []
+        const sources = []
+        const trNews = appm.tr('news') || {}
+        const user = this.state.user
+
+        for(const source of appm.getNewsSources()) {
+            if(user && user.preferences.news.sourcesExcluded.includes(source._id)) {
+                continue
+            }
+
+            sources.push(source)
+        }
+
+        for(const category of appm.getNewsCategories()) {
+            if(user && user.preferences.news.categoriesExcluded.includes(category._id)) {
+                continue
+            }
+
+            categories.push(category)
+        }
+
+        list.push({
+            id: 'all',
+            icon: 'atom',
+            items: sources,
+            name: trNews.all,
+            showImages: true
+        })
+
+        list.push({
+            id: 'categories',
+            icon: 'folder',
+            items: categories,
+            name: trNews.categories
+        })
+
+        if(this.state.user) {
+            list.push({
+                id: 'settings',
+                icon: 'settings',
+                name: 'Configurações'
+            })
+        }
+
+        this.state.list = list
+    }
+
+    userUpdated(user) {
+        this.state.user = user
+
+        this.setupList()
+    }
+}
+
+$ const idSidebar = 'news'
+$ const trNews = appm.tr(idSidebar) || {}
+
+<sidebar-default.sidebar-news class=input.class title=trNews.title>
+    <list-items
+        id=idSidebar
+        idSelection=state.idSelection
+        list=state.list
+        on-clickItem('selectItem')
+        on-clickGroup('selectGroup')
+    />
+
+    <if(state.user && state.user.super && state.user.superActive)>
+        <button-newssuper id=state.id item=state.item />
+    </if>
+</sidebar-default>

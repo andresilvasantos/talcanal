@@ -1,0 +1,221 @@
+/**
+ * Colors.
+ */
+
+@color-black: black;
+@color-darkcontrast: #222222;
+@color-white: white;
+
+/**
+ * Gradients.
+ */
+
+
+/**
+ * Typography.
+ */
+
+@font: Inter, sans-serif;
+@font-medium: InterMedium, sans-serif;
+@font-semibold: InterSemiBold, sans-serif;
+@font-bold: InterBold, sans-serif;
+
+/**
+ * Breakpoints.
+ */
+
+@break-lg: 1200px;
+@break-md: 992px;
+@break-ms: 768px;
+@break-sm: 576px;
+@break-xl: 1440px;
+@break-xxl: 1600px;
+@break-xs: 480px;
+@break-xxs: 320px;
+
+/**
+ * Custom style properties.
+ */
+
+.scroll-custom() {
+    overflow-x: hidden;
+    overflow-y: auto;
+
+    /* Firefox */
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-border1) transparent;
+
+    /* Chrome, Edge, and Safari */
+    &::-webkit-scrollbar {
+        width: 8px;
+    }
+
+    &::-webkit-scrollbar-track {
+        background: transparent;
+    }
+
+    &::-webkit-scrollbar-thumb {
+        background-color: var(--color-border1);
+    }
+}
+
+.scroll-invisible() {
+    overflow-x: hidden;
+    overflow-y: auto;
+
+    /* This will work on Firefox */
+    scrollbar-width: none;
+
+    /* Targtes on Chrome, Edge, and Safari */
+    &::-webkit-scrollbar {
+        width: 0;
+    }
+}
+
+.svg-loading() {
+    .animation(spin 1s linear infinite);
+
+    @keyframes spin {
+        50% {
+            .rotate(180deg);
+        }
+
+        100% {
+            .rotate(360deg);
+        }
+    }
+}
+
+.text-rich(@color) {
+    color: @color;
+    line-height: 1.4;
+
+    &, * {
+        // Text wrap.
+        overflow-wrap: break-word;
+        white-space: normal;
+        word-wrap: anywhere;
+    }
+
+    /*>* {
+        min-height: var(--fontsize);
+    }*/
+
+    /*span {
+        display: inline-flex;
+    }*/
+
+    .bold {
+        font-family: @font-semibold;
+        font-weight: normal;
+    }
+
+    b {
+        font-family: @font-semibold;
+        font-weight: normal;
+    }
+
+    .spoiler {
+        background-color: var(--color-background3);
+        border-radius: var(--app-borderradius);
+        color: transparent;
+        padding: 0 5px;
+        // TODO min height
+        .transition(color 0.2s ease-out);
+
+        &:hover {
+            background-color: var(--color-background3);
+            color: @color;
+        }
+    }
+
+    .quotation {
+        --quotebar-width: 4px;
+
+        display: block;
+        margin-left: 10px;
+        padding: 5px 10px 5px calc(10px + var(--quotebar-width));
+        position: relative;
+        // TODO min height
+
+        &::before {
+            @width: 4px;
+
+            background-color: var(--color-border1);
+            border-radius: calc(@width / 2);
+            content: '';
+            position: absolute;
+            left: 0;
+            min-height: 100%;
+            top: 0;
+            width: @width;
+        }
+    }
+
+    code,
+    .code {
+        background-color: var(--color-background3);
+        border: 1px solid var(--color-border1);
+        border-radius: var(--app-borderradius);
+        display: inline-block;
+        font-family: monospace;
+        max-width: 100%;
+        // TODO min height
+        padding: 5px var(--app-padding);
+
+        .bold {
+            font-family: monospace;
+            font-weight: 600;
+        }
+    }
+
+    .link {
+        color: var(--color-link);
+    }
+
+    a {
+        color: var(--color-link);
+        .transition(color 0.2s ease-out);
+
+        &:hover {
+            text-decoration: underline;
+        }
+    }
+
+    ul,
+    ol {
+        margin-left: 30px;
+    }
+
+    ul {
+        /*>li::before {
+            content: '\2022';
+            display: inline-block;
+            width: 9px;
+            margin-right: 10px;
+        }*/
+
+        // Why was this here?
+        /*span {
+            white-space: nowrap !important;
+        }*/
+    }
+
+    ol {
+        /*counter-reset: my-counter;
+
+        >li {
+            counter-increment: my-counter;
+
+            &::before {
+                content: counter(my-counter) '. ';
+                font-family: @font;
+                margin-right: 10px;
+            }
+        }
+
+        span {
+            white-space: nowrap !important;
+        }*/
+    }
+}

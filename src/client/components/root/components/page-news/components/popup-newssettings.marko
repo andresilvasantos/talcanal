@@ -1,0 +1,265 @@
+import appm from 'js/app-manager'
+
+class {
+    onCreate(input) {
+        this.state = {
+            categoriesExcluded: [],
+            sourcesExcluded: [],
+            status: 0,
+            user: appm.getUser() || {}
+        }
+
+        if(this.state.user) {
+            this.state.categoriesExcluded = this.state.user.preferences.news.categoriesExcluded || []
+            this.state.sourcesExcluded = this.state.user.preferences.news.sourcesExcluded || []
+        }
+
+        this.updateAccountError = this.updateAccountError.bind(this)
+        this.userUpdated = this.userUpdated.bind(this)
+    }
+
+    onMount() {
+        this.popupComponent = this.getComponent('popup')
+
+        appm.on('updateAccountError', this.updateAccountError)
+        appm.on('userUpdated', this.userUpdated)
+    }
+
+    onDestroy() {
+        appm.off('userUpdated', this.userUpdated)
+        appm.off('updateAccountError', this.updateAccountError)
+    }
+
+    // Getters & Setters.
+
+    // Functions.
+
+    hide() {
+        if(!this.visible) {
+            return
+        }
+
+        this.popupComponent.hide()
+    }
+
+    hidden() {
+        this.visible = false
+    }
+
+    show(args) {
+        if(this.visible) {
+            return
+        }
+
+        this.visible = true
+
+        this.popupComponent.show()
+    }
+
+    submitRequested() {
+        if(this.state.status == 1) {
+            return
+        }
+
+        this.state.status = 1
+
+        appm.updateAccount({ preferences: {
+            news: {
+                categoriesExcluded: this.state.categoriesExcluded,
+                sourcesExcluded: this.state.sourcesExcluded
+            }
+        }})
+    }
+
+    toggleSubCategory(idCategory, checked) {
+        if(checked) {
+            if(!this.state.categoriesExcluded.includes(idCategory)) {
+                return
+            }
+
+            this.state.categoriesExcluded.splice(this.state.categoriesExcluded.indexOf(idCategory), 1)
+
+            appm.addAnalyticsEvent('settings', 'subscribeCategory', idCategory)
+        }
+        else {
+            if(this.state.categoriesExcluded.includes(idCategory)) {
+                return
+            }
+
+            this.state.categoriesExcluded.push(idCategory)
+
+            appm.addAnalyticsEvent('settings', 'unsubscribeCategory', idCategory)
+        }
+
+        this.setStateDirty('categoriesExcluded')
+    }
+
+    toggleSubSource(idSource, checked) {
+        if(checked) {
+            if(!this.state.sourcesExcluded.includes(idSource)) {
+                return
+            }
+
+            this.state.sourcesExcluded.splice(this.state.sourcesExcluded.indexOf(idSource), 1)
+
+            appm.addAnalyticsEvent('settings', 'subscribeSource', idSource)
+        }
+        else {
+            if(this.state.sourcesExcluded.includes(idSource)) {
+                return
+            }
+
+            this.state.sourcesExcluded.push(idSource)
+
+            appm.addAnalyticsEvent('settings', 'unsubscribeSource', idSource)
+        }
+
+        this.setStateDirty('sourcesExcluded')
+    }
+
+    updateAccountError() {
+        this.state.status = -1
+    }
+
+    userUpdated(user) {
+        this.state.status = 0
+
+        this.state.user = user || {}
+        this.state.categoriesExcluded = user.preferences.news.categoriesExcluded || []
+        this.state.sourcesExcluded = user.preferences.news.sourcesExcluded || []
+    }
+}
+
+$ const trSettings = appm.tr('news.settings') || {}
+
+<popup.popup-newssettings.align-top
+    key='popup'
+    class=input.class
+    title=trSettings.title
+    on-hidden('hidden')
+>
+    <@form>
+        <div.wrapper-subscriptions>
+            <div.wrapper-title>
+                <icon name='news' />
+
+                <text-title.title.medium>
+                    ${trSettings.subSources}
+                </text-title>
+            </div>
+
+            <div.subscriptions>
+                <for|source| of=appm.getNewsSources()>
+                    <checkbox
+                        checked=(!state.sourcesExcluded.includes(source._id))
+                        text=(source.name || source.id)
+                        on-checked('toggleSubSource', source._id)
+                    >
+                        <image-circle.medium image=source.image />
+                    </checkbox>
+                </for>
+            </div>
+        </div>
+
+        <div.wrapper-subscriptions>
+            <div.wrapper-title>
+                <icon name='folder' />
+
+                <text-title.title.medium>
+                    ${trSettings.subCategories}
+                </text-title>
+            </div>
+
+            <div.subscriptions>
+                <for|category| of=appm.getNewsCategories()>
+                    <checkbox
+                        checked=(!state.categoriesExcluded.includes(category._id))
+                        text=(category.name || category.id)
+                        on-checked('toggleSubCategory', category._id)
+                    />
+                </for>
+            </div>
+        </div>
+
+        <button-submit.big
+            loading=(state.status == 1)
+            text=trSettings.buttonSave
+            on-click('submitRequested')
+        />
+    </@form>
+</popup>
+
+style.less {
+    .popup-newssettings {
+        --subscriptions-gridcount: 2;
+        --subscriptions-spacing-h: 40px;
+        --subscriptions-spacing-v: 20px;
+        --title-iconsize: 30px;
+        --wrappersubscriptions-spacing: 30px;
+        --wrappertitle-spacing: 20px;
+
+        >.wrapper>.panel>.form {
+            >.wrapper-subscriptions {
+                display: flex;
+                flex-direction: column;
+                gap: var(--wrappersubscriptions-spacing);
+
+                >.wrapper-title {
+                    align-items: center;
+                    display: flex;
+                    gap: var(--wrappertitle-spacing);
+
+                    >.icon {
+                        color: var(--color-icon3);
+                        .size(var(--title-iconsize));
+                    }
+
+                    >.title {
+                        color: var(--color-text3);
+                    }
+                }
+
+                >.subscriptions {
+                    .grid(
+                        var(--subscriptions-gridcount),
+                        var(--subscriptions-spacing-h),
+                        var(--subscriptions-spacing-v)
+                    );
+
+                    >.checkbox {
+                        >.wrapper {
+                            >.image-circle {
+                                flex-shrink: 0;
+                            }
+                        }
+                    }
+                }
+            }
+
+            >.button-submit {
+                align-self: center;
+            }
+        }
+
+        // Media queries.
+
+        .r-max(@break-ms, {
+            --subscriptions-spacing-h: 20px;
+            --title-iconsize: 28px;
+            --wrappersubscriptions-spacing: 25px;
+        });
+
+        .r-max(@break-sm, {
+            --spacing: 40px;
+            --subscriptions-spacing-h: 15px;
+            --wrappersubscriptions-spacing: 20px;
+            --wrappertitle-spacing: 15px;
+        });
+
+        .r-max(@break-xs, {
+            --subscriptions-gridcount: 1;
+            --subscriptions-spacing-v: 15px;
+            --title-iconsize: 24px;
+        });
+    }
+};

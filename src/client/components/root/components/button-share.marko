@@ -1,0 +1,26 @@
+import appm from 'js/app-manager'
+import { processObjectsTr } from 'js/utils'
+
+class {
+    shareRequested(type) {
+        this.emit('shareRequested', type)
+    }
+}
+
+$ const options = [{
+    id: 'copyUrl',
+    icon: 'link'
+}, {
+    id: 'message',
+    icon: 'envelope'
+}]
+
+$ const trShare = appm.tr('generic.share') || {}
+
+<button-icon-menu.button-share
+    class=input.class
+    icon='send'
+    options=processObjectsTr(options, trShare)
+    tooltip=trShare.tooltip
+    on-optionRequested('emit', 'shareRequested')
+/>

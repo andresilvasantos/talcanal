@@ -1,0 +1,261 @@
+import appm from 'js/app-manager'
+import { pageFromUrl } from 'js/composer'
+import { timers } from 'js/default-vars'
+
+class {
+    onCreate(input) {
+        this.draggable = input.draggable
+        this.href = input.href
+        this.link = input.link
+        this.tooltip = input.tooltip
+        this.tooltipExtraClasses = input.tooltipExtraClasses || []
+        this.noDelay = input.noDelay || false
+
+        this.dragEnd = this.dragEnd.bind(this)
+        this.dragLeave = this.dragLeave.bind(this)
+        this.dragOver = this.dragOver.bind(this)
+        this.dragStart = this.dragStart.bind(this)
+        this.drop = this.drop.bind(this)
+        this.touchMove = this.touchMove.bind(this)
+    }
+
+    onInput(input) {
+        const draggableOld = this.draggable
+
+        this.draggable = input.draggable
+        this.href = input.href
+        this.link = input.link
+        this.tooltip = input.tooltip
+        this.tooltipExtraClasses = input.tooltipExtraClasses || []
+        this.noDelay = input.noDelay || false
+
+        if(this.mounted && this.draggable != draggableOld) {
+            this.updateDragListeners()
+        }
+    }
+
+    onMount() {
+        if(this.draggable) {
+            this.updateDragListeners()
+        }
+
+        this.mounted = true
+    }
+
+    onDestroy() {
+        clearTimeout(this.timeoutTooltip)
+
+        if(this.draggable) {
+            const button = this.getEl('button')
+
+            button.removeEventListener('dragend', this.dragEnd)
+            button.removeEventListener('dragover', this.dragOver)
+            button.removeEventListener('dragleave', this.dragLeave)
+            button.removeEventListener('dragstart', this.dragStart)
+            button.removeEventListener('drop', this.drop)
+
+            button.removeEventListener('touchend', this.dragEnd)
+            button.removeEventListener('touchcancel', this.dragEnd)
+            button.removeEventListener('touchstart', this.dragStart)
+
+            document.removeEventListener('touchmove', this.touchMove)
+        }
+    }
+
+    // Functions.
+
+    auxClick(event) {
+        if(event.which == 2) {
+            if(!this.link) {
+                event.preventDefault()
+            }
+
+            event.stopPropagation()
+            this.emit('middleClick', event)
+        }
+    }
+
+    click(event) {
+        const button = this.getEl('button')
+        const href = button.href
+
+        if(this.link && href && href.startsWith('/')) {
+            event.preventDefault()
+
+            const dataPage = pageFromUrl(href, appm)
+
+            if(dataPage) {
+                appm.openPage(dataPage.idPage, dataPage.idPane, dataPage.back, ...(dataPage.args || []))
+            }
+            else {
+                window.open(location.href, '_self')
+            }
+        }
+
+        event.stopPropagation()
+
+        if(event.button == 0 && !event.ctrlKey) {
+            this.emit('click', event)
+        }
+        else {
+            this.emit('middleClick', event)
+        }
+    }
+
+    dragEnd(event) {
+        this.emit('dragend', event)
+    }
+
+    dragLeave(event) {
+        this.emit('dragleave', event)
+    }
+
+    dragOver(event) {
+        this.emit('dragover', event)
+    }
+
+    dragStart(event) {
+        this.emit('dragstart', event)
+    }
+
+    drop(event) {
+        this.emit('drop', event)
+    }
+
+    mouseDown(event) {
+        clearTimeout(this.timeoutTooltip)
+        appm.hideTooltip()
+
+        if(event.button == 1) { // middle click.
+            event.preventDefault()
+        }
+
+        this.emit('mousedown')
+    }
+
+    mouseOut() {
+        clearTimeout(this.timeoutTooltip)
+        appm.hideTooltip()
+
+        this.emit('mouseout')
+    }
+
+    mouseOver() {
+        if(this.tooltip) {
+            this.timeoutTooltip = setTimeout(() => {
+                appm.showTooltip(
+                    this.tooltip,
+                    this.tooltipExtraClasses,
+                    this.getEl().getBoundingClientRect()
+                )
+            }, this.noDelay ? 0 : timers.delayShowTooltip)
+        }
+        else {
+            appm.hideTooltip()
+        }
+
+        this.emit('mouseover')
+    }
+
+    touchMove(event) {
+        const root = this.getEl()
+
+        if(!root) {
+            return
+        }
+
+        const bb = this.getEl().getBoundingClientRect()
+        const touch = event.touches[0]
+
+        if(
+            touch.clientX > bb.x && touch.clientY > bb.y &&
+            touch.clientX < bb.x + bb.width && touch.clientY < bb.y + bb.height
+        ) {
+            this.emit('dragover', event)
+        }
+    }
+
+    updateDragListeners() {
+        const button = this.getEl('button')
+
+        if(this.draggable) {
+            button.addEventListener('dragend', this.dragEnd)
+            button.addEventListener('dragover', this.dragOver)
+            button.addEventListener('dragleave', this.dragLeave)
+            button.addEventListener('dragstart', this.dragStart)
+            button.addEventListener('drop', this.drop)
+
+            button.addEventListener('touchend', this.dragEnd)
+            button.addEventListener('touchcancel', this.dragEnd)
+            button.addEventListener('touchstart', this.dragStart)
+
+            document.addEventListener('touchmove', this.touchMove)
+        }
+        else {
+            button.removeEventListener('dragend', this.dragEnd)
+            button.removeEventListener('dragover', this.dragOver)
+            button.removeEventListener('dragleave', this.dragLeave)
+            button.removeEventListener('dragstart', this.dragStart)
+            button.removeEventListener('drop', this.drop)
+
+            button.removeEventListener('touchend', this.dragEnd)
+            button.removeEventListener('touchcancel', this.dragEnd)
+            button.removeEventListener('touchstart', this.dragStart)
+
+            document.removeEventListener('touchmove', this.touchMove)
+        }
+    }
+}
+
+<if(input.link)>
+    <a.button-default.link
+        key='button'
+        class=[input.class, input.disabled ? 'disabled' : '']
+        draggable=(input.draggable ? 'true' : 'false')
+        href=input.href
+        target=(input.newTab ? '_blank' : '')
+        on-auxclick('auxClick')
+        on-click('click')
+        on-mousedown('mouseDown')
+        on-mouseout('mouseOut')
+        on-mouseover('mouseOver')
+    >
+        <${input.renderBody} />
+    </a>
+</if>
+<else>
+    <div.button-default
+        key='button'
+        class=[input.class, input.disabled ? 'disabled' : '']
+        draggable=(input.draggable ? 'true' : 'false')
+        tabindex=input.tabindex
+        style=input.style
+        on-auxclick('auxClick')
+        on-click('click')
+        on-focusout('emit', 'focusout')
+        on-mousedown('mouseDown')
+        on-mouseout('mouseOut')
+        on-mouseover('mouseOver')
+    >
+        <${input.renderBody} />
+    </div>
+</else>
+
+style.less {
+    .button-default {
+        cursor: pointer;
+        pointer-events: auto;
+        .user-select(none);
+
+        &.link {
+            &:hover {
+                text-decoration: underline;
+            }
+        }
+
+        &.disabled {
+            opacity: 0.4;
+            pointer-events: none;
+        }
+    }
+};

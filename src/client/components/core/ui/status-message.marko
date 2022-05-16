@@ -1,0 +1,69 @@
+class {
+    onCreate() {
+        this.state = {
+            message: ''
+        }
+    }
+
+    onMount() {
+        this.mounted = true
+    }
+
+    hide() {
+        this.getEl().classList.add('hidden')
+    }
+
+    setMessage(message, code) {
+        this.state.message = message || ''
+
+        if(this.mounted) {
+            if(this.state.message.length) {
+                this.show()
+            }
+            else {
+                this.hide()
+            }
+        }
+    }
+
+    show() {
+        this.getEl().classList.remove('hidden')
+    }
+}
+
+<div.status-message class=[input.class, 'hidden']>
+    <icon name='error' />
+
+    <text-p.message>
+        ${state.message}
+    </text-p>
+</div>
+
+style.less {
+    .status-message {
+        align-items: center;
+        background-color: var(--color-background2);
+        border: 1px solid var(--color-warning);
+        border-radius: var(--app-borderradius);
+        display: flex;
+        gap: 10px; // TODO
+        padding: 10px 20px; // TODO
+
+        &.hidden {
+            display: none;
+        }
+
+        >.icon {
+            color: var(--color-warning);
+            flex-shrink: 0;
+            .size(20px);
+        }
+
+        >.message {
+            color: var(--color-text3);
+            flex-grow: 1;
+            font-size: 14px; // TODO
+            line-height: 1.2;
+        }
+    }
+};

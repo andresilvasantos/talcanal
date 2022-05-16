@@ -1,0 +1,299 @@
+import appm from 'js/app-manager'
+
+class {
+    onCreate(input) {
+        this.state = {
+            hours: 12,
+            minutes: 0,
+            panelVisible: false,
+            valid: true
+        }
+
+        this.closePanel = this.closePanel.bind(this)
+    }
+
+    onInput(input) {
+        if(!input.noExternalUpdate) {
+            if(input.hasOwnProperty('date')) {
+                this.setTime(input.date)
+            }
+        }
+    }
+
+    onMount() {
+        this.mounted = true
+    }
+
+    onDestroy() {
+        appm.off('scroll', this.closePanel)
+    }
+
+    // Getters & Setters.
+
+    getTime() {
+        return { hours: this.state.hours, minutes: this.state.minutes }
+    }
+
+    setDate(date) {
+        this.state.date = date
+    }
+
+    setTime(hours, minutes) {
+        this.state.hours = hours
+        this.state.minutes = minutes
+    }
+
+    setValid(valid) {
+        this.state.valid = valid
+    }
+
+    // Functions.
+
+    clearTime() {
+        this.setDate()
+        this.closePanel()
+        this.setValid(true)
+
+        this.emit('timeChanged', this.state.date)
+    }
+
+    closePanel() {
+        this.state.panelVisible = false
+    }
+
+    decreaseHours() {
+        let hours = this.state.hours
+
+        --hours
+
+        if(hours < 0) {
+            hours += 24
+        }
+
+        this.state.hours = hours
+    }
+
+    decreaseMinutes() {
+        let minutes = this.state.minutes
+
+        minutes -= 5
+
+        if(minutes < 0) {
+            minutes += 60
+        }
+
+        this.state.minutes = minutes
+    }
+
+    increaseHours() {
+        let hours = this.state.hours
+
+        ++hours
+
+        if(hours >= 24) {
+            hours -= 24
+        }
+
+        this.state.hours = hours
+    }
+
+    increaseMinutes() {
+        let minutes = this.state.minutes
+
+        minutes += 5
+
+        if(minutes >= 60) {
+            minutes -= 60
+        }
+
+        this.state.minutes = minutes
+    }
+
+    togglePanel() {
+        this.setValid(true)
+
+        this.state.panelVisible = !this.state.panelVisible
+
+        if(this.state.panelVisible) {
+            this.update()
+
+            const buttonMain = this.getEl('buttonMain')
+            const panel = this.getEl('panel')
+            const windowHeight = window.innerHeight
+            const bbButton = buttonMain.getBoundingClientRect()
+            const bbPanel = panel.getBoundingClientRect()
+            const higherThanWindow = bbButton.y + bbButton.height + bbPanel.height > windowHeight
+            const marginFromButton = 5
+
+            panel.style.top = (
+                higherThanWindow ?
+                `${bbButton.y - bbPanel.height - marginFromButton}px` :
+                `${bbButton.y + bbButton.height + marginFromButton}px`
+            )
+            panel.style.left = `${bbButton.x + bbButton.width / 2 - bbPanel.width / 2}px`
+
+            appm.on('scroll', this.closePanel)
+        }
+        else {
+            this.closePanel()
+
+            appm.off('scroll', this.closePanel)
+        }
+    }
+}
+
+$ const hours = state.hours < 10 ? `0${state.hours}` : state.hours
+$ const minutes = state.minutes < 10 ? `0${state.minutes}` : state.minutes
+
+<div.input-time
+    class=[
+        input.class,
+        state.panelVisible ? 'panel-visible' : '',
+        state.valid ? '' : 'invalid'
+    ]
+    tabindex='-1'
+    on-focusout('closePanel')
+>
+    $ const text = `${hours}:${minutes}`
+
+    <button-text.button-main.align-left
+        key='buttonMain'
+        class=input.class
+        icon='clock'
+        text=text
+        tooltip=input.tooltip
+        on-click('togglePanel')
+    >
+        <if(input.text && !input.hideLabel)>
+            <span.label>
+                ${input.text}:
+            </span>
+        </if>
+
+        <icon.arrow
+            name=(input.sort ? 'sort' : 'arrow')
+            rotation=(input.sort ? 0 : 90)
+        />
+    </button-text>
+
+    <if(state.panelVisible)>
+        <div.panel key='panel'>
+            <div.hours>
+                <button-icon icon='arrow' iconRotation=-90 on-click('increaseHours') />
+
+                <span.value>
+                    ${hours}<span.small>h</span>
+                </span>
+
+                <button-icon icon='arrow' iconRotation=90 on-click('decreaseHours') />
+            </div>
+
+            <span.colon>
+                :
+            </span>
+
+            <div.minutes>
+                <button-icon icon='arrow' iconRotation=-90 on-click('increaseMinutes') />
+
+                <span.value>
+                    ${minutes}<span.small>m</span>
+                </span>
+
+                <button-icon icon='arrow' iconRotation=90 on-click('decreaseMinutes') />
+            </div>
+        </div>
+    </if>
+</div>
+
+style.less {
+    .input-time {
+        --iconarrow-size: 14px;
+
+        display: flex;
+        flex-direction: column;
+        position: relative;
+
+        >.button-main {
+            >.icon:not(.arrow) {
+                order: -1;
+            }
+
+            >.label {
+                color: var(--color-text2);
+                font-size: var(--fontsize);
+                order: -1;
+            }
+
+            >.text {
+                white-space: nowrap;
+            }
+
+            >.arrow {
+                color: var(--icon-color);
+                display: flex;
+                margin-left: auto;
+                pointer-events: none;
+                .size(var(--iconarrow-size));
+            }
+        }
+
+        >.panel {
+            align-items: center;
+            background-color: var(--color-background2);
+            border: 1px solid var(--color-border1);
+            border-radius: var(--app-borderradius);
+            display: flex;
+            gap: 15px; // TODO
+            opacity: 0;
+            padding: 15px; // TODO
+            pointer-events: none;
+            position: fixed;
+            z-index: 3;
+            .box-shadow(0 4px 10px 0 fade(@color-black, 5));
+            .transition(opacity 0.2s ease-out);
+
+            >.hours,
+            >.minutes {
+                align-items: center;
+                display: flex;
+                flex-direction: column;
+                gap: 15px; // TODO
+                width: 60px; // TODO
+
+                >.value {
+                    color: var(--color-text4);
+                    font-family: @font-medium;
+                    font-size: 30px; // TODO
+
+                    >.small {
+                        color: var(--color-text2);
+                        font-family: @font;
+                        font-size: 20px; // TODO
+                    }
+                }
+            }
+
+            >.colon {
+                color: var(--color-text3);
+                font-size: 30px; // TODO
+            }
+        }
+
+        &.panel-visible {
+            >.button-main {
+                --backgroundcolor: var(--color-button1);
+            }
+
+            >.panel {
+                opacity: 1;
+                pointer-events: auto;
+            }
+        }
+
+        &.invalid {
+            >.button-main {
+                --bordercolor: var(--color-warning);
+            }
+        }
+    }
+};

@@ -1,0 +1,169 @@
+import animm from 'js/anim-manager.js'
+import appm from 'js/app-manager'
+
+class {
+    onCreate() {
+        this.state = {
+            visible: true
+        }
+    }
+
+    onMount() {
+        this.root = this.getEl('root')
+        this.wrapper = this.getEl('wrapper')
+
+        this.show()
+
+        setTimeout(() => {
+            this.hide()
+        }, 1000)
+    }
+
+    onDestroy() {
+        animm.remove(this.root)
+    }
+
+    // Functions.
+
+    backgroundClick(event) {
+        event.stopPropagation()
+
+        this.hide()
+        appm.addAnalyticsEvent('splashScreen', 'forceHide')
+    }
+
+    hide() {
+        this.emit('hiding')
+
+        animm.remove(this.root)
+        animm.add(this.root, { opacity: 0, duration: 0.2, easeOut: 'quart' },
+            () => {
+                this.state.visible = false
+                this.root.style.display = 'none'
+
+                this.emit('hidden')
+            }
+        )
+    }
+
+    panelClick(event) {
+        event.stopPropagation()
+    }
+
+    show() {
+        this.state.visible = true
+
+        this.update()
+
+        animm.remove(this.root, this.wrapper)
+        animm.add(this.wrapper, { opacity: 1, duration: 0.2, easeOut: 'quart' })
+    }
+}
+
+$ const trSplash = appm.tr('screenSplash')
+
+<div.screen-splash key='root' class=input.class on-click('hide')>
+    <if(state.visible)>
+        <div.wrapper key='wrapper'>
+            <icon.logo-symbol name='logoSymbol' />
+
+            <div.wrapper-text>
+                <icon.logo name='logo' />
+
+                <span.slogan>
+                    ${trSplash.slogan}
+                </span>
+            </div>
+        </div>
+    </if>
+</div>
+
+style.less {
+    .screen-splash {
+        --logo-height: 58px;
+        --logosymbol-width: 190px;
+        --slogan-fontsize: 45px;
+        --wrapper-spacing: 40px;
+        --wrappertext-spacing: 20px;
+
+        background-color: var(--color-background1);
+        .flex-center();
+
+        >.wrapper {
+            align-items: center;
+            display: flex;
+            flex-direction: column;
+            gap: var(--wrapper-spacing);
+            opacity: 0;
+
+            >.logo-symbol {
+                color: var(--color-icon4);
+                width: var(--logosymbol-width);
+            }
+
+            >.wrapper-text {
+                align-items: center;
+                display: flex;
+                flex-direction: column;
+                gap: var(--wrappertext-spacing);
+
+                >span {
+                    line-height: 1;
+                }
+
+                >.logo {
+                    color: var(--color-text5);
+                    height: var(--logo-height);
+                }
+
+                >.slogan {
+                    color: var(--color-text4);
+                    font-family: @font-medium;
+                    font-size: var(--slogan-fontsize);
+                }
+            }
+        }
+
+        // Media queries.
+
+        .r-max(@break-lg, {
+            --logo-height: 50px;
+            --logosymbol-width: 170px;
+            --slogan-fontsize: 40px;
+            --wrapper-spacing: 35px;
+            --wrappertext-spacing: 18px;
+        });
+
+        .r-max(@break-md, {
+            --logo-height: 44px;
+            --logosymbol-width: 150px;
+            --slogan-fontsize: 35px;
+            --wrapper-spacing: 30px;
+            --wrappertext-spacing: 15px;
+        });
+
+        .r-max(@break-sm, {
+            --logo-height: 38px;
+            --logosymbol-width: 130px;
+            --slogan-fontsize: 30px;
+            --wrapper-spacing: 28px;
+            --wrappertext-spacing: 13px;
+        });
+
+        .r-max(@break-xs, {
+            --logo-height: 32px;
+            --logosymbol-width: 110px;
+            --slogan-fontsize: 25px;
+            --wrapper-spacing: 22px;
+            --wrappertext-spacing: 11px;
+        });
+
+        .r-max(@break-xxs, {
+            --logo-height: 25px;
+            --logosymbol-width: 90px;
+            --slogan-fontsize: 20px;
+            --wrapper-spacing: 18px;
+            --wrappertext-spacing: 8px;
+        });
+    }
+};

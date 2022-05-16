@@ -1,0 +1,130 @@
+import appm from 'js/app-manager'
+
+class {
+    onCreate(input) {
+        this.state = {
+            pages: appm.getStackPages()
+        }
+
+        this.pageChanged = this.pageChanged.bind(this)
+    }
+
+    onMount() {
+        const debounce = (cb) => () => window.requestAnimationFrame(cb)
+
+        this.handleScroll = debounce(() => {
+            if(this.component && this.component.handleScroll) {
+                this.component.handleScroll()
+            }
+        })
+
+        appm.on('pageChanged', this.pageChanged)
+        appm.on('scroll', this.handleScroll)
+    }
+
+    onDestroy() {
+        appm.off('pageChanged', this.pageChanged)
+        appm.off('scroll', this.handleScroll)
+    }
+
+    // Functions.
+
+    pageChanged(idPage, idPane, args = [], movingBack = false, allowBack = false) {
+        this.state.pages = appm.getStackPages()
+
+        this.setStateDirty('pages')
+
+        const pageLast = this.state.pages[this.state.pages.length - 1]
+
+        if(pageLast) {
+            this.update()
+
+            const pageLoaders = this.getComponents('pageLoaders')
+            const pageLoaderLast = pageLoaders[pageLoaders.length - 1]
+
+            if(movingBack) {
+                this.component = pageLoaderLast.getComponentLoaded()
+            }
+            else {
+                const updateData = () => {
+                    this.component = pageLoaderLast.getComponentLoaded()
+
+                    if(this.component) {
+                        if(this.component.setData) {
+                            this.component.setData(args, allowBack)
+                        }
+                    }
+                }
+
+                if(pageLoaderLast.getComponentLoaded()) {
+                    updateData()
+                }
+                else {
+                    pageLoaderLast.once('loaded', () => {
+                        updateData()
+                    })
+                }
+            }
+
+            // Little hack: don't scroll if anchor requested in about.
+            const scrollToTop = (
+                idPage != 'about' ||
+                (idPane != 'terms' && idPane != 'privacy') ||
+                !args || !args.length
+            )
+
+            if(scrollToTop) {
+                if(movingBack) {
+                    window.scrollTo(0, pageLast.scrollY)
+
+                    // This is an hack to force correct scroll when browser page back.
+                    setImmediate(() => {
+                        window.scrollTo(0, pageLast.scrollY)
+                    })
+                }
+                else {
+                    window.scrollTo(0, 0)
+                }
+            }
+        }
+    }
+}
+
+$ const pages = state.pages || []
+$ const pageLast = pages.length ? pages[pages.length - 1] : {}
+
+<div.stacker-pages class=input.class>
+    <for|page, index| of=pages>
+        $ const last = index == pages.length - 1
+
+        <div.page class=(last ? '' : 'hidden')>
+            <dynamic
+                key='pageLoaders[]'
+                active=last
+                cName=`page-${page.id.toLowerCase()}`
+                id=page.idPane
+            />
+        </div>
+    </for>
+</div>
+
+style.less {
+    .stacker-pages {
+        display: flex;
+        justify-content: center;
+
+        >.page {
+            display: flex;
+            flex-direction: column;
+            width: 100%;
+
+            &.hidden {
+                display: none;
+            }
+
+            >* {
+                flex-grow: 1;
+            }
+        }
+    }
+};

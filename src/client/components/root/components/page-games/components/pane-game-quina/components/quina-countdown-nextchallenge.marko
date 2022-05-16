@@ -1,0 +1,124 @@
+import appm from 'js/app-manager'
+import quinam from 'js/quina-manager'
+
+class {
+    onCreate() {
+        this.state = {
+            timesUp: false,
+            timeLeft: ''
+        }
+
+        this.calculateTimeLeft = this.calculateTimeLeft.bind(this)
+        this.newChallengeAvailable = this.newChallengeAvailable.bind(this)
+    }
+
+    onMount() {
+        this.calculateTimeLeft()
+
+        quinam.on('newChallengeAvailable', this.newChallengeAvailable)
+    }
+
+    onDestroy() {
+        clearTimeout(this.timeoutUpdateTimeLeft)
+
+        quinam.off('newChallengeAvailable', this.newChallengeAvailable)
+    }
+
+    // Functions.
+
+    calculateTimeLeft() {
+        const timeLeft = quinam.getTimeNextChallenge() - Date.now()
+
+        let hours = Math.max(Math.floor((timeLeft % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60)), 0)
+        let minutes = Math.max(Math.floor((timeLeft % (1000 * 60 * 60)) / (1000 * 60)), 0)
+        let seconds = Math.max(Math.floor((timeLeft % (1000 * 60)) / 1000), 0)
+
+        if(this.timeoutUpdateTimeLeft) {
+            clearTimeout(this.timeoutUpdateTimeLeft)
+            this.timeoutUpdateTimeLeft = null
+        }
+
+        if(hours == 0 && minutes == 0 && seconds == 0) {
+            //this.state.timesUp = true
+        }
+        else {
+            this.timeoutUpdateTimeLeft = setTimeout(this.calculateTimeLeft, 1000)
+        }
+
+        if(hours < 10) {
+            hours = `0${hours}`
+        }
+
+        if(minutes < 10) {
+            minutes = `0${minutes}`
+        }
+
+        if(seconds < 10) {
+            seconds = `0${seconds}`
+        }
+
+        this.state.timeLeft = `${hours}:${minutes}:${seconds}`
+    }
+
+    newChallengeAvailable() {
+        this.state.timesUp = true
+    }
+}
+
+$ const trBoard = appm.tr('board') || {}
+
+<div.quina-countdown-nextchallenge class=input.class>
+    <if(state.timesUp)>
+        <button-text
+            icon='arrow'
+            iconRight
+            text='Próxima QUINA'
+            on-click('emit', 'nextChallengeRequested')
+        />
+    </if>
+    <else>
+        <text-p.text>
+            ${trBoard.nextChallenge}
+        </text-p>
+
+        <span.countdown>
+            ${state.timeLeft}
+        </span>
+    </else>
+</div>
+
+style.less {
+    .quina-countdown-nextchallenge {
+        --countdown-fontsize: 50px;
+        --spacing: 5px;
+
+        align-items: center;
+        display: flex;
+        flex-direction: column;
+        gap: var(--spacing);
+
+        >.text {
+            color: var(--color-text2);
+        }
+
+        >.countdown {
+            color: var(--color-text4);
+            font-family: @font-bold;
+            font-size: var(--countdown-fontsize);
+        }
+
+        // Media queries.
+
+        .r-max(@break-xl, {
+            --countdown-fontsize: 46px;
+        });
+
+        .r-max(@break-lg, {
+            --countdown-fontsize: 42px;
+        });
+
+        .r-max(@break-md, {
+            --countdown-fontsize: 38px;
+        });
+    }
+};

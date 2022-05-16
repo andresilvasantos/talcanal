@@ -1,0 +1,324 @@
+import appm from 'js/app-manager'
+import { isMobile } from 'js/utils'
+import { timers } from 'js/default-vars'
+
+class {
+    onCreate() {
+        this.state = {
+            channels: [],
+            countChannels: 0,
+            fetchingChannels: false,
+            idSelection: appm.isUserSignedIn() ? 'sub' : 'popular',
+            listChannels: [],
+            showSearch: false
+        }
+
+        this.channelsMod = []
+        this.channelsSub = []
+        this.filter = ''
+        this.statusFetchChannels = 0
+
+        this.channelCreated = this.channelCreated.bind(this)
+        this.channelDeleted = this.channelDeleted.bind(this)
+        this.channelUpdated = this.channelUpdated.bind(this)
+        this.channelsFetched = this.channelsFetched.bind(this)
+        this.subscribeChannelSuccess = this.subscribeChannelSuccess.bind(this)
+        this.userChanged = this.userChanged.bind(this)
+        this.userUpdated = this.userUpdated.bind(this)
+    }
+
+    onMount() {
+        appm.on('createItemSuccess', this.channelCreated)
+        appm.on('deleteItemSuccess', this.channelDeleted)
+        appm.on('fetchItemsSuccess', this.channelsFetched)
+        appm.on('subscribeChannelSuccess', this.subscribeChannelSuccess)
+        appm.on('updateItemSuccess', this.channelUpdated)
+        appm.on('userChanged', this.userChanged)
+        appm.on('userUpdated', this.userUpdated)
+
+        if(appm.isUserSignedIn()) {
+            this.fetchChannelsUser()
+        }
+
+        this.setupListChannels()
+    }
+
+    onDestroy() {
+        clearTimeout(this.timeoutBetweenFetches)
+
+        appm.off('createItemSuccess', this.channelCreated)
+        appm.off('deleteItemSuccess', this.channelDeleted)
+        appm.off('fetchItemsSuccess', this.channelsFetched)
+        appm.off('subscribeChannelSuccess', this.subscribeChannelSuccess)
+        appm.off('updateItemSuccess', this.channelUpdated)
+        appm.off('userChanged', this.userChanged)
+        appm.off('userUpdated', this.userUpdated)
+    }
+
+    // Getters & Setters.
+
+    setData(idPane, args) {
+        const channelsDefault = appm.isUserSignedIn() ? 'sub' : 'popular'
+
+        this.channelSelected = null
+
+        if(!idPane.length || idPane == 'channels') {
+            this.state.idSelection = args && args[0] ? args[0] : channelsDefault
+        }
+        else if(idPane.startsWith('channel')) {
+            const channel = args[0] || {}
+
+            this.channelSelected = channel
+            this.state.idSelection = channel.id
+        }
+        else if(idPane == 'post') {
+            const post = args[0] || {}
+            const channel = post.channel || {}
+
+            this.channelSelected = channel
+            this.state.idSelection = channel.id
+        }
+        else if(idPane == 'explore' || idPane == 'users') {
+            this.state.idSelection = idPane
+        }
+        else {
+            this.state.idSelection = ''
+        }
+    }
+
+    // Functions.
+
+    channelCreated(type) {
+        if(type != 'channels') {
+            return
+        }
+
+        this.fetchChannelsUser()
+    }
+
+    channelDeleted(type) {
+        if(type != 'channels') {
+            return
+        }
+
+        this.fetchChannelsUser()
+    }
+
+    channelUpdated(type, id, channel) {
+        if(type != 'channels') {
+            return
+        }
+
+        for(const list of this.state.listChannels) {
+            if(!list.items) {
+                continue
+            }
+
+            for(const channelOfList of list.items) {
+                if(channelOfList.id == id) {
+                    channelOfList.image = channel.image
+                    channelOfList.name = channel.name
+                }
+            }
+        }
+
+        this.setStateDirty('listChannels')
+    }
+
+    channelsFetched(idFetch, channels, count) {
+        if(idFetch != this.idFetchChannelsUser) {
+            return
+        }
+
+        this.statusFetchChannels = 0
+        this.channelsMod = channels.mod
+        this.channelsSub = channels.sub
+
+        this.setupListChannels()
+    }
+
+    createChannelRequested() {
+        appm.showPopup('createChannel')
+    }
+
+    createPostRequested() {
+        if(this.channelSelected) {
+            appm.showPopup('createPost', this.channelSelected)
+        }
+        else {
+            appm.showPopup('createPost')
+        }
+    }
+
+    fetchChannelsUser() {
+        // Only fetch user channels if we haven't yet or it is outdated.
+        if(appm.isChannelsUserDirty()) {
+            this.statusFetchChannels = 1
+            this.idFetchChannelsUser = appm.fetchChannelsUser()
+
+            this.setupListChannels()
+        }
+        else {
+            this.channelsMod = appm.getChannelsMod()
+            this.channelsSub = appm.getChannelsSub()
+        }
+    }
+
+    selectChannel(id, channel, idGroup, newTab = false) {
+        if(!newTab) {
+            this.state.idSelection = id
+        }
+
+        appm.openPage('channels', 'channel', { allowBack: false, newTab }, channel)
+        appm.addAnalyticsEvent('sidebarChannels', 'selectChannel', channel.id)
+    }
+
+    selectGroup(id, newTab = false) {
+        if(id == 'createPost') {
+            this.createPostRequested()
+
+            if(isMobile()) {
+                appm.emit('toggleSidebar')
+            }
+
+            appm.addAnalyticsEvent('sidebarChannels', id)
+            return
+        }
+
+        if(id == 'createChannel') {
+            this.createChannelRequested()
+
+            if(isMobile()) {
+                appm.emit('toggleSidebar')
+            }
+
+            appm.addAnalyticsEvent('sidebarChannels', id)
+            return
+        }
+
+        if(!newTab) {
+            this.state.idSelection = id
+        }
+
+        let idPane = 'channels'
+
+        if(id == 'explore' || id == 'users') {
+            idPane = id
+        }
+
+        appm.openPage('channels', idPane, { allowBack: false, newTab }, id)
+        appm.addAnalyticsEvent('sidebarChannels', 'selectGroup', idPane)
+    }
+
+    setupListChannels() {
+        const list = []
+        const trChannels = appm.tr('channels') || {}
+        const trAggregators = trChannels.aggregators || {}
+
+        list.push({
+            id: 'all',
+            icon: 'atom',
+            name: trAggregators.all
+        })
+
+        list.push({
+            id: 'explore',
+            icon: 'search',
+            name: trAggregators.explore
+        })
+
+        list.push({
+            id: 'popular',
+            collapsed: appm.isUserSignedIn(),
+            icon: 'fire',
+            items: appm.getChannelsPopular().sort((a, b) => (a.name || a.id).localeCompare(b.name || b.id)),
+            name: trAggregators.popular,
+            showImages: true
+        })
+
+        if(appm.isUserSignedIn()) {
+            list.push({
+                id: 'sub',
+                icon: 'user',
+                items: this.channelsSub.sort((a, b) => (a.name || a.id).localeCompare(b.name || b.id)),
+                loading: this.statusFetchChannels == 1,
+                name: trAggregators.sub,
+                showImages: true,
+            })
+
+            if(this.channelsMod.length) {
+                list.push({
+                    id: 'mod',
+                    collapsed: true,
+                    icon: 'shield',
+                    items: this.channelsMod.sort((a, b) => (a.name || a.id).localeCompare(b.name || b.id)),
+                    loading: this.statusFetchChannels == 1,
+                    name: trAggregators.mod,
+                    showImages: true,
+                    type: 'channelsMod'
+                })
+            }
+
+            list.push({
+                id: 'favorites',
+                icon: 'heart',
+                name: trAggregators.favorites
+            })
+        }
+
+        list.push({
+            id: 'createPost',
+            icon: 'pencil',
+            name: trAggregators.createPost
+        })
+
+        list.push({
+            id: 'createChannel',
+            icon: 'plus',
+            name: trAggregators.createChannel
+        })
+
+        this.state.listChannels = list
+    }
+
+    subscribeChannelSuccess() {
+        this.fetchChannelsUser()
+    }
+
+    userChanged() {
+        if(appm.isUserSignedIn()) {
+            this.fetchChannelsUser()
+        }
+
+        this.setupListChannels()
+    }
+
+    userUpdated(user) {
+        if(user.super) {
+            this.setupListChannels()
+        }
+    }
+}
+
+$ const idSidebar = 'channels'
+$ const trChannels = appm.tr(idSidebar) || {}
+
+<sidebar-default.sidebar-channels class=input.class title=trChannels.title>
+    <list-items
+        id=idSidebar
+        idSelection=state.idSelection
+        list=state.listChannels
+        on-clickItem('selectChannel')
+        on-clickGroup('selectGroup')
+    />
+</sidebar-default>
+
+style.less {
+    .sidebar-channels {
+        >.contents {
+            >.list-items {
+                width: 100%;
+            }
+        }
+    }
+};

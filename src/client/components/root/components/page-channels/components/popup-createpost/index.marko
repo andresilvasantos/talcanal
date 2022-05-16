@@ -1,0 +1,732 @@
+import appm from 'js/app-manager'
+import { maxImages, maxOptionsPoll, postTypes, timers } from 'js/default-vars'
+import { prepareUrl, processObjectsTr, validatePostTitle, validateUrl } from 'js/utils'
+
+class {
+    onCreate() {
+        this.state = {
+            addText: false,
+            adultContent: false,
+            channel: null,
+            channels: [],
+            showDiscardPanel: false,
+            showInputText: false,
+            showRules: false,
+            status: 0,
+            type: 'text'
+        }
+
+        this.channelsFetched = this.channelsFetched.bind(this)
+        this.created = this.created.bind(this)
+        this.createError = this.createError.bind(this)
+    }
+
+    onMount() {
+        this.errorMessages = appm.tr('status')
+        this.popupComponent = this.getComponent('popup')
+
+        appm.on('createItemError', this.createError)
+        appm.on('createItemSuccess', this.created)
+        appm.on('fetchItemsSuccess', this.channelsFetched)
+    }
+
+    onDestroy() {
+        clearTimeout(this.timeoutBetweenFetches)
+
+        appm.off('createItemError', this.createError)
+        appm.off('createItemSuccess', this.created)
+        appm.off('fetchItemsSuccess', this.channelsFetched)
+    }
+
+    // Getters & Setters.
+
+    setStatus(status) {
+        this.state.status = status
+    }
+
+    // Functions.
+
+    cancelDiscard() {
+        this.state.showDiscardPanel = false
+    }
+
+    channelChanged(index, idChannel) {
+        const adultContentChannelPrevious = this.state.channel.adultContent
+
+        for(const channel of this.state.channels) {
+            if(channel.id == idChannel) {
+                this.state.channel = channel
+                break
+            }
+        }
+
+        this.state.showRules = false
+
+        // Check adult content for post if channel is for that type of content only.
+        this.state.adultContent = this.state.channel.adultContent
+
+        if(this.state.adultContent || adultContentChannelPrevious) {
+            const checkboxAdultContent = this.getComponent('checkboxAdultContent')
+            checkboxAdultContent.setChecked(this.state.adultContent)
+        }
+
+        appm.addAnalyticsEvent('createPost', 'channelChange')
+    }
+
+    channelsFetched(idFetch, items, count) {
+        if(idFetch != this.idFetchChannels) {
+            return
+        }
+
+        for(const channel of items) {
+            channel.text = channel.name || channel.id
+
+            if(channel.id == this.idChannelSelected) {
+                this.state.channel = channel
+            }
+        }
+
+        if(items.length && !this.state.channel) {
+            this.state.channel = items[0]
+        }
+
+        // Check adult content for post if channel is for that type of content only.
+        if(this.state.channel) {
+            this.state.adultContent = this.state.channel.adultContent
+
+            const checkboxAdultContent = this.getComponent('checkboxAdultContent')
+            checkboxAdultContent.setChecked(this.state.adultContent)
+        }
+
+        this.channels = items.sort(
+            (a, b) => (a.name || a.id).localeCompare(b.name || b.id)
+        )
+
+        this.updateAllowedChannels()
+    }
+
+    created(type, idRequest, post) {
+        if(idRequest != this.idRequest) {
+            return
+        }
+
+        this.state.status = 0
+
+        this.hide()
+        appm.openPage('channels', 'post', true, post)
+    }
+
+    createError(type, idRequest, error) {
+        if(idRequest != this.idRequest) {
+            return
+        }
+
+        switch(error) {
+        /* case 1:
+            this.idComponent.setValid(false)
+            this.statusMessage.setMessage(this.errorMessages.channelIdAlreadyExists)
+            break
+        case -1:
+            this.statusMessage.setMessage(this.errorMessages.invalidUser)
+            break */
+        case -100:
+            this.statusMessage.setMessage(this.errorMessages.problemReachingServers)
+            break
+        default:
+            this.statusMessage.setMessage(this.errorMessages.problemUnknown)
+            break
+        }
+
+        this.state.status = -1
+    }
+
+    fetchChannels(ids) {
+        this.state.fetchingChannels = true
+
+        // TODO Only if no load more.
+        this.channels = []
+        this.state.channels = []
+
+        if(this.timeoutBetweenFetches) {
+            clearTimeout(this.timeoutBetweenFetches)
+        }
+
+        this.timeoutBetweenFetches = setTimeout(() => {
+            this.idFetchChannels = appm.fetchItems(
+                'channels', '', { ids, toPost: true }, 0, 'top', 100
+            )
+        }, timers.betweenFetches)
+    }
+
+    hidden() {
+        this.state.status = 0
+        this.state.type = 'text'
+        this.visible = false
+    }
+
+    hide() {
+        if(!this.visible) {
+            return
+        }
+
+        this.popupComponent.hide()
+    }
+
+    hideRequested() {
+        this.state.showDiscardPanel = true
+    }
+
+    imagesUploaded(ids) {
+        if(this.state.status != 1) {
+            return
+        }
+
+        this.data.contents.images = ids
+
+        this.idRequest = appm.createItem('posts', this.data)
+    }
+
+    keyPressed(event) {
+        if(event.keyCode == 13) {
+            //this.submitRequested()
+        }
+    }
+
+    show(args) {
+        if(this.visible) {
+            return
+        }
+
+        // TODO we should fetch channels...
+        const channelFrom = args[0]
+        const channelsMod = appm.getChannelsMod()
+        const channelsPopular = appm.getChannelsPopular()
+        const channelsSub = appm.getChannelsSub()
+
+        let channels = channelFrom ? [channelFrom] : []
+
+        channels = channels.concat(channelsSub).concat(channelsMod).concat(channelsPopular)
+
+        const listChannels = []
+        const listChannelIds = []
+
+        for(const channel of channels) {
+            if(listChannelIds.indexOf(channel.id) != -1) {
+                continue
+            }
+
+            channel.text = channel.name || channel.id
+
+            listChannelIds.push(channel.id)
+            listChannels.push(channel)
+        }
+
+        if(!listChannels.length) {
+            appm.showNotification('Não há canais disponíveis para publicar o post.', -1)
+            return
+        }
+
+        this.visible = true
+        this.idChannelSelected = listChannels[0].id
+
+        this.fetchChannels(listChannelIds)
+        this.popupComponent.show(false)
+
+        if(args.length == 5) {
+            this.state.type = args[1]
+            this.state.showInputText = true
+            this.updateAllowedChannels()
+
+            this.update()
+
+            const title = args[2]
+            const text = args[3]
+            const data = args[4]
+
+            this.getComponent('inputTitle').setValue(title)
+            this.getComponent('inputText').setValue(text)
+
+            // TODO contemplate other types.
+            if(this.state.type == 'link') {
+                this.getComponent('tabs').setOption(this.state.type)
+                this.getComponent('inputLink').setValue(data)
+            }
+        }
+    }
+
+    submitRequested() {
+        if(this.state.status == 1) {
+            return
+        }
+
+        this.statusMessage = this.getComponent('statusMessage')
+
+        const channel = this.state.channel
+
+        if(!channel) {
+            this.statusMessage.setMessage('Seleciona um canal onde publicar o post.')
+            return
+        }
+
+        this.selectorChannel = this.getComponent('selectorChannel')
+        this.adultContentComponent = this.getComponent('checkboxAdultContent')
+        this.titleComponent = this.getComponent('inputTitle')
+
+        const adultContent = this.adultContentComponent.isChecked()
+        const contents = {}
+        const title = this.titleComponent.getValue()
+        const type = this.state.type
+
+        this.statusMessage.hide()
+
+        let validData = true
+
+        if(!validatePostTitle(title)) {
+            this.titleComponent.setValid(false)
+            validData = false
+        }
+
+        switch(type) {
+            case 'link':
+                this.linkComponent = this.getComponent('inputLink')
+                const link = prepareUrl(this.linkComponent.getValue())
+
+                if(!validateUrl(link)) {
+                    this.linkComponent.setValid(false)
+                    validData = false
+                }
+                else {
+                    contents.link = link
+                }
+
+                break
+            case 'image':
+                this.imagesComponent = this.getComponent('inputImages')
+
+                if(!this.imagesComponent.getFiles().length) {
+                    this.imagesComponent.setValid(false)
+                    validData = false
+                }
+
+                break
+            case 'poll':
+                this.pollComponent = this.getComponent('inputPoll')
+                this.durationComponent = this.getComponent('dropdownDuration')
+                this.multipleChoiceComponent = this.getComponent('checkboxMultipleChoice')
+
+                const options = this.pollComponent.getOptions()
+                const multipleChoice = this.multipleChoiceComponent.isChecked()
+                let optionEmpty = false
+
+                for(const option of options) {
+                    if(!option.name.length) {
+                        optionEmpty = true
+                        break
+                    }
+                }
+
+                if(options.length < 2 || optionEmpty) {
+                    this.pollComponent.setValid(false)
+                    validData = false
+                }
+                else {
+                    contents.poll = {
+                        duration: this.durationComponent.getIndex() + 1,
+                        multipleChoice,
+                        options
+                    }
+                }
+
+                break
+        }
+
+        if(type == 'text' || this.state.showInputText) {
+            this.textComponent = this.getComponent('inputText')
+            contents.text = this.textComponent.getValue()
+        }
+
+        if(!validData) {
+            return
+        }
+
+        this.state.status = 1
+
+        this.data = {
+            adultContent,
+            contents,
+            idChannel: channel.id,
+            title,
+            type
+        }
+
+        if(channel.tags && channel.tags.length) {
+            this.tagComponent = this.getComponent('dropdownTag')
+
+            const tag = this.tagComponent.getOption()
+            const idsTags = channel.tags.map(tag => tag.id)
+
+            if(tag.id && idsTags.includes(tag.id)) {
+                this.data.tag = tag.id
+            }
+        }
+
+        if(type == 'image') {
+            this.imagesComponent.upload('large')
+        }
+        else {
+            this.idRequest = appm.createItem('posts', this.data)
+        }
+    }
+
+    textValueChanged() {
+        this.state.showInputText = true
+    }
+
+    toggleInputText() {
+        this.state.showInputText = !this.state.showInputText
+
+        appm.addAnalyticsEvent('createPost', 'toggleText')
+    }
+
+    toggleRules() {
+        this.state.showRules = !this.state.showRules
+
+        appm.addAnalyticsEvent('createPost', 'toggleRules')
+    }
+
+    typeChanged(index, id) {
+        this.state.type = id
+        this.state.optionsPoll = [{ text: '' }, { text: '' }]
+
+        this.updateAllowedChannels()
+
+        appm.addAnalyticsEvent('createPost', 'typeChange', id)
+    }
+
+    updateAllowedChannels() {
+        const channelsAllowed = []
+
+        for(const channel of this.channels) {
+            const typesAllowed = channel.preferences.typePostsAllowed
+
+            if(!typesAllowed || !typesAllowed.length || typesAllowed.includes(this.state.type)) {
+                channelsAllowed.push(channel)
+            }
+        }
+
+        this.state.channels = channelsAllowed
+    }
+
+    uploadImagesError(error) {
+        if(this.state.status != 1) {
+            return
+        }
+
+        this.state.status = -1
+    }
+}
+
+$ const calculateChannelIndex = (channels, idChannel) => {
+    for(const [index, channel] of channels.entries()) {
+        if(channel.id == idChannel) {
+            return index
+        }
+    }
+
+    return 0
+}
+
+$ const getAllowedPostTypes = (preferences) => {
+    const types = []
+
+    if(!preferences.typePostsAllowed || !preferences.typePostsAllowed.length) {
+        return postTypes
+    }
+
+    for(const type of postTypes) {
+        if(preferences.typePostsAllowed.includes(type.id)) {
+            types.push(type)
+        }
+    }
+
+    return types
+}
+
+$ const channel = state.channel || {}
+$ const preferencesChannel = channel.preferences || {}
+$ const trCreatePost = appm.tr('channels.createPost') || {}
+$ const trInputs = trCreatePost.inputs || {}
+$ const trPost = appm.tr('channels.post') || {}
+$ const trTooltips = trPost.tooltips || {}
+
+<popup.popup-createpost.align-top
+    key='popup'
+    class=input.class
+    title=trCreatePost.title
+    on-hidden('hidden')
+    on-hideRequested('hideRequested')
+    on-keyPressed('keyPressed')
+>
+    <tabs.hidetext-whensmall
+        key='tabs'
+        tabs=processObjectsTr(getAllowedPostTypes(preferencesChannel), trCreatePost.tabs)
+        on-tabChanged('typeChanged')
+    />
+
+    <@form>
+        <div.wrapper-channel>
+            <div.controls>
+                <dropdown.dropdown-channel
+                    key='selectorChannel'
+                    icon='channel'
+                    index=calculateChannelIndex(state.channels, channel.id)
+                    isChannel
+                    options=state.channels
+                    text=trCreatePost.channel
+                    on-optionChanged('channelChanged')
+                />
+
+                <if(channel.rules && channel.rules.length)>
+                    <button-text
+                        class=(state.showRules ? 'selected' : '')
+                        icon='book'
+                        text=(state.showRules ? trCreatePost.hideRules : trCreatePost.readRules)
+                        on-click('toggleRules')
+                    />
+                </if>
+            </div>
+
+            <if(state.showRules)>
+                <rules rules=channel.rules />
+            </if>
+        </div>
+
+        <div.inputs>
+            <input-text.big
+                key='inputTitle'
+                icon='title'
+                maxlength=200
+                noExternalUpdate
+                placeholder=trInputs.title
+                on-keyup('keyPressed')
+            />
+
+            <if(state.type == 'link')>
+                <input-text.big
+                    key='inputLink'
+                    icon='link'
+                    maxlength=2000
+                    noExternalUpdate
+                    placeholder=trInputs.link
+                    on-keyup('keyPressed')
+                />
+            </if>
+            <else-if(state.type == 'image')>
+                <input-images
+                    key='inputImages'
+                    countMax=maxImages
+                    icon='image'
+                    noExternalUpdate
+                    text=((trInputs.images || '').replace('{maxImages}', maxImages))
+                    on-uploaded('imagesUploaded')
+                    on-uploadError('uploadImagesError')
+                />
+            </else-if>
+            <else-if(state.type == 'poll')>
+                <input-poll
+                    key='inputPoll'
+                    countMax=maxOptionsPoll
+                    textButtonAdd=trInputs.addOption
+                />
+
+                <checkbox.checkbox-multiplechoice
+                    key='checkboxMultipleChoice'
+                    noExternalUpdate
+                    text=trInputs.multipleChoice
+                />
+
+                <dropdown.dropdown-duration
+                    key='dropdownDuration'
+                    icon='clock'
+                    options=['1 dia', '2 dias', '3 dias']
+                    text=trInputs.duration
+                />
+            </else-if>
+
+            <if(state.type == 'text' || state.showInputText)>
+                <input-textrich.big
+                    key='inputText'
+                    buttonCloseEnabled=(state.type != 'text')
+                    noExternalUpdate
+                    placeholder=trInputs.text
+                    on-closeRequested('toggleInputText')
+                    on-valueChanged('textValueChanged')
+                />
+            </if>
+            <else>
+                <button-text.button-addtext
+                    icon='plus'
+                    text='Adicionar texto'
+                    on-click('toggleInputText')
+                />
+            </else>
+        </div>
+
+        <if(channel.tags && channel.tags.length)>
+            $ const tags = [{ id: trInputs.tagEmpty }].concat(
+                channel.tags.map(tag => ({ id: tag.id, color: tag.color, text: tag.name }))
+            )
+
+            <dropdown.dropdown-tag
+                key='dropdownTag'
+                icon='tag'
+                isTag
+                options=tags
+                text=trInputs.tag
+            />
+        </if>
+
+        <checkbox.checkbox-adultcontent
+            key='checkboxAdultContent'
+            disabled=state.adultContent
+            noExternalUpdate
+            text=trInputs.adultContent
+        >
+            <icon.icon-adults name='circle' />
+        </checkbox>
+
+        <status-message key='statusMessage' />
+
+        <div.wrapper-submit>
+            <button-submit.big
+                loading=(state.status == 1)
+                text=trCreatePost.buttonSubmit
+                on-click('submitRequested')
+            />
+        </div>
+
+        <if(state.showDiscardPanel)>
+            <div.discard-warning on-click('cancelDiscard')>
+                <div.panel>
+                    <text-title.title>
+                        Descartar post?
+                    </text-title>
+
+                    <div.controls>
+                        <button-text.big.danger text='Sim' on-click('hide') />
+
+                        <button-text.big text='Não' on-click('cancelDiscard') />
+                    </div>
+                </div>
+            </div>
+        </if>
+    </@form>
+</popup>
+
+style.less {
+    .popup.popup-createpost {
+        --form-spacing: 30px;
+        --inputs-spacing: 15px;
+        //--tabs-margintop: -10px;
+        --wrapperchannel-spacing: 20px;
+        --wrappersubmit-spacing: 20px;
+
+        >.wrapper {
+            >.panel {
+                >.bar-title {
+                    border-bottom: none;
+                }
+
+                >.tabs {
+                    border-bottom: 1px solid var(--color-border1);
+                    //margin-top: var(--tabs-margintop);
+                    padding: 0 var(--padding-h);
+                }
+
+                >.form {
+                    >.wrapper-channel {
+                        display: flex;
+                        flex-direction: column;
+                        gap: var(--wrapperchannel-spacing);
+
+                        >.controls {
+                            display: flex;
+                            flex-wrap: wrap;
+                            gap: var(--controls-spacing);
+                        }
+                    }
+
+                    >.inputs {
+                        display: flex;
+                        flex-direction: column;
+                        gap: var(--inputs-spacing);
+
+                        // Images.
+
+                        >.input-images {
+                            width: 100%;
+                        }
+
+                        // Polls.
+
+                        >.dropdown-duration {
+                            align-self: flex-start;
+                        }
+
+                        >.button-addtext {
+                            align-self: center;
+                        }
+                    }
+
+                    >.dropdown-tag {
+                        align-self: flex-start;
+                    }
+
+                    >.checkbox-adultcontent {
+                        >.wrapper>.icon-adults {
+                            color: var(--color-warning);
+                            display: flex;
+                            .size(20px); // TODO
+                        }
+                    }
+
+                    >.status-message {
+                        align-self: center;
+                    }
+
+                    >.wrapper-submit {
+                        align-items: center;
+                        display: flex;
+                        gap: var(--wrappersubmit-spacing);
+                        justify-content: center;
+                    }
+
+                    >.discard-warning {
+                        background-color: rgba(var(--color-background1-rgb), 0.7);
+                        .flex-center();
+                        .fixed-fill(10);
+
+                        >.panel {
+                            background-color: var(--color-background2);
+                            border: 1px solid var(--color-warning);
+                            border-radius: var(--app-borderradius2);
+                            display: flex;
+                            flex-direction: column;
+                            gap: 20px;
+                            padding: var(--app-padding-bigger);
+
+                            >.title {
+                                color: var(--color-text5);
+                            }
+
+                            >.controls {
+                                display: flex;
+                                gap: var(--controls-spacing);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+};

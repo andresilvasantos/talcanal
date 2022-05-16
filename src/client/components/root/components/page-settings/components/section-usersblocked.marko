@@ -1,0 +1,129 @@
+import appm from 'js/app-manager'
+
+class {
+    onCreate(input) {
+        this.state = {
+            users: input.users ? input.users.filter(user => user ? true : false) : [],
+            idSelected: null
+        }
+
+        this.userBlocked = this.userBlocked.bind(this)
+    }
+
+    onInput(input) {
+        if(!input.noExternalUpdate) {
+            this.state.users = input.users ? input.users.filter(user => user ? true : false) : []
+            this.state.idSelected = null
+        }
+    }
+
+    onMount() {
+        appm.on('userBlocked', this.userBlocked)
+    }
+
+    onDestroy() {
+        appm.off('userBlocked', this.userBlocked)
+    }
+
+    // Getters & Setters.
+
+    getUsers() {
+        return this.state.users
+    }
+
+    // Functions.
+
+    allowUser() {
+        if(!this.state.idSelected) {
+            return
+        }
+
+        for(const [index, user] of this.state.users.entries()) {
+            if(user.username == this.state.idSelected) {
+                this.state.users.splice(index, 1)
+                this.setStateDirty('users')
+                break
+            }
+        }
+
+        this.state.idSelected = null
+    }
+
+    blockUser() {
+        appm.showPopup('blockUser', this.state.users.concat([appm.getUser()]))
+    }
+
+    openUser(username) {
+        appm.openPage('channels', 'user', { newTab: true }, { username })
+    }
+
+    selectUser(username) {
+        if(this.state.idSelected == username) {
+            this.state.idSelected = null
+            return
+        }
+
+        this.state.idSelected = username
+    }
+
+    userBlocked(user) {
+        this.state.users.push(user)
+
+        this.setStateDirty('users')
+    }
+}
+
+$ const users = state.users || []
+$ const trSettings = input.trSettings || {}
+
+<section-settings.section-usersblocked title=trSettings.title>
+    <if(users.length)>
+        <div.wrapper-users>
+            <for|user| of=users>
+                $ const selected = state.idSelected == user.username
+
+                <button-user
+                    class=(selected ? 'selected' : '')
+                    user=user
+                    on-click('selectUser', user.username)
+                    on-middleClick('openUser', user.username)
+                />
+            </for>
+        </div>
+    </if>
+
+    <div.controls>
+        <if(state.idSelected)>
+            <button-text.button-allow
+                icon='check'
+                text=trSettings.buttonAllowUser
+                on-click('allowUser')
+            />
+        </if>
+        <else>
+            <button-text.button-blockuser.danger
+                icon='block'
+                text=trSettings.buttonBlockUser
+                on-click('blockUser')
+            />
+        </else>
+    </div>
+</section-settings>
+
+style.less {
+    .section-usersblocked {
+        >.contents {
+            >.wrapper-users {
+                display: flex;
+                flex-direction: row;
+                gap: 10px; // TODO
+            }
+
+            >.controls {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 10px; // TODO
+            }
+        }
+    }
+};

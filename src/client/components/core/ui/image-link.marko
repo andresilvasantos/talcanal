@@ -1,0 +1,119 @@
+import appm from 'js/app-manager'
+import { urls } from 'js/default-vars'
+
+$ const link = input.link || ''
+
+<div.image-link class=input.class>
+    <button-default.button-link
+        href=input.link
+        link
+        newTab
+        on-click('emit', 'click')
+        on-middleClick('emit', 'middleClick')
+    >
+        <icon.icon-link name='link' />
+
+        <if(input.image)>
+            <image.cover.big
+                lazyload
+                src=`${appm.getUrlCdn()}/${input.image}.jpg`
+                srcSmall=`${appm.getUrlCdn()}/${input.image}-sm-nocrop.jpg`
+            />
+        </if>
+    </button-default>
+
+    <div.icons>
+        <div.wrapper-iconexternal>
+            <icon name='linkExternal' />
+        </div>
+
+        <image.favicon.fit.small lazyload noPlaceholder src=`${urls.favicons}${link}` />
+    </div>
+</div>
+
+style.less {
+    .image-link {
+        --icon-borderradius: 4px;
+        --icon-padding: 5px;
+        --icon-size: 32px;
+        --iconlink-size: 40px;
+        --icons-margin: 10px;
+        --icons-spacing: 10px;
+
+        position: relative;
+
+        >.button-link {
+            background-color: var(--color-background3);
+            border: 1px solid var(--color-border1);
+            border-radius: var(--app-borderradius2);
+            display: flex;
+            height: 100%;
+            overflow: hidden;
+            position: relative;
+            .transition(border-color 0.2s ease-out);
+
+            >.icon-link {
+                color: var(--color-icon2);
+                .absolute-center();
+                .size(var(--iconlink-size));
+            }
+
+            >.image {
+                .absolute-fill();
+            }
+
+            &:hover {
+                border-color: var(--color-border3);
+            }
+        }
+
+        >.icons {
+            display: flex;
+            gap: var(--icons-spacing);
+            pointer-events: none;
+            position: absolute;
+            right: var(--icons-margin);
+            top: var(--icons-margin);
+
+            >.favicon {
+                border-radius: var(--icon-borderradius);
+                display: flex;
+                overflow: hidden;
+                .size(var(--icon-size));
+            }
+
+            >.wrapper-iconexternal {
+                background-color: rgba(var(--color-background3-rgb), 0.9);
+                border-radius: var(--app-borderradius);
+                opacity: 0;
+                padding: var(--icon-padding);
+                .size(var(--icon-size));
+                .flex-center();
+                .transition(opacity 0.2s ease-out);
+
+                >.icon {
+                    color: var(--color-icon2);
+                    display: flex;
+                }
+            }
+        }
+
+        &:hover {
+            >.icons {
+                >.wrapper-iconexternal {
+                    opacity: 1;
+                }
+            }
+        }
+
+        .r-max(@break-sm, {
+            --icon-size: 26px;
+            --icons-margin: 5px;
+            --icons-spacing: 5px;
+        });
+
+        .r-max(@break-xs, {
+            --icon-size: 22px;
+        });
+    }
+};

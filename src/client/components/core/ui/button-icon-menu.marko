@@ -1,0 +1,177 @@
+import appm from 'js/app-manager'
+
+class {
+    onCreate(input) {
+        this.state = {
+            options: input.options,
+            showOptions: false
+        }
+
+        this.options = this.state.options
+        this.hideOptions = this.hideOptions.bind(this)
+    }
+
+    onInput(input) {
+        this.state.options = input.options
+        this.options = this.state.options
+    }
+
+    onMount() {
+        this.state.mounted = true
+    }
+
+    onDestroy() {
+        appm.off('scroll', this.hideOptions)
+    }
+
+    // Functions.
+
+    hideOptions(event) {
+        if(event) {
+            event.stopPropagation()
+        }
+
+        this.state.options = this.options
+        this.state.showOptions = false
+
+        appm.off('scroll', this.hideOptions)
+    }
+
+    optionRequested(option) {
+        if(option.children) {
+            this.state.options = option.children
+
+            return
+        }
+
+        this.emit('optionRequested', option.id)
+        this.hideOptions()
+    }
+
+    showOptions() {
+        this.state.showOptions = true
+
+        this.update()
+
+        const buttonMain = this.getEl('buttonMain')
+        const menu = this.getEl('menu')
+        const bbButton = buttonMain.getBoundingClientRect()
+        const bbMenu = menu.getBoundingClientRect()
+        const higherThanWindow = bbButton.y + bbButton.height + bbMenu.height > window.innerHeight
+        const widerThanWindow = bbButton.x + bbMenu.width > window.innerWidth
+        const leftPreferred = buttonMain.classList.contains('open-left')
+
+        if(higherThanWindow) {
+            menu.style.bottom = `${window.innerHeight - bbButton.y}px`
+            menu.style.top = 'unset'
+        }
+        else {
+            menu.style.bottom = 'unset'
+            menu.style.top = `${bbButton.y + bbButton.height}px`
+        }
+
+        if(widerThanWindow || leftPreferred) {
+            menu.style.left = `${bbButton.x + bbButton.width - bbMenu.width}px`
+        }
+        else {
+            menu.style.left = `${bbButton.x}px`
+        }
+
+        appm.on('scroll', this.hideOptions)
+    }
+}
+
+<if(state.options.length)>
+    <button-icon.button-icon-menu
+        key='buttonMain'
+        class=[input.class, state.showOptions ? 'options-visible' : '']
+        icon=input.icon
+        iconRotation=input.iconRotation
+        tooltip=(state.showOptions ? '' : input.tooltip)
+        on-click('showOptions')
+    >
+        <if(state.showOptions)>
+            <div.menu key='menu'>
+                <div.overlay on-click('hideOptions') />
+
+                <div.controls>
+                    <for|option| of=state.options>
+                        <button-text.align-left
+                            class=[
+                                option.special ? 'special' : '',
+                                option.special2 ? 'special2' : '',
+                                option.danger ? 'danger' : ''
+                            ]
+                            icon=option.icon
+                            text=(option.text || option.id)
+                            on-click('optionRequested', option)
+                        >
+                            <if(option.isTag)>
+                                <div.tag-indicator
+                                    style=`background-color: var(--color-tags-${option.color})`
+                                />
+                            </if>
+                        </button-text>
+                    </for>
+                </div>
+            </div>
+        </if>
+    </button-icon>
+</if>
+
+style.less {
+    .button-icon-menu {
+        --menu-maxheight: 350px;
+        --tagindicator-size: 20px;
+
+        position: relative;
+
+        &.options-visible {
+            pointer-events: none;
+        }
+
+        >.menu {
+            border-radius: var(--app-borderradius);
+            border: 1px solid var(--color-border1);
+            overflow: hidden;
+            position: fixed;
+            z-index: 7;
+            .box-shadow(0 4px 10px 0 fade(@color-black, 15));
+
+            >.overlay {
+                pointer-events: auto;
+                .fixed-fill();
+            }
+
+            >.controls {
+                background-color: var(--color-background2);
+                display: flex;
+                flex-direction: column;
+                max-height: var(--menu-maxheight);
+                pointer-events: auto;
+                position: relative;
+                z-index: 2;
+                .scroll-custom();
+
+                >.button-text {
+                    --backgroundcolor: transparent;
+
+                    border: none;
+                    border-radius: 0;
+                    flex-shrink: 0;
+
+                    &:hover {
+                        --backgroundcolor: var(--color-button2);
+                    }
+
+                    >.tag-indicator {
+                        border-radius: 50%;
+                        flex-shrink: 0;
+                        order: -1;
+                        .size(var(--tagindicator-size));
+                    }
+                }
+            }
+        }
+    }
+};

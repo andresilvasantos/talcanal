@@ -1,0 +1,270 @@
+import appm from 'js/app-manager'
+import { abbreviateNumber, processObjectsTr } from 'js/utils'
+
+class {
+    onCreate(input) {
+        this.state = {
+            post: input.post || {}
+        }
+    }
+
+    onInput(input) {
+        this.state.post = input.post || {}
+
+        if(this.mounted) {
+            this.setStateDirty('post')
+        }
+    }
+
+    onMount() {
+        this.mounted = true
+    }
+
+    // Functions.
+
+    controlRequested(idControl) {
+        switch(idControl) {
+            case 'approve':
+                this.emit('approveRequested')
+                break
+            case 'delete':
+                this.emit('deleteRequested')
+                break
+            case 'lock':
+            case 'unlock':
+                this.emit('lockRequested')
+                break
+            case 'pin':
+            case 'unpin':
+                this.emit('pinRequested')
+                break
+            case 'markAdultContent':
+                this.emit('markAdultContentRequested', true)
+                break
+            case 'unmarkAdultContent':
+                this.emit('markAdultContentRequested', false)
+                break
+            case 'reject':
+                this.emit('rejectRequested')
+                break
+            case 'report':
+                this.emit('reportRequested')
+                break
+            /* case 'copyUrl':
+            case 'message':
+                this.emit('shareRequested', idControl)
+                break */
+        }
+
+        if(idControl.startsWith('tag-') || idControl == 'tagEmpty') {
+            this.emit('tagRequested', idControl.replace('tag-', ''))
+        }
+    }
+}
+
+$ const processOptions = (post, isCreator, isMod, allowPin, isPinned, trOptions) => {
+    const channel = post.channel || {}
+    const options = []
+
+    if(isMod) {
+        if(post.status != 'approved') {
+            options.push({
+                id: 'approve',
+                icon: 'check',
+                special: true
+            })
+        }
+
+        options.push({
+            id: post.locked ? 'unlock' : 'lock',
+            icon: post.locked ? 'unlock' : 'lock',
+            special: true
+        })
+
+        if(post.status != 'rejected' && post.status != 'autorejected') {
+            options.push({
+                id: 'reject',
+                danger: true,
+                icon: 'reject'
+            })
+        }
+    }
+
+    if(isMod || isCreator) {
+        if(channel.tags && channel.tags.length) {
+            options.push({
+                id: 'tag',
+                icon: 'tag',
+                children: [{ id: 'tagEmpty' }].concat(channel.tags.map(tag => (
+                    { id: `tag-${tag.id}`, color: tag.color, isTag: true, noTr: true, text: tag.name }
+                )))
+            })
+        }
+
+        options.push({
+            id: post.adultContent ? 'unmarkAdultContent' : 'markAdultContent',
+            danger: true,
+            icon: 'circle'
+        })
+    }
+
+    if(allowPin) {
+        options.push({
+            id: isPinned ? 'unpin' : 'pin',
+            danger: isPinned,
+            special2: !isPinned,
+            icon: 'pin'
+        })
+    }
+
+    if(isCreator) {
+        options.push({
+            id: 'delete',
+            danger: true,
+            icon: 'bin'
+        })
+    }
+    else if(!isMod) {
+        options.push({
+            id: 'report',
+            danger: true,
+            icon: 'flag'
+        })
+    }
+
+    return processObjectsTr(options, trOptions)
+}
+
+$ const post = state.post || {}
+$ const channel = post.channel || {}
+$ const creator = post.creator || {}
+$ const creatorRemoved = creator.status == 'removed'
+$ const trTooltips = appm.tr('channels.post.tooltips') || {}
+
+<if(input.smallTop)>
+    <div.controls-card-post class=input.class>
+        <if(!input.hideChannelInfo)>
+            <icon-text.light.small
+                icon='channel'
+                interactive
+                text=channel.id
+                on-click('emit', 'channelRequested', false)
+                on-middleClick('emit', 'channelRequested', true)
+            />
+        </if>
+
+        <if(!input.hideCreatorInfo)>
+            <icon-text.light.small
+                icon='user'
+                interactive=(!creatorRemoved)
+                text=(creatorRemoved ? '[Removido]' : creator.username)
+                on-click('emit', 'creatorRequested', false)
+                on-middleClick('emit', 'creatorRequested', true)
+            />
+        </if>
+    </div>
+</if>
+<else-if(input.smallBottom)>
+    <div.controls-card-post class=input.class>
+        <icon-text.light
+            icon='comment'
+            interactive
+            text=abbreviateNumber(post.countComments)
+            tooltip=trTooltips.comment
+            on-click('emit', 'commentRequested', false)
+            on-middleClick('emit', 'commentRequested', true)
+        />
+
+        <button-icon.special.small.icon-only.light
+            class=(post.hasUserFavorited ? 'selected' : '')
+            icon='heart'
+            tooltip=trTooltips.favorite
+            on-click('emit', 'favoriteRequested')
+        />
+
+        <button-share.small.icon-only.light.open-left on-shareRequested('emit', 'shareRequested') />
+
+        <button-icon-menu.small.icon-only.light
+            icon='ellipsis'
+            iconRotation=90
+            options=processOptions(
+                post,
+                input.isCreator,
+                input.isMod,
+                input.allowPin,
+                input.isPinned,
+                appm.tr('channels.post.controls')
+            )
+            tooltip=trTooltips.more
+            on-optionRequested('controlRequested')
+        />
+    </div>
+</else-if>
+<else>
+    <div.controls-card-post class=input.class>
+        <icon-text.light
+            icon='comment'
+            interactive
+            text=abbreviateNumber(post.countComments)
+            tooltip=trTooltips.comment
+            on-click('emit', 'commentRequested', false)
+            on-middleClick('emit', 'commentRequested', true)
+        />
+
+        <if(!input.hideChannelInfo)>
+            <icon-text.light
+                icon='channel'
+                interactive
+                text=channel.id
+                on-click('emit', 'channelRequested', false)
+                on-middleClick('emit', 'channelRequested', true)
+            />
+        </if>
+
+        <if(!input.hideCreatorInfo)>
+            <icon-text.light
+                icon='user'
+                interactive=(!creatorRemoved)
+                text=(creatorRemoved ? '[Removido]' : creator.username)
+                on-click('emit', 'creatorRequested', false)
+                on-middleClick('emit', 'creatorRequested', true)
+            />
+        </if>
+
+        <button-icon.special.small.icon-only.light
+            class=(post.hasUserFavorited ? 'selected' : '')
+            icon='heart'
+            tooltip=trTooltips.favorite
+            on-click('emit', 'favoriteRequested')
+        />
+
+        <button-share.small.icon-only.light.open-left on-shareRequested('emit', 'shareRequested') />
+
+        <button-icon-menu.small.icon-only.light
+            icon='ellipsis'
+            iconRotation=90
+            options=processOptions(
+                post,
+                input.isCreator,
+                input.isMod,
+                input.allowPin,
+                input.isPinned,
+                appm.tr('channels.post.controls')
+            )
+            tooltip=trTooltips.more
+            on-optionRequested('controlRequested')
+        />
+    </div>
+</else>
+
+style.less {
+    .controls-card-post {
+        align-items: center;
+        display: flex;
+        gap: var(--controls-spacing-medium);
+
+        >.separator {
+            flex-grow: 1;
+        }
+    }
+};

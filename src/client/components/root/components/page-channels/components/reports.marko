@@ -1,0 +1,160 @@
+import appm from 'js/app-manager'
+
+class {
+    onCreate() {
+        this.state = {
+            showReports: false
+        }
+    }
+
+    // Functions.
+
+    toggleReports() {
+        this.state.showReports = !this.state.showReports
+    }
+
+    reporterRequested(user, newTab = false) {
+        appm.openPage('channels', 'user', { allowBack: true, newTab }, user)
+    }
+}
+
+$ const flags = input.flags || []
+$ const trFlags = appm.tr('channels.report.flags') || {}
+
+<div.reports class=[input.class, state.showReports ? 'opened' : '']>
+    <button-default.button-bar on-click('toggleReports')>
+        <div.content>
+            <icon name='flag' />
+
+            <span.text>
+                Denúncias - ${flags.length}
+            </span>
+        </div>
+
+        <icon.icon-arrow name='arrow' rotation=(state.showReports ? -90 : 90) />
+    </button-default>
+
+    <if(state.showReports)>
+        <div.wrapper-reports>
+            <for|flag| of=flags>
+                $ const user = flag.user || {}
+
+                <div.report>
+                    <span.type>
+                        ${trFlags[flag.type]}
+                    </span>
+
+                    <if(flag.text && flag.text.length)>
+                        <span.text>
+                            ${` - ${flag.text}`}
+                        </span>
+                    </if>
+
+                    <icon-text.small.light
+                        icon='user'
+                        interactive
+                        text=user.username
+                        on-click('reporterRequested', user, false)
+                        on-middleClick('reporterRequested', user, true)
+                    />
+                </div>
+            </for>
+        </div>
+    </if>
+</div>
+
+style.less {
+    .reports {
+        --buttonbar-content-spacing: 15px;
+        --buttonbar-fontsize: 16px;
+        --buttonbar-height: 40px;
+        --buttonbar-padding-h: 15px;
+        --buttonbar-spacing: 15px;
+        --iconarrow-size: 18px;
+        --iconflag-size: 20px;
+        --report-fontsize: 14px;
+        --wrapperreports-padding: 10px 15px;
+        --wrapperreports-spacing: 10px;
+
+        background-color: var(--color-background4);
+        border: 1px solid var(--color-border2);
+        border-radius: var(--app-borderradius);
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+        .transition(border-color 0.2s ease-out);
+
+        >.button-bar {
+            align-items: center;
+            background-color: var(--color-button1);
+            display: flex;
+            gap: var(--buttonbar-spacing);
+            height: var(--buttonbar-height);
+            padding: 0 var(--buttonbar-padding-h);
+            justify-content: space-between;
+            .transition(background-color 0.2s ease-out);
+
+            >.content {
+                align-items: center;
+                display: flex;
+                gap: var(--buttonbar-content-spacing);
+
+                >.icon {
+                    color: var(--color-icon2);
+                    display: flex;
+                    .size(var(--iconflag-size));
+                }
+
+                >.text {
+                    color: var(--color-text2);
+                    font-family: @font-medium;
+                    font-size: var(--buttonbar-fontsize);
+                }
+            }
+
+            >.icon-arrow {
+                color: var(--color-icon1);
+                display: flex;
+                .size(var(--iconarrow-size));
+                .transition(color 0.2s ease-out);
+            }
+
+            &:hover {
+                background-color: var(--color-button2);
+
+                >.icon-arrow {
+                    color: var(--color-icon2);
+                }
+            }
+        }
+
+        >.wrapper-reports {
+            //border-top: 1px solid var(--color-border2);
+            display: flex;
+            flex-direction: column;
+            gap: var(--wrapperreports-spacing);
+            padding: var(--wrapperreports-padding);
+
+            >.report {
+                font-size: var(--report-fontsize);
+
+                >.type {
+                    color: var(--color-text2);
+                }
+
+                >.text {
+                    color: var(--color-text1);
+                }
+
+                >.icon-text {
+                    display: inline-flex;
+                    margin-left: 5px; // TODO
+                }
+            }
+        }
+
+        &.opened {
+            border-color: var(--color-warning);
+        }
+    }
+};

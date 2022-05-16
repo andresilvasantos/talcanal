@@ -1,0 +1,66 @@
+<p.text-p class=input.class>
+    <${data.renderBody} />
+</p>
+
+style.less {
+    .text-p {
+        --fontsize: 16px;
+        --fontsize-big: 20px;
+        --fontsize-medium: 18px;
+        --fontsize-small: 14px;
+
+        font-family: @font;
+        font-size: var(--fontsize);
+        line-height: 1.4;
+
+        &.small,
+        .small {
+            font-size: var(--fontsize-small);
+        }
+
+        &.medium,
+        .medium {
+            font-size: var(--fontsize-medium);
+        }
+
+        &.big,
+        .big {
+            font-size: var(--fontsize-big);
+        }
+
+        .bold {
+            font-family: @font-medium;
+        }
+
+        a {
+            color: var(--color-link);
+        }
+
+        // Media queries.
+
+        .r-max(@break-lg, {
+            --fontsize: 15px;
+            --fontsize-big: 19px;
+            --fontsize-medium: 17px;
+        });
+
+        .r-max(@break-md, {
+            --fontsize: 14px;
+            --fontsize-big: 18px;
+            --fontsize-medium: 16px;
+            --fontsize-small: 13px;
+        });
+
+        .r-max(@break-ms, {
+            --fontsize-big: 16px;
+            --fontsize-medium: 15px;
+            //--fontsize-small: 12px;
+        });
+
+        .r-max(@break-sm, {
+            --fontsize-big: 15px;
+            --fontsize-medium: 14px;
+            --fontsize-small: 12px;
+        });
+    }
+};

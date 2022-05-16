@@ -1,0 +1,58 @@
+class {
+    onCreate(input) {
+        this.state = {
+            loading: input.loading
+        }
+    }
+
+    onInput(input) {
+        if(this.state.loading != input.loading) {
+            if(input.loading) {
+                this.timeChangedToLoading = new Date().getTime()
+
+                this.state.loading = true
+            }
+            else {
+                if(!this.timeChangedToLoading || this.timeChangedToLoading - new Date().getTime() > 500) {
+                    this.state.loading = false
+                }
+                else if(!this.timeoutCancelLoading) {
+                    this.timeoutCancelLoading = setTimeout(() => {
+                        this.state.loading = false
+
+                        this.timeoutCancelLoading = false
+                    }, 500)
+                }
+            }
+        }
+    }
+
+    onDestroy() {
+        if(this.timeoutCancelLoading) {
+            clearTimeout(this.timeoutCancelLoading)
+        }
+    }
+}
+
+<button-text.button-submit.strong
+    class=[input.class, state.loading ? 'loading' : '']
+    disabled=(state.loading || input.disabled)
+    icon=input.icon
+    text=input.text
+    on-click('emit', 'click')
+>
+    <if(state.loading)>
+        <icon.icon-loading name=(state.loading ? 'loading' : '') />
+    </if>
+</button-text>
+
+style.less {
+    .button-submit {
+        >.icon-loading {
+            color: var(--color-icon2);
+            display: flex;
+            .size(var(--icon-size));
+            .svg-loading();
+        }
+    }
+};

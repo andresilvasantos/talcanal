@@ -1,0 +1,180 @@
+import appm from 'js/app-manager'
+import { timers } from 'js/default-vars'
+
+class {
+    onCreate() {
+        this.state = {
+            notifications: [],
+            syncInProgress: false
+        }
+
+        this.startSyncNotification = this.startSyncNotification.bind(this)
+        this.stopSyncNotification = this.stopSyncNotification.bind(this)
+        this.addNotification = this.addNotification.bind(this)
+    }
+
+    onMount() {
+        appm.on('syncStarted', this.startSyncNotification)
+        appm.on('syncStopped', this.stopSyncNotification)
+        appm.on('showNotification', this.addNotification)
+    }
+
+    onDestroy() {
+        appm.removeListener('syncStarted', this.startSyncNotification)
+        appm.removeListener('syncStopped', this.stopSyncNotification)
+        appm.removeListener('showNotification', this.addNotification)
+    }
+
+    // Functions.
+
+    addNotification(message, code, icon) {
+        const notification = {
+            code: code,
+            icon: icon ? icon : (code < 0 ? 'error' : 'check'),
+            message: message
+        }
+
+        this.state.notifications.push(notification)
+        this.setStateDirty('notifications')
+
+        setTimeout(() => {
+            this.state.notifications.shift()
+            this.setStateDirty('notifications')
+        }, timers.durationNotifications)
+    }
+
+    startSyncNotification() {
+        this.state.syncInProgress = true
+        this.timeSyncStart = new Date()
+    }
+
+    stopSyncNotification(success) {
+        const minTimeSyncNotification = 1000
+
+        if(Date.now() - this.timeSyncStart > minTimeSyncNotification) {
+            this.state.syncInProgress = false
+        }
+        else {
+            if(this.timeoutSync) {
+                clearTimeout(this.timeoutSync)
+            }
+
+            this.timeoutSync = setTimeout(() => {
+                this.state.syncInProgress = false
+                this.timeoutSync = null
+            }, minTimeSyncNotification - (Date.now() - this.timeSyncStart))
+        }
+    }
+}
+
+$ const getClassNotification = (code) => {
+    if(code < 0) {
+        return 'error'
+    }
+    /* else if(code == 1) {
+        return 'pro'
+    } */
+
+    return ''
+}
+
+<!-- $ const getIconNotification = (code) => {
+    if(code < 0) {
+        return 'error'
+    }
+    else if(code == 1) {
+        return 'lock'
+    }
+
+    return 'check'
+} -->
+
+<div.app-notifications class=input.class>
+    <for|notification| of=state.notifications>
+        <div.notification class=getClassNotification(notification.code)>
+            <icon name=notification.icon />
+
+            <span.message>
+                $!{notification.message}
+            </span>
+        </div>
+    </for>
+
+    <if(state.syncInProgress)>
+        <div.notification.sync>
+            <icon name='loading' />
+        </div>
+    </if>
+</div>
+
+style.less {
+    .app-notifications {
+        --icon-size: 18px;
+        --message-fontsize: 15px;
+        --notification-maxwidth: 400px;
+        --notification-minheight: 30px;
+        --notification-padding: 10px 20px;
+        --notification-spacing: 10px;
+        --spacing: 10px;
+
+        align-items: center;
+        display: flex;
+        flex-direction: column;
+        gap: var(--spacing);
+        pointer-events: none;
+
+        >.notification {
+            background-color: var(--color-background2);
+            border: 2px solid var(--color-accent1);
+            border-radius: var(--app-borderradius);
+            display: flex;
+            gap: var(--notification-spacing);
+            justify-content: center;
+            max-width: var(--notification-maxwidth);
+            min-height: var(--notification-minheight);
+            padding: var(--notification-padding);
+
+            >.icon {
+                color: var(--color-accent1);
+                display: flex;
+                flex-shrink: 0;
+                .size(var(--icon-size));
+            }
+
+            >.message {
+                font-size: var(--message-fontsize);
+                .text-rich(var(--color-text3));
+            }
+
+            &.error {
+                border-color: var(--color-warning);
+                border-width: 2px;
+
+                >.icon {
+                    color: var(--color-warning);
+                }
+            }
+
+            &.sync {
+                border-color: var(--color-border1);
+                border-width: 1px;
+
+                >.icon {
+                    color: var(--color-icon2);
+                    .size(var(--icon-size));
+                    .svg-loading();
+                }
+            }
+        }
+
+        // Media queries
+
+        .r-max(@break-sm, {
+            --notification-padding: 8px 15px;
+        });
+
+        .r-max(@break-xs, {
+            --notification-padding: 5px 10px;
+        });
+    }
+};

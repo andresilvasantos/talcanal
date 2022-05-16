@@ -1,0 +1,162 @@
+<if(input.interactive)>
+    <button-default.icon-text.interactive
+        class=input.class
+        on-click('emit', 'click')
+        on-middleClick('emit', 'middleClick')
+    >
+        <icon class=(input.icon == 'channel' ? 'icon-grow' : '') name=input.icon />
+
+        <span.text>
+            ${input.text || 0}
+        </span>
+    </button-default>
+</if>
+<else>
+    <div.icon-text class=input.class>
+        <icon class=(input.icon == 'channel' ? 'icon-grow' : '') name=input.icon />
+
+        <span.text>
+            ${input.text || 0}
+        </span>
+    </div>
+</else>
+
+style.less {
+    .icon-text {
+        --fontsize: 16px;
+        --icon-size: 16px;
+        --padding: 0;
+        --spacing: 10px;
+
+        align-items: center;
+        border: 1px solid transparent;
+        border-radius: var(--app-borderradius);
+        color: var(--color-text2);
+        display: flex;
+        font-size: var(--fontsize);
+        gap: var(--spacing);
+        padding: var(--padding);
+        .transition(background-color 0.1s ease-out, color 0.1s ease-out;);
+
+        >.icon {
+            display: flex;
+            .size(var(--icon-size));
+
+            &.icon-grow {
+                height: unset;
+                width: calc(var(--icon-size) + 4px);
+            }
+        }
+
+        >.text {
+            white-space: nowrap;
+        }
+
+        &.light {
+            color: var(--color-text1);
+        }
+
+        &.fill {
+            --padding: 5px 8px;
+
+            background-color: var(--color-background4);
+        }
+
+        &.interactive {
+            &:hover {
+                color: var(--color-text3);
+
+                &.light {
+                    color: var(--color-text2);
+                }
+
+                >.icon {
+                    .scale(1.1);
+                }
+            }
+
+            &.selected {
+                &.fill {
+                    background-color: var(--color-accent1);
+                    color: @color-darkcontrast;
+                }
+            }
+        }
+
+        &.small {
+            --fontsize: 14px;
+            --icon-size: 13px;
+            --spacing: 5px;
+        }
+
+        &.medium {
+            --fontsize: 15px;
+            --icon-size: 14px;
+        }
+
+        &.big {
+            --fontsize: 18px;
+            --icon-size: 18px;
+            --spacing: 10px;
+
+            >.text {
+                font-family: @font-medium;
+            }
+        }
+
+        // Media queries
+
+        .r-max(@break-md, {
+            --fontsize: 15x;
+            --icon-size: 15px;
+            --spacing: 8px;
+
+            &.big {
+                --fontsize: 17px;
+                --icon-size: 17px;
+            }
+
+            /*&.interactive {
+                --fontsize: 15px;
+                --icon-size: 16px;
+            }*/
+        });
+
+        .r-max(@break-sm, {
+            --fontsize: 14px;
+            --icon-size: 14px;
+            --spacing: 5px;
+
+            &.big {
+                --fontsize: 16px;
+                --icon-size: 16px;
+                --spacing: 8px;
+            }
+
+            /*&.interactive {
+                --fontsize: 13px;
+                --icon-size: 16px;
+            }*/
+        });
+
+        .r-max(@break-xs, {
+            --fontsize: 14px;
+            --icon-size: 15px;
+            --spacing: 5px;
+
+            &.small {
+                --fontsize: 13px;
+                --icon-size: 13px;
+            }
+
+            &.medium {
+                --fontsize: 14px;
+                --icon-size: 14px;
+            }
+
+            &.fill {
+                --padding: 3px 5px;
+            }
+        });
+    }
+};

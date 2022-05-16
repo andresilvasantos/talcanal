@@ -1,0 +1,145 @@
+import appm from 'js/app-manager'
+import { validatePassword } from 'js/utils'
+
+class {
+    onCreate() {
+        this.state = {
+            passwordVisible: false,
+            status: 0
+        }
+
+        this.deleteAccountError = this.deleteAccountError.bind(this)
+        this.deleteAccountSuccess = this.deleteAccountSuccess.bind(this)
+    }
+
+    onMount() {
+        this.errorMessages = appm.tr('status')
+        this.popupComponent = this.getComponent('popup')
+    }
+
+    onDestroy() {
+        appm.off('deleteAccountError', this.deleteAccountError)
+        appm.off('deleteAccountSuccess', this.deleteAccountSuccess)
+    }
+
+    // Functions.
+
+    deleteAccountError(error) {
+        appm.off('deleteAccountError', this.deleteAccountError)
+        appm.off('deleteAccountSuccess', this.deleteAccountSuccess)
+
+        switch(error) {
+            case 1:
+                this.passwordComponent.setValid(false)
+                this.statusMessage.setMessage(this.errorMessages.wrongPassword)
+                break
+            case -100:
+                this.statusMessage.setMessage(this.errorMessages.problemReachingServers)
+                break
+            default:
+                this.statusMessage.setMessage(this.errorMessages.problemUnknown)
+                break
+        }
+
+        this.state.status = -1
+    }
+
+    deleteAccountSuccess() {
+        this.hide()
+    }
+
+    hide() {
+        if(!this.visible) {
+            return
+        }
+
+        this.popupComponent.hide()
+    }
+
+    hidden() {
+        this.state.status = 0
+        this.visible = false
+    }
+
+    keyPressed(event) {
+        switch(event.keyCode) {
+            case 13: // Enter
+                this.submitRequested()
+                break
+            case 27:
+                this.hide()
+        }
+    }
+
+    show(args) {
+        if(this.visible) {
+            return
+        }
+
+        this.visible = true
+
+        this.popupComponent.show()
+    }
+
+    submitRequested() {
+        if(this.state.status == 1) {
+            return
+        }
+
+        this.passwordComponent = this.getComponent('inputPassword')
+        this.statusMessage = this.getComponent('statusMessage')
+
+        this.statusMessage.hide()
+
+        const password = this.passwordComponent.getValue()
+
+        let validData = true
+
+        if(!validatePassword(password)) {
+            this.passwordComponent.setValid(false, this.errorMessages.invalidPassword)
+            validData = false
+        }
+
+        if(!validData) {
+            return
+        }
+
+        this.state.status = 1
+
+        appm.on('deleteAccountError', this.deleteAccountError)
+        appm.on('deleteAccountSuccess', this.deleteAccountSuccess)
+
+        appm.deleteAccount(password)
+    }
+
+    togglePasswordVisibility() {
+        this.state.passwordVisible = !this.state.passwordVisible
+    }
+}
+
+$ const trDeleteAccount = appm.tr('settings.deleteAccount') || {}
+
+<popup-yesno.popup-deleteaccount
+    key='popup'
+    class=input.class
+    dangerAction
+    iconConfirm='bin'
+    status=state.status
+    text=trDeleteAccount.text
+    textButtonCancel=trDeleteAccount.buttonCancel
+    textButtonSubmit=trDeleteAccount.buttonSubmit
+    title=trDeleteAccount.title
+    on-hidden('hidden')
+    on-keyPressed('keyPressed')
+    on-submitRequested('submitRequested')
+>
+    <input-password.big
+        key='inputPassword'
+        charsVisible=state.passwordVisible
+        placeholder=trDeleteAccount.inputPassword
+        on-keyPressed('keyPressed')
+        on-toggleVisibility('togglePasswordVisibility')
+    />
+
+    <status-message key='statusMessage' />
+</popup-yesno>

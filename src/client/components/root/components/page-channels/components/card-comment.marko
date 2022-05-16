@@ -1,0 +1,452 @@
+import appm from 'js/app-manager'
+import { elapsedDateToShortString, processObjectsTr } from 'js/utils'
+import { urls } from 'js/default-vars'
+
+class {
+    onCreate(input) {
+        this.state = {
+            comment: input.comment || {}
+        }
+
+        this.approved = this.approved.bind(this)
+        this.favorited = this.favorited.bind(this)
+        this.rejected = this.rejected.bind(this)
+        this.voted = this.voted.bind(this)
+    }
+
+    onInput(input) {
+        this.state.comment = input.comment || {}
+    }
+
+    onMount() {
+        appm.on('approveItemsSuccess', this.approved)
+        appm.on('favoriteItemSuccess', this.favorited)
+        appm.on('rejectItemsSuccess', this.rejected)
+        appm.on('voteCommentSuccess', this.voted)
+    }
+
+    onDestroy() {
+        appm.off('approveItemsSuccess', this.approved)
+        appm.off('favoriteItemSuccess', this.favorited)
+        appm.off('rejectItemsSuccess', this.rejected)
+        appm.off('voteCommentSuccess', this.voted)
+    }
+
+    // Functions.
+
+    approved(type, ids) {
+        if(type != 'comments' || !ids.includes(this.state.comment.id)) {
+            return
+        }
+
+        this.state.comment.status = 'approved'
+
+        this.setStateDirty('comment')
+    }
+
+    approveRequested() {
+        appm.approveItems('comments', [this.state.comment.id])
+    }
+
+    channelRequested(channel, newTab = false) {
+        appm.openPage('channels', 'channel', { allowBack: true, newTab }, channel)
+    }
+
+    controlRequested(idControl) {
+        switch(idControl) {
+            case 'approve':
+                this.approveRequested()
+                break
+            case 'delete':
+                this.emit('deleteRequested')
+                break
+            case 'reject':
+                this.rejectRequested()
+                break
+            case 'report':
+                this.reportRequested()
+                break
+            /* case 'copyUrl':
+            case 'message':
+                this.share(idControl) */
+                break
+        }
+    }
+
+    creatorRequested(creator, newTab = false) {
+        appm.openPage('channels', 'user', { allowBack: true, newTab }, creator)
+    }
+
+    favorited(type, id, favorited) {
+        if(type != 'comments' || id != this.state.comment.id) {
+            return
+        }
+
+        this.state.comment.hasUserFavorited = favorited
+
+        this.setStateDirty('comment')
+    }
+
+    favoriteRequested() {
+        appm.favoriteItem('comments', this.state.comment.id)
+    }
+
+    rejected(type, ids) {
+        if(type != 'comments' || !ids.includes(this.state.comment.id)) {
+            return
+        }
+
+        this.state.comment.status = 'rejected'
+
+        this.setStateDirty('comment')
+    }
+
+    rejectRequested() {
+        appm.rejectItems('comments', [this.state.comment.id])
+    }
+
+    reportRequested() {
+        appm.showPopup('report', 'comments', this.state.comment.id)
+    }
+
+    share(type) {
+        const comment = this.state.comment || {}
+        const post = comment.post || {}
+        const channel = post.channel || {}
+
+        const url = `${urls.domain}/c/${channel.id}/p/${post.id}/${comment.id}`
+
+        switch(type) {
+            case 'copyUrl':
+                appm.copyToClipboard(url)
+                break
+            case 'message':
+                appm.showPopup('sendMessage', `<a href='${url}'>${url}</a>`)
+                break
+        }
+
+        appm.addAnalyticsEvent('comment', 'share', channel.id)
+    }
+
+    voted(idComment, idPost, vote, voteIncrement) {
+        if(idComment != this.state.comment.id) {
+            return
+        }
+
+        this.state.comment.countVotes += voteIncrement
+        this.state.comment.hasUserUpvoted = vote == 1
+        this.state.comment.hasUserDownvoted = vote == -1
+
+        this.setStateDirty('comment')
+    }
+
+    voteRequested(up) {
+        appm.voteComment(this.state.comment.id, this.state.comment.post.id, up)
+    }
+}
+
+$ const processOptions = (isCreator, isMod, trOptions) => {
+    const options = []
+
+    if(isMod) {
+        options.push({
+            id: 'approve',
+            icon: 'check',
+            special: true
+        })
+
+        options.push({
+            id: 'reject',
+            danger: true,
+            icon: 'reject'
+        })
+    }
+
+    /* options.push({
+        id: 'share',
+        icon: 'send',
+        children: [{
+            id: 'copyUrl',
+            icon: 'link'
+        }, {
+            id: 'message',
+            icon: 'envelope'
+        }]
+    }) */
+
+    if(isCreator) {
+        options.push({
+            id: 'delete',
+            danger: true,
+            icon: 'bin'
+        })
+    }
+    else if(!isMod) {
+        options.push({
+            id: 'report',
+            danger: true,
+            icon: 'flag'
+        })
+    }
+
+    return processObjectsTr(options, trOptions)
+}
+
+$ const comment = state.comment || {}
+$ const creator = comment.creator || {}
+$ const post = comment.post || {}
+$ const channel = post.channel || {}
+$ const user = appm.isUserSignedIn() ? appm.getUser() : null
+$ const isMod = user && (
+    (channel.admins && channel.admins.includes(appm.getUser()._id)) ||
+    (channel.moderators && channel.moderators.includes(appm.getUser()._id)) ||
+    (user.super && user.superActive)
+)
+$ const isCreator = user && user._id == creator._id
+$ const removed = comment.status == 'removed'
+$ const removedPost = post.status == 'removed'
+$ const trTooltips = appm.tr('channels.comment.tooltips')
+
+<macro|{ smallBottom, smallTop }| name='rowControls'>
+    <div.row>
+        <div.details>
+            <if(smallBottom)>
+                <vote.medium.flat
+                    count=comment.countVotes
+                    downvoted=comment.hasUserDownvoted
+                    upvoted=comment.hasUserUpvoted
+                    on-voteRequested('voteRequested')
+                />
+            </if>
+
+            <if(!smallBottom)>
+                <status-comment comment=comment isMod=isMod />
+
+                <icon-text.light
+                    icon='channel'
+                    interactive
+                    text=channel.id
+                    on-click('channelRequested', channel, false)
+                    on-middleClick('channelRequested', channel, true)
+                />
+
+                <if(!input.hideCreatorInfo)>
+                    <icon-text.light
+                        icon='user'
+                        interactive
+                        text=(removed ? '[Removido]' : creator.username)
+                        on-click('creatorRequested', creator, false)
+                        on-middleClick('creatorRequested', creator, true)
+                    />
+                </if>
+            </if>
+
+            <if(!smallTop)>
+                <div.controls>
+                    <button-icon.special.small.icon-only.light
+                        class=(comment.hasUserFavorited ? 'selected' : '')
+                        icon='heart'
+                        tooltip=trTooltips.favorite
+                        on-click('favoriteRequested')
+                    />
+
+                    <button-share.small.icon-only.light.open-left on-shareRequested('share') />
+
+                    <button-icon-menu.small.icon-only.light
+                        icon='ellipsis'
+                        iconRotation=90
+                        options=processOptions(
+                            isCreator,
+                            isMod,
+                            appm.tr('channels.comment.controls')
+                        )
+                        tooltip=trTooltips.more
+                        on-optionRequested('controlRequested')
+                    />
+                </div>
+            </if>
+        </div>
+
+        <if(!smallBottom)>
+            <div.column>
+                <icon-text.small.light
+                    icon='clock'
+                    text=elapsedDateToShortString(comment.createdAt)
+                />
+
+                <if(input.selectable)>
+                    <checkbox checked=input.selected on-checked('emit', 'selectRequested') />
+                </if>
+            </div>
+        </if>
+    </div>
+</macro>
+
+<button-default.card-comment
+    class=input.class
+    on-click('emit', 'openRequested', false)
+    on-middleClick('emit', 'openRequested', true)
+>
+    <breakpoint-condition break='ms' min>
+        <vote
+            count=comment.countVotes
+            downvoted=comment.hasUserDownvoted
+            upvoted=comment.hasUserUpvoted
+            vertical
+            on-voteRequested('voteRequested')
+        />
+    </breakpoint-condition>
+
+    <div.wrapper>
+        <breakpoint-condition break='ms'>
+            <rowControls smallTop=true />
+
+            <@else>
+                <rowControls />
+            </@else>
+        </breakpoint-condition>
+
+        <text-p.text>
+            <if(removed)>
+                [Removido]
+            </if>
+            <else>
+                $!{comment.text}
+            </else>
+        </text-p>
+
+        <div.row>
+            <div.info-post>
+                <icon name='post' />
+
+                <text-p.title.small>
+                    <if(removedPost)>
+                        [Removido]
+                    </if>
+                    <else>
+                        ${post.title}
+                    </else>
+                </text-p>
+            </div>
+        </div>
+
+        <breakpoint-condition break='ms'>
+            <rowControls smallBottom=true />
+        </breakpoint-condition>
+    </div>
+</button-default>
+
+style.less {
+    .card-comment {
+        --details-spacing: 15px;
+        --iconadultcontent-size: 20px;
+        --posticon-size: 16px;
+        --postinfo-spacing: 5px;
+        //--posttitle-fontsize: 16px;
+        --row-spacing: 20px;
+        --vote-width: 60px;
+        --wrapper-padding: var(--app-padding) var(--app-padding) var(--app-padding) 0;
+        --wrapper-spacing: 10px;
+
+        background-color: var(--color-background2);
+        border-bottom: 1px solid var(--color-border1);
+        display: flex;
+        .transition(background-color 0.2s ease-out);
+
+        >.vote {
+            align-self: flex-start;
+            width: var(--vote-width);
+        }
+
+        >.wrapper {
+            display: flex;
+            flex-direction: column;
+            flex-grow: 1;
+            gap: var(--wrapper-spacing);
+            padding: var(--wrapper-padding);
+            // Width needs to be set so that text post can be ellipsed.
+            width: calc(100% - var(--vote-width));
+
+            >.row {
+                align-items: center;
+                display: flex;
+                justify-content: space-between;
+                gap: var(--row-spacing);
+
+                >.details {
+                    align-items: center;
+                    display: flex;
+                    gap: var(--details-spacing);
+
+                    >.controls {
+                        align-items: center;
+                        display: flex;
+                        gap: var(--controls-spacing-medium);
+                    }
+                }
+
+                >.column {
+                    align-items: center;
+                    display: flex;
+                    gap: var(--controls-spacing);
+                }
+
+                >.info-post {
+                    color: var(--color-text1);
+                    .text-truncate-lines(1);
+
+                    >.icon {
+                        display: inline-flex;
+                        margin-right: 5px; // TODO
+                        margin-top: -2px;
+                        vertical-align: middle;
+                        .size(var(--posticon-size));
+                    }
+
+                    >.title {
+                        display: inline;
+                    }
+                }
+            }
+
+            >.text {
+                color: var(--color-text3);
+                flex-grow: 1;
+                .text-rich(var(--color-text3));
+            }
+        }
+
+        &:hover,
+        &.selected {
+            background-color: var(--color-button1);
+
+            >.vote:not(.upvoted):not(.downvoted) {
+                >.count {
+                    color: var(--color-text4);
+                }
+            }
+        }
+
+        // Media queries.
+
+        .r-max(@break-ms, {
+            --wrapper-padding: var(--app-padding);
+
+            >.wrapper {
+                >.row {
+                    >.details {
+                        flex-grow: 1;
+
+                        >.controls {
+                            margin-left: auto;
+                        }
+                    }
+                }
+            }
+        });
+
+        .r-max(@break-xs, {
+            --wrapper-spacing: 5px;
+        });
+    }
+};

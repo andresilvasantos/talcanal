@@ -1,0 +1,45 @@
+$ const channel = input.channel || {}
+
+<button-default.button-channel
+    class=input.class
+    on-click('emit', 'click')
+    on-middleClick('emit', 'middleClick')
+>
+    <image-circle.medium icon='channel' image=channel.image />
+
+    <span.id>
+        ${channel.id}
+    </span>
+</button-default>
+
+style.less {
+    .button-channel {
+        --height: 40px;
+        --padding: 10px;
+        --spacing: 10px;
+        --id-fontsize: 15px;
+
+        background-color: var(--color-button1);
+        border-radius: var(--app-borderradius);
+        gap: var(--spacing);
+        height: var(--height);
+        padding: var(--padding);
+        .flex-center();
+        .transition(background-color 0.2s ease-out);
+
+        >.id {
+            color: var(--color-text2);
+            font-family: @font-medium;
+            font-size: var(--id-fontsize);
+            .transition(color 0.2s ease-out);
+        }
+
+        &:hover {
+            background-color: var(--color-button2);
+
+            >.id {
+                color: var(--color-text4);
+            }
+        }
+    }
+};

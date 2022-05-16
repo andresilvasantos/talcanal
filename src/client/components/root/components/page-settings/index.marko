@@ -1,0 +1,137 @@
+import appm from 'js/app-manager'
+import { processObjectsTr } from 'js/utils'
+
+static const tabs = [{
+    id: 'account',
+    icon: 'userId'
+}, {
+    id: 'notifications',
+    icon: 'bell'
+}]
+
+class {
+    onCreate() {
+        this.state = {
+            idTab: tabs[0].id,
+            status: 0,
+            user: appm.getUser()
+        }
+
+        this.accountUpdated = this.accountUpdated.bind(this)
+        this.updateAccountError = this.updateAccountError.bind(this)
+    }
+
+    onMount() {
+        appm.on('updateAccountSuccess', this.accountUpdated)
+        appm.on('updateAccountError', this.updateAccountError)
+    }
+
+    onDestroy() {
+        appm.off('updateAccountSuccess', this.accountUpdated)
+        appm.off('updateAccountError', this.updateAccountError)
+    }
+
+    // Functions.
+
+    accountUpdated() {
+        this.state.status = 0
+
+        const tab = this.getComponent('tab')
+
+        if(!tab) {
+            return
+        }
+
+        tab.setStatus(this.state.status)
+    }
+
+    saveRequested() {
+        if(this.state.status == 1) {
+            return
+        }
+
+        const tab = this.getComponent('tab')
+
+        if(!tab) {
+            return
+        }
+
+        tab.saveRequested()
+    }
+
+    statusChanged(status) {
+        this.state.status = status
+    }
+
+    tabChanged(index, tab) {
+        this.state.idTab = tab
+        this.state.user = appm.getUser()
+
+        appm.addAnalyticsEvent('settings', 'tabChange', tab)
+    }
+
+    updateAccountError(error) {
+        this.state.status = -1
+
+        const tab = this.getComponent('tab')
+
+        if(!tab) {
+            return
+        }
+
+        tab.setStatus(this.state.status)
+    }
+}
+
+$ const trSettings = appm.tr('settings')
+$ const user = state.user || {}
+
+<pane-default.pane-settings
+    allowBack
+    class=input.class
+    disableRefresh
+    idPage='profile'
+    title=trSettings.title
+>
+    <@barControls>
+        <button-submit
+            loading=(state.status == 1)
+            text=trSettings.buttonSave
+            on-click('saveRequested')
+        />
+    </@barControls>
+
+    <@barExtension>
+        <tabs.full-height
+            tabs=processObjectsTr(tabs, trSettings.tabs, 'title')
+            on-tabChanged('tabChanged')
+        />
+    </@barExtension>
+
+    <@contents.settings>
+        <if(state.idTab == 'account')>
+            <tab-settings-account
+                key='tab'
+                user=state.user
+                on-statusChanged('statusChanged')
+            />
+        </if>
+        <else-if(state.idTab == 'notifications')>
+            <tab-settings-notifications
+                key='tab'
+                user=state.user
+                on-statusChanged('statusChanged')
+            />
+        </else-if>
+    </@contents>
+</pane-default>
+
+style.less {
+    .pane-default.pane-settings {
+        >.bar-extension {
+            >.tabs {
+                width: 100%;
+            }
+        }
+    }
+};

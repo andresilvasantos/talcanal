@@ -1,0 +1,42 @@
+class {
+    onCreate(input) {
+        this.state = {
+            indexOpened: -1,
+            rules: input.rules || []
+        }
+    }
+
+    onInput(input) {
+        this.state.rules = input.rules || []
+    }
+
+    // Functions.
+
+    toggleRule(index) {
+        this.state.indexOpened = this.state.indexOpened == index ? -1 : index
+        this.emit('ruleToggled', index)
+    }
+}
+
+<div.rules class=input.class>
+    <for|rule, index| of=state.rules>
+        $ const opened = index == state.indexOpened
+
+        <card-rule
+            number=(index + 1)
+            opened=opened
+            rule=rule
+            on-click('toggleRule', index)
+        />
+    </for>
+</div>
+
+style.less {
+    .rules {
+        --rules-spacing: 10px;
+
+        display: flex;
+        flex-direction: column;
+        gap: var(--rules-spacing);
+    }
+};

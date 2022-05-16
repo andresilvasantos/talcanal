@@ -1,0 +1,249 @@
+import appm from 'js/app-manager'
+import { urls } from 'js/default-vars'
+
+class {
+    // Functions.
+
+    channelsRequested(newTab = false) {
+        appm.openPage('channels', '', { allowBack: false, newTab })
+    }
+
+    linkRequested(id) {
+        switch(id) {
+            case 'participate':
+                appm.showPopup('createPost')
+                appm.addAnalyticsEvent('about', 'createPost')
+                break
+            case 'channels':
+                appm.showPopup('createChannel')
+                appm.addAnalyticsEvent('about', 'createChannel')
+                break
+        }
+    }
+
+    termsRequested(newTab = false) {
+        appm.openPage('about', 'terms', { allowBack: true, newTab })
+    }
+}
+
+$ const features = [{
+    id: 'participate',
+    hasLink: true
+}, {
+    id: 'channels',
+    hasLink: true
+}, {
+    id: 'transparency',
+    hasLink: true,
+    link: '/transparencia'
+}]
+
+$ const utilities = [{
+    id: 'help',
+    link: '/c/ajuda'
+}, {
+    id: 'official',
+    link: '/c/talcanal'
+}]
+
+$ const trAbout = appm.tr('about.about') || {}
+$ const trIntro = trAbout.intro || {}
+$ const trFeatures = trAbout.features || {}
+$ const trOpinions = trAbout.opinions || {}
+$ const trTeam = trAbout.team || {}
+$ const trUtilities = trAbout.utilities || {}
+
+<pane-default.pane-about
+    key='root'
+    allowBack
+    disableRefresh
+    class=input.class
+    title=trAbout.title
+>
+    <@bar-controls>
+        <button-text
+            link
+            href=`mailto:${urls.social.email}`
+            icon='envelope'
+            text=trAbout.buttonContact
+        />
+    </@bar-controls>
+
+    <@contents>
+        <section-imagetext.section-intro.section.big
+            srcImage='/assets/images/about/about.jpg'
+            text=trIntro.text
+            title=trIntro.title
+        >
+            <button-text.big
+                icon='channel'
+                text=trIntro.buttonHome
+                on-click('channelsRequested', false)
+                on-middleClick('channelsRequested', true)
+            />
+        </section-imagetext>
+
+        <div.section-features.section>
+            <for|feature, index| of=features>
+                $ const trFeature = trFeatures[feature.id] || {}
+                $ const flipped = index % 2 == 0
+
+                <combo-imagetext
+                    flipped=flipped
+                    hasLink=feature.hasLink
+                    link=feature.link
+                    srcImage=`/assets/images/about/features/${feature.id}.jpg`
+                    text=trFeature.text
+                    textLink=trFeature.link
+                    title=trFeature.title
+                    on-linkRequested('linkRequested', feature.id)
+                />
+            </for>
+        </div>
+
+        <section-imagetext.section-opinions.section
+            srcImage='/assets/images/about/diffopinion.jpg'
+            text=trOpinions.text
+            title=trOpinions.title
+        >
+            <button-text.big
+                icon='book'
+                text=trOpinions.buttonTerms
+                on-click('termsRequested', false)
+                on-middleClick('termsRequested', true)
+            />
+        </section-imagetext>
+
+        <div.section-utils.section>
+            <for|util| of=utilities>
+                $ const trUtil = trUtilities[util.id] || {}
+
+                <combo-titletextlink
+                    hasLink
+                    link=util.link
+                    title=trUtil.title
+                    text=trUtil.text
+                    textLink=trUtil.link
+                />
+            </for>
+        </div>
+
+        <section-imagetext.section-team.section
+            srcImage='/assets/images/about/iconica.jpg'
+            text=trTeam.text
+            title=trTeam.title
+        >
+            <div.buttons>
+                <button-text.big
+                    icon='envelope'
+                    text='Email'
+                />
+
+                <button-text.big
+                    icon='globe'
+                    href=urls.iconica
+                    link
+                    newTab
+                    text='Website'
+                />
+            </div>
+        </section-imagetext>
+
+        <div.section-inspiration.section>
+            <text-p>
+                $!{trAbout.inspiration}
+            </text-p>
+        </div>
+    </@contents>
+
+    <@footerNonSticky>
+        <footer />
+    </@footerNonSticky>
+</pane-default>
+
+style.less {
+    .pane-default.pane-about {
+        --padding-bottom: 0;
+        --spacing: 50px;
+        --team-buttons-spacing: 20px;
+        --utils-gridcount: 2;
+        --utils-spacing: 40px;
+
+        >.contents {
+            display: flex;
+            flex-direction: column;
+
+            >.section-intro {
+                >.banner {
+                    >img {
+                        object-position: top;
+                    }
+                }
+            }
+
+            >.section-opinions,
+            >.section-inspiration,
+            >.section-team,
+            >.section-utils,
+            >.section-footer {
+                border-top: 1px solid var(--color-border1);
+            }
+
+            >.section-intro,
+            >.section-opinions {
+                >.button-text {
+                    align-self: center;
+                }
+            }
+
+            >.section-features {
+                display: flex;
+                flex-direction: column;
+                gap: var(--spacing);
+                padding: var(--app-padding-bigger);
+            }
+
+            >.section-utils {
+                padding: var(--app-padding-bigger);
+                .grid(var(--utils-gridcount), var(--utils-spacing), var(--utils-spacing));
+            }
+
+            >.section-inspiration {
+                color: var(--color-text3);
+                padding: var(--app-padding-bigger);
+            }
+
+            >.section-team {
+                >.buttons {
+                    display: flex;
+                    justify-content: center;
+                    gap: var(--team-buttons-spacing);
+                }
+            }
+
+            >.section {
+                padding-bottom: 40px;
+            }
+        }
+
+        // Media queries.
+
+        .r-max(@break-xs, {
+            --team-buttons-spacing: 10px;
+            --utils-gridcount: 1;
+            --utils-spacing: 30px;
+
+            >.contents {
+                >.section-team {
+                    >.buttons {
+                        flex-direction: column;
+
+                        >.button-text {
+                            width: 100%;
+                        }
+                    }
+                }
+            }
+        });
+    }
+};

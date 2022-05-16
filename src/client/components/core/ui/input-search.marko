@@ -1,0 +1,154 @@
+import { abbreviateNumber } from 'js/utils'
+
+class {
+    onCreate() {
+        this.state = {
+            hasText: false
+        }
+    }
+
+    onMount() {
+        this.inputComponent = this.getComponent('input')
+    }
+
+    // Getters & Setters.
+
+    getValue() {
+        return this.inputComponent.getValue()
+    }
+
+    setValue(value) {
+        this.state.hasText = value.length > 0
+
+        this.inputComponent.setValue(value || '')
+        this.emit('searchChanged', value)
+    }
+
+    // Functions.
+
+    clear() {
+        this.setValue('')
+
+        this.emit('cleared')
+    }
+
+    focusInput() {
+        this.inputComponent.focusInput()
+    }
+
+    searchChanged(value) {
+        this.state.hasText = value.length > 0
+
+        this.emit('searchChanged', value)
+    }
+}
+
+<input-text.input-search.medium
+    class=[input.class, state.hasText ? 'has-text' : '']
+    key='input'
+    icon='search'
+    maxlength=200
+    noExternalUpdate
+    placeholder=input.placeholder
+    text=input.text
+    on-focusout('emit', 'focusOut')
+    on-valueChanged('searchChanged')
+>
+    <div.extras>
+        <if(state.hasText)>
+            <button-icon.button-close.small.bg-transparent.icon-only
+                icon='close'
+                on-click('clear')
+            />
+        </if>
+
+        <div.counter>
+            <if(input.loading)>
+                <icon.loading name='loading' />
+            </if>
+            <else>
+                <span>
+                    ${abbreviateNumber(input.count)}
+                </span>
+            </else>
+        </div>
+    </div>
+</input-text>
+
+style.less {
+    .input-search {
+        --counter-fontsize: 13px;
+        --counter-minwidth: 30px;
+        --counter-padding-h: 10px;
+        --extras-margin: 5px;
+        --extras-spacing: 10px;
+        --iconloading-size: 15px;
+        --wrapper-padding-right: 80px;
+
+        >.wrapper {
+            >.extras {
+                align-items: center;
+                display: flex;
+                gap: var(--extras-spacing);
+                bottom: var(--extras-margin);
+                position: absolute;
+                right: var(--extras-margin);
+                top: var(--extras-margin);
+
+                >.counter {
+                    background-color: var(--color-background3);
+                    border-radius: var(--app-borderradius);
+                    color: var(--color-text3);
+                    font-family: @font-medium;
+                    font-size: var(--counter-fontsize);
+                    height: 100%;
+                    min-width: var(--counter-minwidth);
+                    padding: 0 var(--counter-padding-h);
+                    .flex-center();
+                    .transition(background-color 0.2s ease-out, color 0.5s ease-out;);
+
+                    >.loading {
+                        .svg-loading();
+                        .size(var(--iconloading-size));
+                    }
+                }
+            }
+        }
+
+        &.in-focus {
+            >.wrapper {
+                >.extras {
+                    >.counter {
+                        background-color: var(--color-background4);
+                        color: var(--color-text2);
+                    }
+                }
+            }
+        }
+
+        &.has-text {
+            >.wrapper {
+                padding-right: var(--wrapper-padding-right);
+            }
+        }
+
+        &.big {
+            --counter-fontsize: 15px;
+            --counter-minwidth: 40px;
+            --iconloading-size: 18px;
+        }
+
+        // Media queries.
+
+        .r-max(@break-md, {
+            --counter-fontsize: 12px;
+            --counter-minwidth: 25px;
+            --counter-padding-h: 5px;
+            //--extras-margin: 5px;
+            --extras-spacing: 5px;
+            --iconloading-size: 12px;
+            --width: 150px;
+            --wrapper-padding-right: 55px;
+        });
+    }
+};

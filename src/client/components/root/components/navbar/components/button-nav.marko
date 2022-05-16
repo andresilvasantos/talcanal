@@ -1,0 +1,90 @@
+<button-icon.button-nav
+    class=[input.class, input.selected ? 'selected' : '']
+    icon=input.icon
+    tabindex=input.tabindex
+    tooltip=input.tooltip
+    tooltipExtraClasses=['side']
+    on-click('emit', 'click')
+    on-middleClick('emit', 'middleClick')
+    on-focusout('emit', 'focusout')
+>
+    <div.background />
+
+    <${data.renderBody} />
+</button-icon>
+
+style.less {
+    .button-icon.button-nav {
+        --backgroundcolor: transparent;
+        --icon-size: 30px;
+        --height: 50px;
+
+        border: none;
+        border-radius: 0;
+        position: relative;
+        .size(100%, var(--height));
+
+        >.background {
+            background-color: var(--color-icon2);
+            border-bottom-right-radius: var(--app-borderradius);
+            border-top-right-radius: var(--app-borderradius);
+            height: 30%;
+            position: absolute;
+            left: 0;
+            opacity: 0;
+            pointer-events: none;
+            top: 50%;
+            width: 6px; // TODO
+            .translateY(-50%);
+            .transition(
+                background-color 0.2s ease-out,
+                height 0.2s ease-out,
+                opacity 0.2s ease-out;
+            );
+        }
+
+        >.icon {
+            max-width: 32px;
+        }
+
+        &.small {
+            --icon-size: 22px;
+        }
+
+        &:hover {
+            --backgroundcolor: transparent;
+
+            >.background {
+                opacity: 1;
+            }
+        }
+
+        &.selected {
+            --backgroundcolor: transparent;
+
+            >.background {
+                background-color: var(--color-accent1);
+                height: 100%;
+                opacity: 1;
+            }
+        }
+
+        // Media queries.
+
+        .r-max(@break-md, {
+            --icon-size: 26px;
+
+            &.small {
+                --icon-size: 20px;
+            }
+        });
+
+        .r-max(@break-sm, {
+            --icon-size: 24px;
+
+            &.small {
+                --icon-size: 18px;
+            }
+        });
+    }
+};

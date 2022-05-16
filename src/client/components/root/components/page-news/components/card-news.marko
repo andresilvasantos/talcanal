@@ -1,0 +1,415 @@
+import appm from 'js/app-manager'
+import { abbreviateNumber, elapsedDateToShortString, processObjectsTr } from 'js/utils'
+
+class {
+    onCreate(input) {
+        this.state = {
+            news: input.news || {}
+        }
+    }
+
+    onInput(input) {
+        this.state.news = input.news || {}
+
+        if(this.mounted) {
+            this.setStateDirty('news')
+        }
+    }
+
+    onMount() {
+        this.mounted = true
+    }
+
+    // Functions.
+
+    categoryRequested(category, newTab = false) {
+        appm.openPage('news', 'category', { allowBack: true, newTab }, category)
+        appm.addAnalyticsEvent('news', 'selectCategory', category.id)
+    }
+
+    controlRequested(idControl) {
+        switch(idControl) {
+            case 'createPost':
+                const news = this.state.news
+
+                appm.showPopup('createPost', '', 'link', news.title, news.text, news.link)
+                break
+            case 'copyUrl':
+            case 'message':
+                const url = this.state.news.link || ''
+
+                if(idControl == 'copyUrl') {
+                    appm.copyToClipboard(url)
+                }
+                else {
+                    appm.showPopup('sendMessage', `<a href='${url}'>${url}</a>`)
+                }
+
+                appm.addAnalyticsEvent('news', idControl, url)
+                break
+        }
+    }
+
+    openRequested(event) {
+        let eventClick
+
+        if(event.button == 0 && !event.ctrlKey) {
+            eventClick = new MouseEvent('click', { button: 0 })
+        }
+        else {
+            eventClick = new MouseEvent('click', { button: 0, ctrlKey: true })
+            event.preventDefault()
+        }
+
+        this.getEl('buttonLink').dispatchEvent(eventClick)
+
+        appm.newsClick(this.state.news.link)
+        appm.addAnalyticsEvent('news', 'open', this.state.news.link)
+
+        if(!this.state.news.hasUserViewed) {
+            this.state.news.hasUserViewed = true
+
+            this.setStateDirty('news')
+        }
+    }
+
+    sourceRequested(source, newTab = false) {
+        appm.openPage('news', 'source', { allowBack: true, newTab }, source)
+        appm.addAnalyticsEvent('news', 'selectSource', source.id)
+    }
+}
+
+$ const processOptions = (trOptions) => {
+    const options = []
+
+    options.push({
+        id: 'createPost',
+        icon: 'comment'
+    })
+
+    options.push({
+        id: 'share',
+        icon: 'send',
+        children: [{
+            id: 'copyUrl',
+            icon: 'link'
+        }, {
+            id: 'message',
+            icon: 'envelope'
+        }]
+    })
+
+    return processObjectsTr(options, trOptions)
+}
+
+$ const news = state.news || {}
+$ const category = news.category
+$ const source = news.source || {}
+$ const trNews = appm.tr('news') || {}
+
+<button-default.card-news
+    class=[
+        input.class,
+        input.big ? 'big' : '',
+        news.hasUserViewed ? 'seen' : ''
+    ]
+    on-click('openRequested')
+    on-middleClick('openRequested')
+>
+    <button-default.link key='buttonLink' href=news.link link newTab />
+
+    <div.wrapper-image>
+        <image.cover
+            lazyload
+            src=`${appm.getUrlCdn()}/${news.image}${input.big ? '' : '-sm-nocrop'}.jpg`
+            srcSmall=`${appm.getUrlCdn()}/${news.image}${input.big ? '-sm-nocrop' : '-tn'}.jpg`
+        />
+
+        <if(category)>
+            <button-default.button-category
+                on-click('categoryRequested', category, false)
+                on-middleClick('categoryRequested', category, true)
+            >
+                ${category.name}
+            </button-default>
+        </if>
+
+        <div.wrapper-iconexternal>
+            <icon name='linkExternal' />
+        </div>
+    </div>
+
+    <div.info>
+        <div.bar-info>
+            <div.details>
+                <button-default.button-source
+                    on-click('sourceRequested', source, false)
+                    on-middleClick('sourceRequested', source, true)
+                >
+                    <image-circle.tiny image=source.image />
+
+                    <span.name>
+                        ${source.name}
+                    </span>
+                </button-default>
+
+                <span.time>
+                    ${elapsedDateToShortString(news.date)}
+                </span>
+
+                <div.clicks>
+                    <icon name='eye' />
+
+                    <span.count>
+                        ${news.countClicks ? abbreviateNumber(news.countClicks) : '-'}
+                    </span>
+                </div>
+            </div>
+
+            <button-icon-menu.open-left.small.bg-transparent
+                icon='ellipsis'
+                iconRotation=90
+                options=processOptions(trNews.controls)
+                tooltip='Opções'
+                on-optionRequested('controlRequested')
+            />
+        </div>
+
+        <span.title>
+            $!{news.title}
+        </span>
+
+        <text-p.text.small>
+            $!{news.text}
+        </text-p>
+    </div>
+</button-default>
+
+style.less {
+    .card-news {
+        --barinfo-spacing: 5px;
+        --buttoncategory-borderradius: 4px;
+        --buttoncategory-fontsize: 13px;
+        --buttoncategory-margin: 10px;
+        --buttoncategory-padding: 4px 5px;
+        --buttonsource-fontsize: 12px;
+        --buttonsource-spacing: 8px;
+        --iconexternal-margin: 5px;
+        --wrapperimage-maxheight: 300px;
+        --wrapperimage-minheight: 100px;
+        --spacing: 15px;
+        --time-fontsize: 12px;
+        --title-fontsize: 20px;
+
+        display: flex;
+        flex-direction: column;
+        gap: var(--spacing);
+        padding: var(--app-padding);
+        position: relative;
+        .box-shadow(0 0 0 1px var(--color-border1));
+        .transition(background-color 0.2s ease-out, border-color 0.2s ease-out;);
+
+        >.link {
+            display: none;
+        }
+
+        >.wrapper-image {
+            flex-grow: 1;
+            max-height: var(--wrapperimage-maxheight);
+            min-height: var(--wrapperimage-minheight);
+            position: relative;
+
+            >.image {
+                height: 100%;
+                opacity: 0.9;
+                .transition(opacity 0.2s ease-out);
+
+                >* {
+                    border: 1px solid var(--color-border2);
+                    border-radius: var(--app-borderradius2);
+                }
+            }
+
+            >.button-category {
+                background-color: rgba(var(--color-background2-rgb), 0.9);
+                border-radius: var(--buttoncategory-borderradius);
+                bottom: var(--buttoncategory-margin);
+                color: var(--color-text2);
+                font-family: @font-medium;
+                font-size: var(--buttoncategory-fontsize);
+                left: var(--buttoncategory-margin);
+                padding: var(--buttoncategory-padding);
+                position: absolute;
+                .transition(background-color 0.2s ease-out, color 0.2s ease-out;);
+
+                &:hover {
+                    background-color: var(--color-accent1);
+                    color: var(--color-background1);
+                }
+            }
+
+            >.wrapper-iconexternal {
+                --icon-borderradius: 4px;
+                --icon-padding: 5px;
+                --icon-size: 25px;
+
+                background-color: rgba(var(--color-background2-rgb), 0.9);
+                border-radius: var(--app-borderradius);
+                opacity: 0;
+                padding: var(--icon-padding);
+                position: absolute;
+                right: var(--iconexternal-margin);
+                top: var(--iconexternal-margin);
+                .size(var(--icon-size));
+                .flex-center();
+                .transition(opacity 0.2s ease-out);
+
+                >.icon {
+                    color: var(--color-icon2);
+                    display: flex;
+                }
+            }
+        }
+
+        >.info {
+            display: flex;
+            flex-direction: column;
+            gap: var(--barinfo-spacing);
+
+            >.bar-info {
+                align-items: center;
+                display: flex;
+                gap: 10px; // TODO
+                justify-content: space-between;
+
+                >.details {
+                    align-items: center;
+                    display: flex;
+                    gap: 8px; // TODO
+                    height: 100%;
+                    margin-left: -5px; // To compensate overflow hidden not cropping.
+                    overflow: hidden;
+
+                    >.button-source {
+                        align-items: center;
+                        display: flex;
+                        gap: var(--buttonsource-spacing);
+                        height: 100%;
+                        overflow: hidden;
+
+                        >.image-circle {
+                            flex-shrink: 0;
+                            margin-left: 5px; // To compensate overflow hidden not cropping.
+                        }
+
+                        >.name {
+                            color: var(--color-text2);
+                            font-size: var(--buttonsource-fontsize);
+                            text-transform: uppercase;
+                            .text-truncate();
+                            .transition(color 0.2s ease-out);
+                        }
+
+                        &:hover {
+                            >.image-circle {
+                                .scale(1.1);
+                            }
+
+                            >.name {
+                                color: var(--color-accent1);
+                            }
+                        }
+                    }
+
+                    >.clicks {
+                        align-items: center;
+                        color: var(--color-text1);
+                        display: flex;
+                        gap: 3px;
+
+                        >.icon {
+                            display: flex;
+                            .size(15px);
+                        }
+
+                        >.count {
+                            font-size: var(--time-fontsize);
+                        }
+                    }
+
+                    >.time {
+                        color: var(--color-text1);
+                        font-size: var(--time-fontsize);
+                    }
+                }
+            }
+
+            >.title {
+                color: var(--color-text2);
+                font-family: @font-medium;
+                font-size: var(--title-fontsize);
+                line-height: 1.3;
+                .transition(color 0.2s ease-out);
+            }
+
+            >.text {
+                color: var(--color-text1);
+                .text-truncate-lines(3);
+                .transition(color 0.2s ease-out);
+            }
+        }
+
+        &.seen {
+            >.info {
+                >.title {
+                    color: var(--color-text1);
+                }
+
+                >.text {
+                    color: var(--color-text1);
+                }
+            }
+        }
+
+        &:hover {
+            background-color: var(--color-button1);
+            text-decoration: none !important;
+            z-index: 1;
+            .box-shadow(0 0 0 1px var(--color-border1));
+
+            >.wrapper-image {
+                >.image {
+                    opacity: 1;
+                }
+
+                >.category:not(:hover) {
+                    background-color: var(--color-background2);
+                }
+
+                >.wrapper-iconexternal {
+                    opacity: 1;
+                }
+            }
+
+            >.info {
+                >.title {
+                    color: var(--color-text4);
+                }
+
+                >.text {
+                    color: var(--color-text3);
+                }
+            }
+        }
+
+        // Media queries
+
+        .r-max(@break-lg, {
+            --title-fontsize: 19px;
+        });
+
+        .r-max(@break-sm, {
+            --spacing: 10px;
+        });
+    }
+};

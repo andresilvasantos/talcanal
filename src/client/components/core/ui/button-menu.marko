@@ -1,0 +1,112 @@
+import appm from 'js/app-manager'
+
+class {
+    onCreate() {
+        this.state = {
+            menuVisible: false
+        }
+
+        this.closeMenu = this.closeMenu.bind(this)
+    }
+
+    // Functions.
+
+    closeMenu() {
+        this.state.menuVisible = false
+
+        appm.off('scroll', this.closeMenu)
+        this.emit('menuClosed')
+    }
+
+    showMenu() {
+        this.state.menuVisible = true
+
+        this.update()
+
+        const buttonMain = this.getEl('wrapperButton')
+        const menu = this.getEl('menu')
+        const bbButton = buttonMain.getBoundingClientRect()
+        const bbMenu = menu.getBoundingClientRect()
+        const higherThanWindow = bbButton.y + bbButton.height + bbMenu.height > window.innerHeight
+        const widerThanWindow = bbButton.x + bbMenu.width > window.innerWidth
+        const leftPreferred = this.getEl().classList.contains('open-left')
+
+        if(higherThanWindow) {
+            menu.style.bottom = '100%'
+            menu.style.top = 'unset'
+            menu.style.marginBottom = `var(--menu-margin)`
+            menu.style.marginTop = 'unset'
+        }
+        else {
+            menu.style.bottom = 'unset'
+            menu.style.top = '100%'
+            menu.style.marginTop = `var(--menu-margin)`
+            menu.style.marginBottom = 'unset'
+        }
+
+        if(widerThanWindow || leftPreferred) {
+            menu.style.left = 'unset'
+            menu.style.right = 0
+        }
+        else {
+            menu.style.left = 0
+            menu.style.right = 'unset'
+        }
+
+        appm.on('scroll', this.closeMenu)
+    }
+}
+
+<div.button-menu class=input.class>
+    <div.wrapper-button key='wrapperButton'>
+        <${input.button} />
+    </div>
+
+    <if(state.menuVisible)>
+        <div.overlay on-click('closeMenu') />
+
+        <div.menu key='menu'>
+            <${input.menu} />
+        </div>
+    </if>
+</div>
+
+style.less {
+    .button-menu {
+        --menu-minwidth: 240px;
+        --menu-margin: 10px;
+
+        position: relative;
+
+        >.overlay {
+            pointer-events: auto;
+            .fixed-fill(9);
+        }
+
+        >.menu {
+            background-color: var(--color-background2);
+            border: 1px solid var(--color-border2);
+            border-radius: var(--app-borderradius2);
+            overflow: hidden;
+            min-width: var(--menu-minwidth);
+            position: absolute;
+            z-index: 10;
+            .box-shadow(0 10px 20px 0 fade(@color-black, 30));
+        }
+
+        // Media Queries.
+
+        .r-max(@break-md, {
+            --menu-minwidth: 200px;
+        });
+
+        .r-max(@break-sm, {
+            --menu-margin: 8px;
+        });
+
+        .r-max(@break-xs, {
+            --menu-margin: 5px;
+            --menu-minwidth: 180px;
+        });
+    }
+};

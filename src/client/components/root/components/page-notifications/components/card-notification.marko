@@ -1,0 +1,328 @@
+import appm from 'js/app-manager'
+import { elapsedDateToShortString } from 'js/utils'
+
+class {
+    onCreate(input) {
+        this.state = {
+            notification: input.notification || {}
+        }
+    }
+
+    onInput(input) {
+        this.state.notification = input.notification || {}
+    }
+
+    // Functions.
+
+    channelRequested(newTab) {
+        const channel = this.state.notification.channel
+
+        if(!channel) {
+            return
+        }
+
+        appm.openPage('channels', 'channel', { allowBack: true, newTab }, channel)
+        appm.addAnalyticsEvent('notification', 'channelRequested', channel.id)
+    }
+
+    openNotification(newTab) {
+        const notification = this.state.notification
+        const channel = notification.channel || {}
+
+        switch(notification.type) {
+            case 'postComment':
+            case 'commentReply':
+            case 'commentUpvotes':
+            case 'commentReject': {
+                const comment = notification.comment || {}
+                const post = notification.post || {}
+
+                appm.openPage('channels', 'post', { allowBack: true, newTab },
+                    { id: post.id, channel: { id: channel.id }}, comment.id)
+                break
+            }
+            case 'channelAdmin':
+            case 'channelAdminRemove':
+            case 'channelMember':
+            case 'channelMemberRemove':
+            case 'channelModerator':
+            case 'channelModeratorRemove':
+            case 'channelUserBan':
+            case 'channelBan':
+                appm.openPage('channels', 'channel', { allowBack: true, newTab }, channel)
+                break
+            case 'postUpvotes':
+            case 'postReject': {
+                const post = notification.post || {}
+
+                appm.openPage('channels', 'post', { allowBack: true, newTab },
+                    { id: post.id, channel: { id: channel.id }})
+                break
+            }
+        }
+
+        appm.addAnalyticsEvent('notification', 'open', notification.type)
+    }
+
+    profileRequested(newTab) {
+        const user = this.state.notification.sender
+
+        if(!user) {
+            return
+        }
+
+        appm.openPage('channels', 'user', { allowBack: true, newTab }, user)
+        appm.addAnalyticsEvent('notification', 'userRequested')
+    }
+}
+
+$ const icons = {
+    channelAdmin: 'key',
+    channelAdminRemove: 'key',
+    channelBan: 'block',
+    channelMember: 'channel',
+    channelMemberRemove: 'channel',
+    channelModerator: 'shield',
+    channelModeratorRemove: 'shield',
+    channelUserBan: 'block',
+    commentReject: 'bin',
+    commentUpvotes: 'arrow',
+    postReject: 'bin',
+    postUpvotes: 'arrow'
+}
+
+$ const notification = state.notification || {}
+$ const channel = notification.channel || {}
+$ const type = notification.type || ''
+$ const trNotifications = appm.tr('notifications') || {}
+$ const trActions = trNotifications.actions || {}
+$ const trContents = trNotifications.contents || {}
+
+<button-default.card-notification
+    class=input.class
+    on-click('openNotification', false)
+    on-middleClick('openNotification', true)
+>
+    <div.info>
+        <div.details>
+            <if(['channelMember', 'channelModerator', 'channelAdmin'].includes(type))>
+                <button-imagetext.action-title.big.special
+                    disabled
+                    icon=icons[type]
+                    text=trActions[type]
+                />
+            </if>
+            <else-if(['channelMemberRemove', 'channelModeratorRemove', 'channelAdminRemove'].includes(type))>
+                <button-imagetext.action-title.big.danger
+                    disabled
+                    icon=icons[type]
+                    text=trActions[type]
+                />
+            </else-if>
+            <else-if(['postUpvotes', 'commentUpvotes'].includes(type))>
+                <button-imagetext.action-title.big.special2
+                    disabled
+                    icon=icons[type]
+                    iconRotation=-90
+                    text=`${notification.countVotes} ${trActions[type]}`
+                />
+            </else-if>
+            <else-if(['postReject', 'commentReject'].includes(type))>
+                <button-imagetext.action-title.big.danger
+                    disabled
+                    icon=icons[type]
+                    text=trActions[type]
+                />
+            </else-if>
+            <else-if(['channelBan', 'channelUserBan'].includes(type))>
+                <button-imagetext.action-title.big.danger
+                    disabled
+                    icon=icons[type]
+                    text=trActions[type]
+                />
+            </else-if>
+            <else-if(['postComment', 'commentReply'].includes(type))>
+                $ const sender = notification.sender || {}
+
+                <button-imagetext.big
+                    idImage=sender.image
+                    text=sender.username
+                    on-click('profileRequested', false)
+                    on-middleClick('profileRequested', true)
+                />
+
+                <text-p.text-action.medium>
+                    <if(type == 'postComment')>
+                        comentou no teu post
+                    </if>
+                    <else-if(type == 'commentReply')>
+                        respondeu ao teu comentário
+                    </else-if>
+                </text-p>
+            </else-if>
+        </div>
+
+        <div.column>
+            <icon-text.small.light
+                icon='clock'
+                text=elapsedDateToShortString(notification.createdAt) />
+        </div>
+    </div>
+
+    <div.content>
+        <if(['postComment', 'commentReply', 'commentUpvotes', 'commentReject'].includes(type))>
+            $ const comment = notification.comment || {}
+
+            <text-p.rich>
+                $!{comment.text}
+            </text-p>
+        </if>
+        <else-if([
+            'channelMember',
+            'channelMemberRemove',
+            'channelModerator',
+            'channelModeratorRemove',
+            'channelAdmin',
+            'channelAdminRemove',
+            'channelBan',
+            'channelUserBan'
+        ].includes(type))>
+            <button-imagetext.huge
+                icon='channel'
+                idImage=channel.image
+                text=(channel.name || channel.id)
+                on-click('channelRequested', false)
+                on-middleClick('channelRequested', true)
+            />
+
+            <if(trContents[type])>
+                <text-p>
+                    ${trContents[type]}
+                </text-p>
+            </if>
+        </else-if>
+        <else-if(['postUpvotes', 'postReject'].includes(type))>
+            $ const post = notification.post || {}
+
+            <text-p>
+                ${post.title}
+            </text-p>
+        </else-if>
+    </div>
+
+    <if(['postUpvotes', 'commentUpvotes', 'postReject', 'commentReject', 'postComment', 'commentReply'].includes(type))>
+        <div.info-extra>
+            <icon-text.light.small
+                icon='channel'
+                interactive
+                text=channel.id
+                on-click('channelRequested', false)
+                on-middleClick('channelRequested', true)
+            />
+
+            <if(['postComment', 'commentReply', 'commentUpvotes', 'commentReject'].includes(type))>
+                $ const post = notification.post || {}
+
+                <div.info-post>
+                    <icon name='post' />
+
+                    <text-p.title.small>
+                        ${post.title}
+                    </text-p>
+                </div>
+            </if>
+        </div>
+    </if>
+</button-default>
+
+style.less {
+    .card-notification {
+        --details-spacing: 15px;
+        --info-spacing: 15px;
+        --posticon-size: 16px;
+        --postinfo-spacing: 5px;
+        //--posttitle-fontsize: 16px;
+        --spacing: 10px;
+
+        background-color: var(--color-background2);
+        border-bottom: 1px solid var(--color-border1);
+        display: flex;
+        flex-direction: column;
+        gap: var(--spacing);
+        padding: var(--app-padding);
+        .transition(background-color 0.2s ease-out);
+
+        >.info {
+            align-items: center;
+            display: flex;
+            justify-content: space-between;
+            gap: var(--info-spacing);
+
+            >.details {
+                align-items: center;
+                display: flex;
+                flex-wrap: wrap;
+                gap: var(--details-spacing);
+
+                >.text-action {
+                    color: var(--color-text4);
+                }
+            }
+        }
+
+        >.info-extra {
+            display: flex;
+            gap: 10px;
+
+            >.info-post {
+                color: var(--color-text1);
+                .text-truncate-lines(1);
+
+                >.icon {
+                    display: inline-flex;
+                    margin-right: 5px; // TODO
+                    margin-top: -2px;
+                    vertical-align: middle;
+                    .size(var(--posticon-size));
+                }
+
+                >.title {
+                    display: inline;
+                }
+            }
+        }
+
+        >.content {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+
+            >.text-p {
+                color: var(--color-text3);
+
+                &.rich {
+                    .text-rich(var(--color-text3));
+                }
+            }
+
+            >.button-imagetext {
+                align-self: center;
+            }
+        }
+
+        &.unseen {
+            background-color: var(--color-background4);
+        }
+
+        &:hover {
+            background-color: var(--color-button1);
+        }
+
+        // Media queries.
+
+        .r-max(@break-xs, {
+            --details-spacing: 5px;
+            --info-spacing: 5px;
+        });
+    }
+};

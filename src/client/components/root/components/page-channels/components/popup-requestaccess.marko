@@ -1,0 +1,146 @@
+import appm from 'js/app-manager'
+
+class {
+    onCreate() {
+        this.state = {
+            status: 0
+        }
+
+        this.accessRequested = this.accessRequested.bind(this)
+        this.requestAccessError = this.requestAccessError.bind(this)
+    }
+
+    onMount() {
+        this.popupComponent = this.getComponent('popup')
+    }
+
+    onDestroy() {
+        appm.off('requestChannelAccessError', this.requestAccessError)
+        appm.off('requestChannelAccessSuccess', this.accessRequested)
+    }
+
+    // Functions.
+
+    accessRequested(id) {
+        if(id != this.idChannel) {
+            return
+        }
+
+        this.hide()
+    }
+
+    hide() {
+        if(!this.visible) {
+            return
+        }
+
+        this.popupComponent.hide()
+    }
+
+    hidden() {
+        this.state.status = 0
+        this.visible = false
+    }
+
+    keyPressed(event) {
+        if(event.keyCode == 13) {
+            //this.submitRequested()
+        }
+    }
+
+    requestAccessError(id) {
+        if(id != this.idChannel) {
+            return
+        }
+
+        this.state.status = -1
+    }
+
+    show(args) {
+        if(this.visible) {
+            return
+        }
+
+        this.idChannel = args[0]
+        this.visible = true
+
+        this.popupComponent.show()
+    }
+
+    submitRequested() {
+        if(this.state.status == 1) {
+            return
+        }
+
+        const inputText = this.getComponent('inputText')
+
+        text = inputText.getValue()
+
+        if(!text.length) {
+            inputText.setValid(false)
+            return
+        }
+
+        this.state.status = 1
+
+        appm.on('requestChannelAccessError', this.requestAccessError)
+        appm.on('requestChannelAccessSuccess', this.accessRequested)
+
+        appm.requestChannelAccess(this.idChannel, text)
+    }
+}
+
+$ const trRequestAccess = appm.tr('channels.requestAccess') || {}
+
+<popup.popup-requestaccess
+    key='popup'
+    class=input.class
+    title=trRequestAccess.title
+    on-hidden('hidden')
+    on-keyPressed('keyPressed')
+>
+    <div.contents>
+        <input-textmulti
+            key='inputText'
+            icon='details'
+            noExternalUpdate
+            placeholder=trRequestAccess.inputText
+        />
+    </div>
+
+    <div.bar-submit>
+        <button-submit.big
+            icon='userPlus'
+            loading=(state.status == 1)
+            text=trRequestAccess.buttonSubmit
+            on-click('submitRequested')
+        />
+    </div>
+</popup>
+
+style.less {
+    .popup.popup-requestaccess {
+        --contents-spacing: 20px;
+        --padding-v: var(--padding-h);
+        //--panel-width: 480px;
+
+        >.wrapper {
+            >.panel {
+                max-width: 480px; // TODO
+
+                >.contents {
+                    display: flex;
+                    flex-direction: column;
+                    gap: var(--contents-spacing);
+                    padding: var(--padding-v) var(--padding-h);
+                }
+
+                >.bar-submit {
+                    border-top: 1px solid var(--color-border2);
+                    padding: var(--padding-v) var(--padding-h);
+                    .flex-center();
+                }
+            }
+        }
+    }
+};

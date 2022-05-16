@@ -1,0 +1,153 @@
+import appm from 'js/app-manager'
+import { dateToTime } from 'js/utils'
+
+class {
+    onCreate(input) {
+        this.state = {
+            channel: input.channel || {}
+        }
+    }
+
+    onInput(input) {
+        this.state.channel = input.channel || {}
+    }
+
+    // Functions.
+
+    moderatorRequested(moderator, newTab = false) {
+        appm.openPage('channels', 'user', { allowBack: true, newTab }, moderator)
+        appm.addAnalyticsEvent('channelAbout', 'openMod', this.state.channel.id)
+    }
+
+    ruleToggled() {
+        appm.addAnalyticsEvent('channelAbout', 'toggleRule')
+    }
+}
+
+$ const channel = state.channel || {}
+$ const trAbout = appm.tr('channels.about') || {}
+
+<div.section-channel-about class=input.class>
+    <div.section-info.section>
+        <icon-text.fill.big icon='cake' text=dateToTime(channel.createdAt, false) />
+
+        <icon-text.fill.big icon='post' text=channel.countPosts />
+    </div>
+
+    <section-text.section-rules.section title='Regras'>
+        <if(channel.rules && channel.rules.length)>
+            <rules rules=channel.rules on-ruleToggled('ruleToggled') />
+        </if>
+        <else>
+            <text-p.noitems-text.medium>
+                ${trAbout.noRules}
+            </text-p>
+        </else>
+    </section-text>
+
+    <section-text.section-tags.section title='Etiquetas'>
+        <if(channel.tags && channel.tags.length)>
+            <div.tags>
+                <for|tag| of=channel.tags>
+                    <tag.big
+                        tag=tag
+                        on-click('emit', 'searchTagRequested', tag.id, channel, false)
+                        on-middleClick('emit', 'searchTagRequested', tag.id, channel, true)
+                    />
+                </for>
+            </div>
+        </if>
+        <else>
+            <text-p.noitems-text.medium>
+                ${trAbout.noTags}
+            </text-p>
+        </else>
+    </section-text>
+
+    <section-text.section-moderators.section title='Moderadores'>
+        <div.moderators>
+            <for|admin| of=channel.admins>
+                <button-user
+                    user=admin
+                    isAdmin
+                    on-click('moderatorRequested', admin, false)
+                    on-middleClick('moderatorRequested', admin, true)
+                />
+            </for>
+
+            <for|mod| of=channel.moderators>
+                <button-user
+                    user=mod
+                    on-click('moderatorRequested', mod, false)
+                    on-middleClick('moderatorRequested', mod, true)
+                />
+            </for>
+        </div>
+    </section-text>
+</div>
+
+style.less {
+    .section-channel-about {
+        --info-spacing: 10px;
+        --moderators-spacing: 15px;
+        --section-spacing: 20px;
+        --tags-spacing: 10px;
+
+        >.section {
+            --padding: var(--app-padding-bigger);
+            --spacing: var(--section-spacing);
+
+            background-color: unset;
+            border-bottom: 1px solid var(--color-border1);
+
+            >.wrapper-text {
+                >.title {
+                    color: var(--color-text3);
+                    margin: 0;
+                    text-align: unset;
+                }
+            }
+        }
+
+        >.section-info {
+            align-items: center;
+            display: flex;
+            flex-wrap: wrap;
+            gap: var(--info-spacing);
+            padding: var(--padding);
+        }
+
+        >.section-tags {
+            >.tags {
+                display: flex;
+                gap: var(--tags-spacing);
+                flex-wrap: wrap;
+            }
+        }
+
+        >.section-rules,
+        >.section-tags {
+            >.noitems-text {
+                color: var(--color-text1);
+            }
+        }
+
+        >.section-moderators {
+            >.moderators {
+                display: flex;
+                gap: var(--moderators-spacing);
+                flex-wrap: wrap;
+            }
+        }
+
+        // Media queries
+
+        .r-max(@break-sm, {
+            --tags-spacing: 8px;
+        });
+
+        .r-max(@break-xs, {
+            --tags-spacing: 5px;
+        });
+    }
+};

@@ -1,0 +1,116 @@
+class {
+    onCreate(input) {
+        this.state = {
+            component: null,
+            attributes: {}
+        }
+
+        this.processAttributes(input)
+    }
+
+    onInput(input) {
+        const oldName = this.name
+
+        this.processAttributes(input)
+
+        if(this.mounted) {
+            if(this.name != oldName) {
+                if(this.name.length) {
+                    this.reloadComponent()
+                }
+                else {
+                    this.state.component = null
+                }
+            }
+
+            this.setStateDirty('attributes')
+        }
+    }
+
+    onMount() {
+        this.components = require.context(COMPONENTS_DIR, true, /\.marko$/, 'lazy')
+
+        if(this.name.length) {
+            this.loadComponent()
+        }
+
+        this.mounted = true
+    }
+
+    // Getters & Setters.
+
+    getComponentLoaded() {
+        return this.getComponent('root')
+    }
+
+    // Functions.
+
+    eventTriggered(...args) {
+        const eventName = args.splice(0, 1)
+        this.emit(eventName, args)
+    }
+
+    loadComponent() {
+        for(const key of this.components.keys()) {
+            if(key.includes(`${this.name}.marko`) || key.includes(`${this.name}/index.marko`)) {
+                this.components(key)
+                .then(module => {
+                    this.state.component = module
+                })
+                .catch((error) => {
+                    console.log('Error loading dynamic component', error)
+                })
+
+                break
+            }
+        }
+    }
+
+    loaded() {
+        const component = this.getComponent('root')
+
+        for(const eventName of this.events) {
+            this.subscribeTo(component).on(eventName, () => {
+                this.emit(eventName)
+            })
+        }
+
+        this.emit('loaded', this.name, component)
+    }
+
+    loadFromName(name) {
+        this.name = name.toLowerCase()
+
+        if(this.name.length) {
+            this.reloadComponent()
+        }
+        else {
+            this.state.component = null
+        }
+    }
+
+    processAttributes(input) {
+        const inputCopy = Object.assign({}, input)
+
+        const name = inputCopy.cName || ''
+
+        this.name = name.toLowerCase()
+        this.events = inputCopy.cEvents || []
+
+        const attributesObj = inputCopy.cAttributes
+
+        delete inputCopy.cName
+        delete inputCopy.cAttributes
+
+        this.state.attributes = Object.assign(inputCopy, attributesObj)
+    }
+
+    reloadComponent() {
+        this.state.component = null
+
+        this.update()
+        this.loadComponent()
+    }
+}
+
+<${state.component} key='root' ...state.attributes on-mount('loaded') />

@@ -1,0 +1,91 @@
+<div.section-text class=input.class>
+    <if(data.before)>
+        <${data.before} />
+    </if>
+
+    <div.wrapper-text>
+        <text-title.title class=(input.class.includes('big') ? 'big' : '')>
+            ${input.title}
+        </text-title>
+
+        <if(input.text)>
+            <text-p.text class=(input.class.includes('big') ? 'medium' : '')>
+                $!{input.text}
+            </text-p>
+        </if>
+    </div>
+
+    <${data.renderBody} />
+</div>
+
+style.less {
+    .section-text {
+        --padding: 50px;
+        --spacing: 50px;
+        --title-margin-h: var(--padding);
+        --wrappertext-padding-h: 0;
+        --wrappertext-spacing: 20px;
+
+        background-color: var(--color-background4);
+        display: flex;
+        flex-direction: column;
+        gap: var(--spacing);
+        padding: var(--padding);
+
+        >.wrapper-text {
+            display: flex;
+            flex-direction: column;
+            gap: var(--wrappertext-spacing);
+            padding: 0 var(--wrappertext-padding-h);
+
+            >.title {
+                color: var(--color-text4);
+                margin: 0 var(--title-margin-h);
+                text-align: center;
+            }
+
+            >.text {
+                color: var(--color-text3);
+            }
+        }
+
+        &.big {
+            background-color: unset;
+
+            --wrappertext-spacing: 30px;
+
+            >.wrapper-text {
+                >.title {
+                    color: var(--color-text5);
+                }
+            }
+        }
+
+        // Media Queries.
+
+        .r-max(@break-ms, {
+            --padding: 40px;
+        });
+
+        .r-max(@break-sm, {
+            --padding: 30px;
+            --spacing: 40px;
+        });
+
+        .r-max(@break-xs, {
+            --padding: 20px;
+            --spacing: 30px;
+            --title-margin-h: 0;
+
+            >.wrapper-text {
+                >.title {
+                    text-align: left;
+                }
+            }
+
+            &.big {
+                --wrappertext-spacing: 20px;
+            }
+        });
+    }
+};

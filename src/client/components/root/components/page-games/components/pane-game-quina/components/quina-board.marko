@@ -1,0 +1,151 @@
+import animm from 'js/anim-manager'
+
+class {
+    onCreate(input) {
+        this.state = {
+            indexTileFocus: input.indexTileFocus || 0,
+            wordCurrent: input.wordCurrent || {},
+            words: input.words || []
+        }
+    }
+
+    onInput(input) {
+        const numberChallengeOld = this.numberChallenge
+
+        this.state.indexTileFocus = input.indexTileFocus || 0
+        this.numberChallenge = input.numberChallenge
+        this.state.wordCurrent = input.wordCurrent || {}
+        this.state.words = input.words || []
+
+        if(this.mounted) {
+            if(numberChallengeOld != this.numberChallenge) {
+                for(const buttonTile of this.getComponents('buttonsTile')) {
+                    buttonTile.clearMark()
+                }
+            }
+
+            this.setStateDirty('wordCurrent')
+            this.setStateDirty('words')
+        }
+    }
+
+    onMount() {
+        this.mounted = true
+    }
+
+    // Functions.
+
+    startInvalidAnim() {
+        const row = this.getEl('rowCurrent')
+        const offset = 20
+
+        animm.add(row, { '--rowcurrent-x': `-${offset}px`, duration: 0.05, easeOut: 'quart' }, () => {
+            animm.add(row, { '--rowcurrent-x': `${offset}px`, duration: 0.14, easeOut: 'quart' }, () => {
+                animm.add(row, { '--rowcurrent-x': '0px', duration: 1, easeOut: 'elastic' })
+            })
+        })
+    }
+}
+
+$ const completed = input.status > 1
+$ const marksValidated = input.easyMode || completed
+
+<div.quina-board class=[input.class, completed ? 'completed' : '']>
+    <for|word, indexRow| of=input.words>
+        $ const lettersRight = word.lettersRight || []
+
+        <div.row>
+            <for|index| from=0 to=4>
+                $ const mark = (
+                    word.lettersWrong.includes(index) ? 1 :
+                    word.lettersRight.includes(index) ? 2 :
+                    3
+                )
+
+                <quina-button-tile
+                    key='buttonsTile[]'
+                    letter=word[String(index)]
+                    mark=(marksValidated ? mark : null)
+                    marksValidated=marksValidated
+                    noTouch=marksValidated
+                    on-markChanged('emit', 'tileMarkChanged', word[String(index)])
+                />
+            </for>
+
+            <quina-tile-result pinsRight=word.pinsRight pinsWrong=word.pinsWrong />
+        </div>
+    </for>
+
+    <if(input.wordCurrent && !completed)>
+        <div.row key='rowCurrent'>
+            <for|index| from=0 to=4>
+                $ const letter = input.wordCurrent[String(index)]
+                $ const inFocus = index == state.indexTileFocus
+
+                <quina-button-tile
+                    editable
+                    letter=letter
+                    inFocus=inFocus
+                    on-focusRequested('emit', 'focusTileRequested', index)
+                />
+            </for>
+
+            <quina-tile-result waiting />
+        </div>
+    </if>
+</div>
+
+style.less {
+    .quina-board {
+        --spacing: 10px;
+        --pin-margin: 10px;
+        --pin-size: 16px;
+        --rowcurrent-x: 0;
+        --tile-letter-fontsize: 40px;
+        --tile-size: 70px;
+
+        display: flex;
+        flex-direction: column;
+        gap: var(--spacing);
+
+        >.row {
+            display: flex;
+            gap: var(--spacing);
+
+            &:last-child {
+                .translateX(var(--rowcurrent-x));
+            }
+        }
+
+        // Media queries.
+
+        .r-max(@break-lg, {
+            --pin-size: 14px;
+            --pin-margin: 9px;
+            --spacing: 8px;
+            --tile-letter-fontsize: 36px;
+            --tile-size: 65px;
+        });
+
+        .r-max(@break-md, {
+            --pin-size: 13px;
+            --pin-margin: 8px;
+            --tile-letter-fontsize: 32px;
+            --tile-size: 60px;
+        });
+
+        .r-max(@break-ms, {
+            --pin-size: 12px;
+            --tile-letter-fontsize: 28px;
+            --tile-size: 55px;
+        });
+
+        .r-max(@break-xs, {
+            --pin-size: 10px;
+            --pin-margin: 6px;
+            --spacing: 4px;
+            --tile-letter-fontsize: 24px;
+            --tile-size: 46px;
+        });
+    }
+};

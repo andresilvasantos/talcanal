@@ -1,0 +1,380 @@
+class {
+    onCreate(input, out) {
+        this.state = {
+            currency: input.currency || false,
+            decimal: input.decimal || false,
+            errorMessage: input.errorMessage || '',
+            inFocus: false,
+            number: input.number || input.currency || false,
+            placeholder: input.placeholder || '',
+            text: input.text || '',
+            valid: true
+        }
+
+        if(typeof this.state.text != String) {
+            this.state.text = this.state.text.toString()
+        }
+    }
+
+    onInput(input) {
+        if(!input.noExternalUpdate) {
+            this.valueOld = this.state.text
+
+            this.state.currency = input.currency || false
+            this.state.number = input.number || input.currency || false
+            this.state.placeholder = input.placeholder || ''
+            this.state.text = input.text || ''
+
+            if(this.state.number) {
+                this.checkNumber()
+            }
+
+            if(typeof this.state.text != String) {
+                this.state.text = this.state.text.toString()
+            }
+
+            if(this.mounted) {
+                this.setValid(true)
+            }
+        }
+    }
+
+    onMount() {
+        this.mounted = true
+
+        this.getEl().classList.add('no-transition')
+
+        this.timeoutNoTransition = setTimeout(() => {
+            this.getEl().classList.remove('no-transition')
+            this.timeoutNoTransition = null
+        }, 100)
+    }
+
+    onDestroy() {
+        if(this.timeoutNoTransition) {
+            clearTimeout(this.timeoutNoTransition)
+        }
+    }
+
+    // Getters & Setters.
+
+    getValue() {
+        return this.state.text
+    }
+
+    setValue(value) {
+        this.applyText(value)
+        this.setValid(true)
+    }
+
+    setValid(valid, error) {
+        this.state.valid = valid
+        this.state.errorMessage = error
+    }
+
+    // Functions.
+
+    checkNumber() {
+        if(!this.state.text.length) {
+            return
+        }
+
+        let numberValue = this.state.text
+
+        if(this.state.decimal || this.state.currency) {
+            if(this.state.decimal) {
+                if(!/^-?\d*[.,]?(\d{0,2})$/.test(this.state.text)) {
+                    this.state.text = this.valueOld
+                    return
+                }
+            }
+            else if(this.state.currency) {
+                if(!/^\d*[.,]?(\d{0,2})$/.test(this.state.text)) {
+                    this.state.text = this.valueOld
+                    return
+                }
+            }
+
+            numberValue = numberValue.replace(/,/g, '.')
+        }
+        else {
+            if(!/^-?\d*$/.test(this.state.text)) {
+                this.state.text = this.valueOld
+                return
+            }
+        }
+
+        this.state.text =  numberValue
+    }
+
+    focus(event) {
+        this.state.inFocus = true
+
+        this.emit('focus', event)
+    }
+
+    focusInput() {
+        this.getEl('input').focus()
+    }
+
+    focusOut(event) {
+        this.state.inFocus = false
+
+        this.emit('focusout', event)
+    }
+
+    keyPressed(event) {
+        event.stopPropagation()
+
+        this.emit('keydown', event)
+    }
+
+    keyReleased(event) {
+        event.stopPropagation()
+
+        const element = this.getEl('input')
+
+        const moveCaretTo = (to) => {
+            if(typeof element.selectionStart == 'number') {
+                element.selectionStart = element.selectionEnd = to
+            }
+            else if(typeof element.createTextRange != 'undefined') {
+                const range = element.createTextRange()
+                range.collapse(true)
+                range.select()
+            }
+        }
+
+        if(this.state.currency && this.state.text.length) {
+            const indexCaret = element.selectionStart
+
+            if(indexCaret > this.state.text.length) {
+                moveCaretTo(this.state.text.length)
+            }
+        }
+
+        this.emit('keyup', event)
+    }
+
+    applyText(text) {
+        this.valueOld = this.state.text
+        this.state.text = this.state.currency ? String(text).replace(/€/g, '') : text
+
+        if(this.state.number) {
+            this.checkNumber()
+        }
+    }
+
+    textChange(event) {
+        this.applyText(event.target.value)
+
+        this.emit('change', event)
+        this.emit('valueChanged', this.state.text)
+        this.setValid(true)
+    }
+
+    textInput(event) {
+        this.applyText(event.target.value)
+
+        this.emit('input', event.target.value)
+        this.emit('valueChanged', this.state.text)
+        this.setValid(true)
+    }
+
+    textPaste(event) {
+        this.applyText(event.target.value)
+
+        if(this.state.inFocus) {
+            event.stopPropagation()
+        }
+
+        this.emit('paste', event)
+        this.emit('valueChanged', this.state.text)
+        this.setValid(true)
+    }
+}
+
+<div.input-text
+    class=[
+        input.class,
+        state.text && state.text.length ? 'has-text' : '',
+        state.inFocus ? 'in-focus' : '',
+        state.valid ? '' : 'invalid',
+        !state.valid && state.errorMessage ? 'has-errormessage' : ''
+    ]
+    on-click('focusInput')
+    on-focus('focusInput')
+    on-focusout('focusOut')
+>
+    <if(input.label)>
+        <label for:scoped='input'>
+            ${input.label}
+        </label>
+    </if>
+
+    <div.wrapper>
+        <if(input.icon)>
+            <icon for:scoped='input' name=input.icon />
+        </if>
+
+        <input
+            key='input'
+            id:scoped='input'
+            autocomplete='new-password'
+            class=(input.label ? 'has-label' : '')
+            disabled=input.disabled
+            maxlength=(input.maxlength || (state.number ? (state.currency ? 10 : 20) : 254))
+            placeholder=state.placeholder
+            readonly=input.readOnly
+            type=(input.type || 'text')
+            value=(state.currency && state.text.length ? `${state.text}€` : state.text)
+            on-focus('focus')
+            on-input('textInput')
+            on-keydown('keyPressed')
+            on-keyup('keyReleased')
+            on-paste('textPaste')
+        />
+
+        <${input.renderBody} />
+    </div>
+
+    <if(!state.valid && state.errorMessage)>
+        <div.wrapper-error>
+            <span>
+                ${state.errorMessage}
+            </span>
+        </div>
+    </if>
+</div>
+
+style.less {
+    .input-text {
+        --backgroundcolor: var(--color-input1);
+        --bordercolor: var(--color-border1);
+        --color: var(--color-text2);
+        --fontfamily: @font;
+        --fontsize: 16px;
+        --height: 40px;
+        --icon-size: 18px;
+        --label-marginbottom: 15px;
+        --padding-h: 15px;
+        --spacing: 15px;
+        --text-align: left;
+
+        display: flex;
+        flex-direction: column;
+        position: relative;
+
+        >label {
+            color: var(--color-text2);
+            cursor: pointer;
+            font-family: @font-medium;
+            font-size: var(--fontsize);
+            margin-bottom: var(--label-marginbottom);
+        }
+
+        >.wrapper {
+            align-items: center;
+            background-color: var(--backgroundcolor);
+            border: 1px solid var(--bordercolor);
+            border-radius: var(--app-borderradius);
+            display: flex;
+            gap: var(--spacing);
+            height: var(--height);
+            padding: 0 var(--padding-h);
+            .transition(border-color 0.2s ease-out, background-color 0.2s ease-out;);
+
+            >.icon {
+                color: var(--color-icon2);
+                cursor: pointer;
+                display: flex;
+                flex-shrink: 0;
+                .size(var(--icon-size));
+                .transition(color 0.2s ease-out);
+            }
+
+            >input {
+                background-color: transparent;
+                border: none;
+                border-radius: 0;
+                color: var(--color);
+                font-family: var(--fontfamily);
+                font-size: var(--fontsize);
+                outline: 0;
+                padding: 0;
+                text-align: var(--text-align);
+                .placeholder({
+                    color: var(--color-text4);
+                    opacity: 0.5;
+                });
+                .remove-appearance();
+                .size(100%);
+                .text-truncate();
+            }
+        }
+
+        &.has-text {
+            --color: var(--color-text4);
+        }
+
+        &.in-focus {
+            --backgroundcolor: var(--color-input2);
+            --bordercolor: var(--color-border3);
+            --color: var(--color-text4);
+
+            >.wrapper {
+                >.icon {
+                    .scale(1.1);
+                }
+            }
+        }
+
+        &.align-center {
+            --text-align: center;
+        }
+
+        &.align-right {
+            --text-align: right;
+        }
+
+        &.big {
+            --fontsize: 17px;
+            --height: 50px;
+            --icon-size: 18px;
+        }
+
+        &.invalid {
+            >.wrapper {
+                border-color: var(--color-warning);
+            }
+
+            &.has-errormessage {
+                display: flex;
+                flex-direction: column;
+
+                .wrapper-error {
+                    color: var(--color-warning);
+                    font-size: 12px;
+                    margin-top: 8px;
+                    width: 100%;
+                }
+            }
+        }
+
+        // Media queries.
+
+        .r-max(@break-sm, {
+            --fontsize: 15px;
+            --height: 35px;
+            --icon-size: 15px;
+            --padding-h: 10px;
+            --spacing: 10px;
+
+            &.big {
+                --fontsize: 15px;
+                --height: 45px;
+                --icon-size: 16px;
+            }
+        });
+    }
+};

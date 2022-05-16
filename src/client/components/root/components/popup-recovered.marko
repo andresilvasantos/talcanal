@@ -1,0 +1,88 @@
+import appm from 'js/app-manager'
+
+class {
+    onMount() {
+        this.popupComponent = this.getComponent('popup')
+    }
+
+    // Functions.
+
+    hide() {
+        if(!this.visible) {
+            return
+        }
+
+        this.popupComponent.hide()
+    }
+
+    hidden() {
+        this.visible = false
+    }
+
+    keyPressed(event) {
+        if(event.keyCode == 13) {
+
+        }
+    }
+
+    show() {
+        if(this.visible) {
+            return
+        }
+
+        this.visible = true
+
+        this.popupComponent.show()
+    }
+}
+
+$ const trRecovered = appm.tr('recovered') || {}
+
+<popup.popup-recovered
+    key='popup'
+    class=input.class
+    title=trRecovered.title
+    on-hidden('hidden')
+    on-keyPressed('keyPressed')
+>
+    <div.contents>
+        <div.wrapper>
+            <text-p.text>
+                $!{trRecovered.text}
+            </text-p>
+
+            <button-text.button-agree.big.strong text=trRecovered.buttonAgree on-click('hide') />
+        </div>
+    </div>
+</popup>
+
+style.less {
+    .popup-recovered {
+        --wrapper-spacing: 30px;
+
+        >.wrapper {
+            >.panel {
+                >.contents {
+                    display: flex;
+
+                    >.wrapper {
+                        align-items: flex-start;
+                        display: flex;
+                        flex-direction: column;
+                        gap: var(--wrapper-spacing);
+                        padding: var(--app-padding-bigger);
+                        width: var(--wrapper-width);
+
+                        >.text {
+                            color: var(--color-text2);
+
+                            >a {
+                                color: var(--color-accent1);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+};

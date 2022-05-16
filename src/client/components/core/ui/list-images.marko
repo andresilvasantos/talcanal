@@ -1,0 +1,257 @@
+import animm from '@client/js/anim-manager'
+import appm from '@client/js/app-manager'
+import { urls } from '@client/js/default-vars'
+
+class {
+    onCreate(input) {
+        this.state = {
+            images: input.images || [],
+            index: input.index || 0
+        }
+
+        this.canSelect = true
+
+        this.listReleased = this.listReleased.bind(this)
+    }
+
+    onInput(input) {
+        this.state.index = input.index || 0
+
+        if(this.mounted) {
+            this.checkSelectionVisible()
+            /* setTimeout(() => {
+                this.checkSelectionVisible()
+            }, 1) */
+        }
+    }
+
+    onMount() {
+        this.list = this.getEl('list')
+        this.listScroll = this.getEl('listScroll')
+        this.listScrollX = 0
+        this.propertyScrollX = '--listscroll-translationx'
+
+        this.checkSelectionVisible()
+
+        this.mounted = true
+    }
+
+    // Functions.
+
+    checkSelectionVisible() {
+        const listWidth = this.list.clientWidth
+        const buttonImages = this.getComponents('buttonImages')
+
+        if(!buttonImages.length || this.state.index >= buttonImages.length) {
+            return
+        }
+
+        const buttonImageSelected = buttonImages[this.state.index]
+        const targetElement = buttonImageSelected.getEl()
+
+        if(targetElement.offsetLeft + this.listScrollX < 0) {
+            this.listScrollX += -(targetElement.offsetLeft + this.listScrollX)
+            this.getEl().style.setProperty(this.propertyScrollX, `${this.listScrollX}px`)
+        }
+        else if(this.listScrollX + targetElement.offsetLeft + targetElement.clientWidth > listWidth) {
+            this.listScrollX -= this.listScrollX + targetElement.offsetLeft + targetElement.clientWidth - listWidth
+            this.getEl().style.setProperty(this.propertyScrollX, `${this.listScrollX}px`)
+        }
+    }
+
+    imageRequested(index, event) {
+        event.preventDefault()
+
+        if(this.canSelect) {
+            this.emit('imageRequested', index)
+        }
+    }
+
+    listPressed(event) {
+        window.addEventListener('mouseup', this.listReleased)
+        window.addEventListener('touchend', this.listReleased, { passive: true })
+
+        this.accumulatedMovement = 0
+        this.canSelect = true
+        this.mousePressed = true
+        this.movement = 0
+
+        if(event.type == 'touchstart') {
+            this.startX = event.touches[0].clientX - this.listScrollX
+        }
+        else {
+            this.startX = event.clientX - this.listScrollX
+        }
+    }
+
+    listReleased(event) {
+        event.preventDefault()
+        event.stopPropagation()
+
+        window.removeEventListener('mouseup', this.listReleased)
+        window.removeEventListener('touchend', this.listReleased, { passive: true })
+
+        this.mousePressed = false
+
+        let faster = false
+        const listWidth = this.list.clientWidth
+        const listScrollWidth = this.listScroll.clientWidth
+        let needsAnim = false
+
+        if(this.listScrollX > 0) {
+            this.listScrollX = 0
+            needsAnim = true
+        }
+        else if(listScrollWidth < listWidth) {
+            this.listScrollX = 0
+            needsAnim = true
+        }
+        else if(listScrollWidth > listWidth && this.listScrollX + listScrollWidth < listWidth) {
+            this.listScrollX = listWidth - listScrollWidth
+            needsAnim = true
+        }
+        else if(Math.abs(this.movement) > 40) {
+            this.listScrollX += this.movement
+
+            if(this.movement < 0) {
+                const limitX = listWidth - listScrollWidth
+
+                if(this.listScrollX < limitX) {
+                    this.listScrollX = limitX
+                }
+            }
+            else if(this.listScrollX > 0) {
+                this.listScrollX = 0
+            }
+
+            faster = true
+            needsAnim = true
+        }
+
+        if(!needsAnim) {
+            return
+        }
+
+        const animObj = { duration: faster ? 0.2 : 0.5, easeOut: 'sine' }
+        animObj[this.propertyScrollX] = `${this.listScrollX}px`
+
+        animm.remove(this.getEl())
+        animm.add(this.getEl(), animObj)
+    }
+
+    mouseMoveOverList(event) {
+        if(this.mousePressed) {
+            animm.remove(this.getEl())
+
+            let previousScroll = this.listScrollX
+
+            if(event.type == 'touchmove') {
+                this.listScrollX = event.touches[0].clientX - this.startX
+            }
+            else {
+                this.listScrollX = event.clientX - this.startX
+            }
+
+            this.getEl().style.setProperty(this.propertyScrollX, `${this.listScrollX}px`)
+
+            const movement = this.listScrollX - previousScroll
+
+            this.accumulatedMovement += Math.abs(movement)
+            const direction = movement > 0 ? 1 : 0
+            this.movement = this.lastDirection == direction ? this.movement + movement : movement
+            this.lastDirection = direction
+
+            if(this.accumulatedMovement > 5) {
+                this.canSelect = false
+            }
+        }
+    }
+}
+
+<div.list-images
+    class=input.class
+    key='list'
+    on-mousemove('mouseMoveOverList')
+    on-mousedown('listPressed')
+    on-touchmove('mouseMoveOverList')
+    on-touchstart('listPressed')
+>
+    <div.scroll key='listScroll'>
+        <for|image, index| of=state.images>
+            $ const selected = index == input.index
+
+            <button-default.button-image
+                key='buttonImages[]'
+                class=(selected ? 'selected' : '')
+                on-click('imageRequested', index)
+                on-touchend('imageRequested', index)
+            >
+                <image.cover
+                    lazyload
+                    src=`${input.pathBaseUrl}/${image}-sm.jpg`
+                    srcSmall=`${input.pathBaseUrl}/${image}-tn.jpg`
+                />
+            </button-default>
+        </for>
+    </div>
+</div>
+
+style.less {
+    .list-images {
+        --buttonimage-size: 70px;
+        --listscroll-translationx: 0;
+        --spacing: 10px;
+
+        display: flex;
+        height: 100%;
+        overflow: hidden;
+
+        >.scroll {
+            display: flex;
+            gap: var(--spacing);
+            .translateX(var(--listscroll-translationx));
+
+            >.button-image {
+                border-radius: var(--app-borderradius);
+                opacity: 0.4;
+                overflow: hidden;
+                position: relative;
+                .size(var(--buttonimage-size));
+                .transition(opacity 0.2s ease-out);
+
+                >.image {
+                    .absolute-fill();
+                }
+
+                &:hover {
+                    opacity: 0.8;
+                }
+
+                &.selected {
+                    opacity: 1;
+                    border: 2px solid var(--color-accent1);
+                    //.box-shadow(0 0 0 2px var(--color-accent1));
+                }
+            }
+        }
+
+        // Media queries
+
+        .r-max(@break-lg, {
+            --buttonimage-size: 65px;
+        });
+
+        .r-max(@break-md, {
+            --buttonimage-size: 60px;
+        });
+
+        .r-max(@break-sm, {
+            --buttonimage-size: 55px;
+            --spacing: 5px;
+        });
+
+        .r-max(@break-xs, {
+            --buttonimage-size: 50px;
+        });
+    }
+};

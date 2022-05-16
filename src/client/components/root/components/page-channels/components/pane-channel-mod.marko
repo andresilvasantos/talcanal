@@ -1,0 +1,506 @@
+import appm from 'js/app-manager'
+import { abbreviateNumber, getCookie, getIndexFromId, processObjectsTr, scrollReachBottom, setCookie } from 'js/utils'
+import { timers, viewModes } from 'js/default-vars'
+
+static const filters = {
+    manual: ['queue', 'approved', 'rejected', 'reported', 'unmoderated'],
+    auto: ['autoRejected']
+}
+
+static const tabs = [{
+    id: 'manual',
+    icon: 'hand'
+}, {
+    id: 'auto',
+    icon: 'chip'
+}]
+
+class {
+    onCreate() {
+        this.state = {
+            channel: {},
+            countItems: 0,
+            fetchingItems: true,
+            idsSelected: [],
+            idTab: tabs[0].id,
+            indexFilter: 0,
+            indexViewMode: 0,
+            items: [],
+            typeData: 'posts'
+        }
+
+        this.filter = ''
+        this.pageCurrent = 0
+
+        this.channelsModPinged = this.channelsModPinged.bind(this)
+        this.itemsFetched = this.itemsFetched.bind(this)
+        this.leaveChannel = this.leaveChannel.bind(this)
+    }
+
+    onMount() {
+        appm.on('fetchItemsSuccess', this.itemsFetched)
+        appm.on('leaveChannelSuccess', this.leaveChannel)
+        appm.on('pingChannelsModSuccess', this.channelsModPinged)
+    }
+
+    onDestroy() {
+        clearTimeout(this.timeoutBetweenFetches)
+
+        appm.off('fetchItemsSuccess', this.itemsFetched)
+        appm.off('leaveChannelSuccess', this.leaveChannel)
+        appm.off('pingChannelsModSuccess', this.channelsModPinged)
+    }
+
+    // Getters & Setters.
+
+    setData(channel) {
+        this.state.channel = Object.assign({}, channel)
+
+        this.getComponent('searchSort').clearSearch()
+        this.calculateViewMode()
+        this.fetchItems()
+    }
+
+    // Functions.
+
+    bulkApproveRequested() {
+        if(!this.state.idsSelected.length) {
+            return
+        }
+
+        appm.approveItems(this.state.typeData, this.state.idsSelected)
+    }
+
+    bulkLockRequested() {
+        if(!this.state.idsSelected.length) {
+            return
+        }
+
+        switch(this.state.typeData) {
+            case 'posts':
+                appm.lockPosts(this.state.idsSelected)
+                break
+        }
+    }
+
+    bulkRejectRequested() {
+        if(!this.state.idsSelected.length) {
+            return
+        }
+
+        appm.rejectItems(this.state.typeData, this.state.idsSelected)
+    }
+
+    calculateViewMode() {
+        switch(this.state.typeData) {
+            case 'comments':
+                this.state.indexViewMode = 1
+                break
+            case 'posts':
+                const preferences = this.state.channel.preferences || {}
+
+                this.state.indexViewMode = getIndexFromId(
+                    viewModes,
+                    appm.isUserSignedIn() ? appm.getUser().preferences.viewMode : [],
+                    preferences.viewMode,
+                    getCookie('viewMode')
+                )
+                break
+        }
+    }
+
+    changeTypeRequested(type) {
+        this.state.typeData = type
+
+        this.calculateViewMode()
+        this.fetchItems()
+        appm.addAnalyticsEvent('channelMod', 'typeChange', `${this.state.channel.id} - ${this.state.typeData}`)
+    }
+
+    channelsModPinged(data) {
+        if(data[this.state.channel.id]) {
+            const info = data[this.state.channel.id]
+
+            this.state.channel.countCommentsQueue = info.countCommentsQueue || 0
+            this.state.channel.countMemberRequests = info.countMemberRequests || 0
+            this.state.channel.countPostsQueue = info.countPostsQueue || 0
+
+            this.setStateDirty('channel')
+        }
+        else {
+            this.state.channel.countCommentsQueue = 0
+            this.state.channel.countMemberRequests = 0
+            this.state.channel.countPostsQueue = 0
+        }
+
+        this.setStateDirty('channel')
+    }
+
+    checkLoadMore() {
+        if(
+            this.state.fetchingItems ||
+            !this.state.items.length ||
+            this.state.items.length >= this.state.countItems ||
+            !scrollReachBottom(this.getEl())
+        ) {
+            return
+        }
+
+        ++this.pageCurrent
+
+        this.fetchItems()
+        appm.addAnalyticsEvent('channelMod', 'loadMore', this.state.channel.id)
+    }
+
+    commentRequested(comment, newTab = false) {
+        const post = comment.post || {}
+        const channel = post.channel || {}
+
+        appm.openPage('channels', 'comment', { allowBack: true, newTab },
+            { id: post.id, channel: { id: channel.id }}, comment.id)
+        appm.addAnalyticsEvent('user', 'openComment')
+    }
+
+    deleteCommentRequested(comment) {
+        appm.showPopup('deleteItem', 'comments', comment.id)
+    }
+
+    deletePostRequested(post) {
+        appm.showPopup('deleteItem', 'posts', post.id)
+    }
+
+    fetchItems() {
+        this.state.fetchingItems = true
+
+        if(!this.pageCurrent) {
+            this.state.countItems = 0
+            this.state.items = []
+            this.state.idsSelected = []
+        }
+
+        if(this.timeoutBetweenFetches) {
+            clearTimeout(this.timeoutBetweenFetches)
+        }
+
+        this.timeoutBetweenFetches = setTimeout(() => {
+            this.idFetchItems = appm.fetchItems(this.state.typeData, this.filter,
+            {
+                channel: this.state.channel._id,
+                filterStatus: filters[this.state.idTab][this.state.indexFilter]
+            },
+            this.pageCurrent, 'new')
+        }, timers.betweenFetches)
+    }
+
+    filterChanged(index) {
+        this.state.indexFilter = index
+        this.pageCurrent = 0
+
+        this.fetchItems()
+    }
+
+    itemsFetched(idFetch, items, count) {
+        if(idFetch != this.idFetchItems) {
+            return
+        }
+
+        this.state.fetchingItems = false
+        this.state.countItems = count
+
+        if(this.pageCurrent > 0) {
+            const itemsUnique = items.filter(item => !this.idsItems.includes(item.id))
+
+            this.state.items = this.state.items.concat(itemsUnique)
+            this.idsItems = this.idsItems.concat(itemsUnique.map(item => item.id ))
+        }
+        else {
+            this.state.items = items
+            this.idsItems = items.map(item => item.id )
+        }
+    }
+
+    leaveChannel() {
+        appm.openPage('channels')
+    }
+
+    manageUsersRequested() {
+        appm.showPopup('manageUsers', this.state.channel)
+    }
+
+    postRequested(post, newTab = false) {
+        appm.openPage('channels', 'post', { allowBack: true, newTab }, post)
+    }
+
+    refresh() {
+        this.pageCurrent = 0
+
+        this.fetchItems()
+        appm.addAnalyticsEvent('channelMod', 'refresh', `${this.state.channel.id} - ${this.state.typeData}`)
+    }
+
+    searchChanged(search) {
+        this.pageCurrent = 0
+        this.filter = search
+
+        this.fetchItems()
+        appm.addAnalyticsEvent('channelMod', 'search', `${this.state.channel.id} - ${this.filter}`)
+    }
+
+    searchTag(idTag, channel, newTab) {
+        appm.openPage('channels', 'channel', { allowBack: true, newTab }, channel, idTag)
+        appm.addAnalyticsEvent('channelMod', 'searchTag', `${channel.id} #${idTag}`)
+    }
+
+    selectItem(id, selected) {
+        if(selected == this.state.idsSelected.includes(id)) {
+            return
+        }
+
+        if(selected) {
+            this.state.idsSelected.push(id)
+        }
+        else {
+            this.state.idsSelected.splice(this.state.idsSelected.indexOf(id), 1)
+        }
+
+        this.setStateDirty('idsSelected')
+    }
+
+    tabChanged(index, tab) {
+        this.state.idTab = tab
+        this.state.indexFilter = 0
+
+        this.fetchItems()
+        appm.addAnalyticsEvent('channelMod', 'tabChange', `${this.state.channel.id}  - ${tab}`)
+    }
+
+    toggleSelectAll() {
+        if(this.state.idsSelected.length == this.state.items.length) {
+            this.state.idsSelected = []
+        }
+        else {
+            this.state.idsSelected = this.state.items.map(item => item.id)
+        }
+
+        appm.addAnalyticsEvent('channelMod', 'toggleSelect')
+    }
+
+    viewModeChanged(index) {
+        this.state.indexViewMode = index
+        this.pageCurrent = 0
+
+        const idViewMode = viewModes[this.state.indexViewMode].id
+
+        setCookie('viewMode', idViewMode)
+        this.fetchItems()
+        appm.addAnalyticsEvent('channelMod', 'viewMode', `${this.state.channel.id} - ${idViewMode}`)
+    }
+}
+
+$ const iconsType = {
+    comments: 'comment',
+    posts: 'post'
+}
+
+$ const channel = state.channel || {}
+$ const countSelected = state.idsSelected.length
+$ const items = state.items || []
+$ const trMod = appm.tr('channels.moderation')
+$ const trTooltips = trMod.tooltips || {}
+$ const viewMode = viewModes[state.indexViewMode].id
+
+<pane-default.pane-channel-mod
+    key='root'
+    allowBack
+    class=input.class
+    title=trMod.title
+    on-refreshRequested('refresh')
+>
+    <@barControls>
+        <button-text
+            text=trMod.buttonManageUsers
+            on-click('manageUsersRequested')
+        >
+            <counter-button count=abbreviateNumber(channel.countMemberRequests) />
+        </button-text>
+    </@barControls>
+
+    <@barNonSticky>
+        <tabs tabs=processObjectsTr(tabs, trMod.tabs) on-tabChanged('tabChanged') />
+    </@barNonSticky>
+
+    <@barExtension>
+        <div.bar>
+            <div.controls>
+                <for|type| of=['posts', 'comments']>
+                    <button-icon
+                        class=(state.typeData == type ? 'selected' : '')
+                        icon=iconsType[type]
+                        tooltip=trTooltips[type]
+                        on-click('changeTypeRequested', type)
+                    >
+                        <counter-button
+                            count=abbreviateNumber(
+                                type == 'posts' ? channel.countPostsQueue : channel.countCommentsQueue
+                            )
+                        />
+                    </button-icon>
+                </for>
+
+                <dropdown
+                    index=state.indexFilter
+                    options=processObjectsTr(filters[state.idTab], trMod.filters)
+                    tooltip=trTooltips[state.typeData]
+                    on-optionChanged('filterChanged')
+                />
+            </div>
+
+            <combo-searchsort
+                key='searchSort'
+                countItems=state.countItems
+                indexViewMode=state.indexViewMode
+                loading=state.fetchingItems
+                viewModes=(state.typeData == 'posts' ? viewModes : null)
+                on-searchChanged('searchChanged')
+                on-viewModeChanged('viewModeChanged')
+            >
+                <if(countSelected)>
+                    <button-icon.special
+                        icon='check'
+                        tooltip=trTooltips.approve
+                        on-click('bulkApproveRequested')
+                    />
+
+                    <if(state.typeData == 'posts')>
+                        <button-icon.special
+                            icon='lock'
+                            tooltip=trTooltips.lock
+                            on-click('bulkLockRequested')
+                        />
+                    </if>
+
+                    <button-icon.danger
+                        icon='reject'
+                        tooltip=trTooltips.reject
+                        on-click('bulkRejectRequested')
+                    />
+                </if>
+
+                <div.wrapper-selector>
+                    <if(countSelected)>
+                        <span.count>
+                            ${countSelected}
+                        </span>
+                    </if>
+
+                    <checkbox
+                        checked=countSelected
+                        tooltip=trTooltips.selectAll
+                        on-checked('toggleSelectAll')
+                    />
+                </div>
+            </combo-searchsort>
+        </div>
+    </@barExtension>
+
+    <@contents class=(!items.length ? 'center' : viewMode)>
+        <if(state.typeData == 'posts' && (items.length || state.fetchingItems))>
+            <for|post| of=items>
+                $ const selected = state.idsSelected.includes(post.id)
+
+                <card-post
+                    class=(selected ? 'selected' : '')
+                    hideChannelInfo
+                    post=post
+                    selectable
+                    selected=selected
+                    viewMode=viewMode
+                    on-deleteRequested('deletePostRequested', post)
+                    on-openRequested('postRequested', post)
+                    on-searchTagRequested('searchTag')
+                    on-selectRequested('selectItem', post.id)
+                />
+            </for>
+        </if>
+        <else-if(state.typeData == 'comments' && (items.length || state.fetchingItems))>
+            <for|comment| of=items>
+                $ const selected = state.idsSelected.includes(comment.id)
+
+                <card-comment
+                    class=(selected ? 'selected' : '')
+                    comment=comment
+                    selectable
+                    selected=selected
+                    on-deleteRequested('deleteCommentRequested', comment)
+                    on-openRequested('commentRequested', comment)
+                    on-selectRequested('selectItem', comment.id)
+                />
+            </for>
+        </else-if>
+        <else>
+            $ const trNoItems = trMod.noItems || {}
+
+            <contents-empty
+                icon='search'
+                noButton
+                text=trNoItems.text
+                title=trNoItems[`title${
+                    state.typeData.charAt(0).toUpperCase() + state.typeData.slice(1)
+                }`]
+            />
+        </else>
+    </@contents>
+
+    <@footer>
+        <loading-finder show=state.fetchingItems />
+    </@footer>
+</pane-default>
+
+style.less {
+    .pane-default.pane-channel-mod {
+        >.bar-nonsticky {
+            >.tabs {
+                border-bottom: 1px solid var(--color-border1);
+                padding: 0 var(--app-padding);
+            }
+        }
+
+        >.bar-extension {
+            flex-direction: column;
+            //gap: 0;
+            height: unset;
+            padding: 0;
+
+            >.bar {
+                display: flex;
+                justify-content: space-between;
+                min-height: var(--barpane-height);
+                padding: 10px var(--app-padding);
+
+                >.controls {
+                    align-items: center;
+                    display: flex;
+                    flex-wrap: wrap;
+                    gap: var(--controls-spacing);
+                }
+
+                >.combo-searchsort {
+                    >.wrapper-selector {
+                        align-items: center;
+                        display: flex;
+                        gap: var(--controls-spacing);
+                        order: 1;
+
+                        >.count {
+                            color: var(--color-text2);
+                            font-family: @font-medium;
+                            font-size: 16px; // TODO
+                        }
+                    }
+                }
+            }
+
+
+        }
+    }
+};

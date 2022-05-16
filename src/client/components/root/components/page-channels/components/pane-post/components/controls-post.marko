@@ -1,0 +1,188 @@
+import appm from 'js/app-manager'
+import { abbreviateNumber, processObjectsTr } from 'js/utils'
+
+class {
+    onCreate(input) {
+        this.state = {
+            post: input.post || {}
+        }
+    }
+
+    onInput(input) {
+        this.state.post = input.post || {}
+
+        if(this.mounted) {
+            this.setStateDirty('post')
+        }
+    }
+
+    onMount() {
+        this.mounted = true
+    }
+
+    // Functions.
+
+    controlRequested(idControl) {
+        switch(idControl) {
+            case 'approve':
+                this.emit('approveRequested')
+                break
+            case 'delete':
+                this.emit('deleteRequested')
+                break
+            case 'edit':
+                this.emit('editRequested')
+                break
+            case 'lock':
+            case 'unlock':
+                this.emit('lockRequested')
+                break
+            case 'markAdultContent':
+                this.emit('markAdultContentRequested', true)
+                break
+            case 'unmarkAdultContent':
+                this.emit('markAdultContentRequested', false)
+                break
+            case 'reject':
+                this.emit('rejectRequested')
+                break
+            case 'report':
+                this.emit('reportRequested')
+                break
+        }
+
+        if(idControl.startsWith('tag-') || idControl == 'tagEmpty') {
+            this.emit('tagRequested', idControl.replace('tag-', ''))
+        }
+    }
+}
+
+$ const processOptions = (post, isCreator, isMod, isSuper, trOptions) => {
+    const channel = post.channel || {}
+    const options = []
+
+    if(post.status == 'removed') {
+        return options
+    }
+
+    if(isCreator || isSuper) {
+        options.push({
+            id: 'edit',
+            icon: 'pencil'
+        })
+    }
+
+    if(isMod) {
+        if(post.status != 'approved') {
+            options.push({
+                id: 'approve',
+                icon: 'check',
+                special: true
+            })
+        }
+
+        options.push({
+            id: post.locked ? 'unlock' : 'lock',
+            icon: post.locked ? 'unlock' : 'lock',
+            special: true
+        })
+
+        if(post.status != 'rejected' && post.status != 'autorejected') {
+            options.push({
+                id: 'reject',
+                danger: true,
+                icon: 'reject'
+            })
+        }
+    }
+
+    if(isMod || isCreator) {
+        if(channel.tags && channel.tags.length) {
+            options.push({
+                id: 'tag',
+                icon: 'tag',
+                children: [{ id: 'tagEmpty' }].concat(channel.tags.map(tag => (
+                    { id: `tag-${tag.id}`, color: tag.color, isTag: true, noTr: true, text: tag.name }
+                )))
+            })
+        }
+
+        options.push({
+            id: post.adultContent ? 'unmarkAdultContent' : 'markAdultContent',
+            danger: true,
+            icon: 'circle'
+        })
+    }
+
+    if(isCreator) {
+        options.push({
+            id: 'delete',
+            danger: true,
+            icon: 'bin'
+        })
+    }
+    else if(!isMod) {
+        options.push({
+            id: 'report',
+            danger: true,
+            icon: 'flag'
+        })
+    }
+
+    return processObjectsTr(options, trOptions)
+}
+
+$ const post = state.post || {}
+$ const commentEnabled = !post.locked && post.status != 'archived'
+$ const trTooltips = appm.tr('channels.post.tooltips') || {}
+
+<div.controls-post class=input.class>
+    <vote
+        count=post.countVotes
+        disabled=(input.removed || input.archived)
+        downvoted=post.hasUserDownvoted
+        upvoted=post.hasUserUpvoted
+        on-voteRequested('emit', 'voteRequested')
+    />
+
+    <if(commentEnabled)>
+        <button-icon.icon-only
+            icon='comment'
+            tooltip=trTooltips.comment
+            on-click('emit', 'commentRequested')
+        />
+    </if>
+
+    <if(!input.removed)>
+        <button-icon.special.icon-only
+            class=(post.hasUserFavorited ? 'selected' : '')
+            icon='heart'
+            tooltip=trTooltips.favorite
+            on-click('emit', 'favoriteRequested')
+        />
+    </if>
+
+    <button-share.icon-only.open-left on-shareRequested('emit', 'shareRequested') />
+
+    <button-icon-menu.icon-only.open-left
+        icon='ellipsis'
+        iconRotation=90
+        options=processOptions(
+            post,
+            input.isCreator,
+            input.isMod,
+            input.isSuper,
+            appm.tr('channels.post.controls')
+        )
+        tooltip=trTooltips.more
+        on-optionRequested('controlRequested')
+    />
+</div>
+
+style.less {
+    .controls-post {
+        align-items: center;
+        display: flex;
+        gap: var(--controls-spacing-big);
+    }
+};

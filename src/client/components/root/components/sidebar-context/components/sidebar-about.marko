@@ -1,0 +1,140 @@
+import appm from 'js/app-manager'
+import { isMobile } from 'js/utils'
+
+class {
+    onCreate() {
+        this.state = {
+            idSelection: '',
+            listItems: []
+        }
+    }
+
+    onMount() {
+        this.setupListItems()
+    }
+
+    // Getters & Setters.
+
+    setData(idPane, args) {
+        this.state.idSelection = idPane || 'about'
+
+        const numberTopic = args && args[0] ? args[0] : -1
+
+        if(numberTopic >= 1) {
+            if(idPane == 'privacy') {
+                this.state.idSelection = `topicPrivacy-#${numberTopic}`
+            }
+            else if(idPane == 'terms') {
+                this.state.idSelection = `topicTerms-#${numberTopic}`
+            }
+        }
+    }
+
+    // Functions.
+
+    selectAnchor(id, anchor, idGroup, newTab = false) {
+        const numberAnchor = parseInt(id.replace( /^\D+/g, ''))
+
+        if(!newTab) {
+            this.state.idSelection = id
+        }
+
+        const page = appm.getPageLast()
+
+        if(page && page.id == 'about' && page.idPane == idGroup) {
+            appm.emit('anchorRequested', numberAnchor)
+
+            if(isMobile()) {
+                appm.emit('toggleSidebar')
+            }
+        }
+        else {
+            appm.openPage('about', idGroup, { allowBack: true, newTab }, numberAnchor)
+        }
+
+        appm.addAnalyticsEvent('sidebarAbout', 'selectAnchor', idGroup)
+    }
+
+    selectPage(id, newTab = false) {
+        if(id == 'channels') {
+            appm.openPage('channels', '', { allowBack: false, newTab })
+            return
+        }
+
+        if(!newTab) {
+            this.state.idSelection = id
+        }
+
+        appm.openPage('about', id, { allowBack: true, newTab })
+        appm.addAnalyticsEvent('sidebarAbout', 'selectPage', id)
+    }
+
+    setupListItems() {
+        const list = []
+        const trAbout = appm.tr('about') || {}
+        const trPrivacy = trAbout.privacy || {}
+        const trTerms = trAbout.terms || {}
+        const topicsPrivacy = (trPrivacy.topics || [])
+            .map((topic, index) => ({ id: `topicPrivacy-#${index + 1}`, name: topic.title }))
+        const topicsTerms = (trTerms.topics || [])
+            .map((topic, index) => ({ id: `topicTerms-#${index + 1}`, name: topic.title }))
+
+        /* list.push({
+            id: 'channels',
+            icon: 'arrowLong',
+            iconRotation: 180,
+            name: 'Voltar a canais'//trAbout.about.title
+        }) */
+
+        list.push({
+            id: 'about',
+            name: trAbout.about.title
+        })
+
+        list.push({
+            id: 'terms',
+            collapsed: true,
+            items: topicsTerms,
+            name: trAbout.terms.title,
+            type: 'topics'
+        })
+
+        list.push({
+            id: 'privacy',
+            collapsed: true,
+            items: topicsPrivacy,
+            name: trAbout.privacy.title,
+            type: 'topics'
+        })
+
+        list.push({
+            id: 'transparency',
+            name: trAbout.transparency.title
+        })
+
+        this.state.listItems = list
+    }
+}
+
+$ const idSidebar = 'about'
+$ const trAbout = appm.tr(idSidebar) || {}
+
+<sidebar-default.sidebar-about class=input.class title=trAbout.title>
+    <list-items
+        id=idSidebar
+        idSelection=state.idSelection
+        list=state.listItems
+        on-clickGroup('selectPage')
+        on-clickItem('selectAnchor')
+    />
+</sidebar-default>
+
+style.less {
+    .sidebar-about {
+        >.contents {
+            >.list-items {
+                width: 100%;
+            }
+        }
+    }
+};

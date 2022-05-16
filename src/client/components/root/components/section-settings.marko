@@ -1,0 +1,36 @@
+<div.section-settings class=input.class>
+    <text-title.title.small>
+        ${input.title}
+    </text-title>
+
+    <div.contents>
+        <${data.renderBody} />
+    </div>
+</div>
+
+style.less {
+    .section-settings {
+        --contents-spacing: 15px;
+        --spacing: 20px;
+
+        display: flex;
+        flex-direction: column;
+        gap: var(--spacing);
+
+        >.title {
+            color: var(--color-text2);
+        }
+
+        >.contents {
+            display: flex;
+            flex-direction: column;
+            gap: var(--contents-spacing);
+        }
+
+        // Media queries.
+
+        .r-max(@break-sm, {
+            --contents-spacing: 10px;
+        });
+    }
+};

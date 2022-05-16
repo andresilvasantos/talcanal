@@ -1,0 +1,166 @@
+import appm from 'js/app-manager'
+import { abbreviateNumber } from 'js/utils'
+
+class {
+    onCreate(input) {
+        this.state = {
+            count: 0,
+            item: input.item || {},
+            isChannelMod: input.isChannelMod
+        }
+
+        this.channelsModPinged = this.channelsModPinged.bind(this)
+    }
+
+    onInput(input) {
+        this.state.item = input.item || []
+        this.state.isChannelMod = input.isChannelMod
+
+        if(this.mounted) {
+            if(this.state.isChannelMod) {
+                appm.off('pingChannelsModSuccess', this.channelsModPinged)
+                appm.on('pingChannelsModSuccess', this.channelsModPinged)
+            }
+
+            this.setStateDirty('item')
+        }
+    }
+
+    onMount() {
+        if(this.state.isChannelMod) {
+            appm.on('pingChannelsModSuccess', this.channelsModPinged)
+
+            this.channelsModPinged(appm.getDataChannelsMod())
+        }
+
+        this.mounted = true
+    }
+
+    onDestroy() {
+        if(this.state.isChannelMod) {
+            appm.off('pingChannelsModSuccess', this.channelsModPinged)
+        }
+    }
+
+    // Functions.
+
+    channelsModPinged(data) {
+        if(!this.state.isChannelMod) {
+            return
+        }
+
+        if(data[this.state.item.id]) {
+            const info = data[this.state.item.id]
+
+            this.state.count = (
+                (info.countCommentsQueue || 0) +
+                (info.countMemberRequests || 0) +
+                (info.countPostsQueue || 0)
+            )
+        }
+        else {
+            this.state.count = 0
+        }
+    }
+}
+
+$ const item = state.item || {}
+//$ const name = item.name || item.id
+//$ const text = input.isTopic ? `${input.number}. ${name}` : name
+
+<button-text.button-item.align-left.bg-transparent
+    class=input.class
+    icon=item.icon
+    text=(item.name || item.id)
+    on-click('emit', 'click')
+    on-middleClick('emit', 'middleClick')
+>
+    <if(input.showImage)>
+        <image-circle.medium image=item.image />
+    </if>
+
+    <if(input.isTopic)>
+        <span.number>
+            ${input.number}.
+        </span>
+    </if>
+
+    <if(state.isChannelMod)>
+        <counter-button count=abbreviateNumber(state.count) />
+    </if>
+</button-text>
+
+style.less {
+    .button-default.button-text.button-item {
+        --bordercolor: transparent;
+        --color: var(--color-text3);
+        --fontsize: 17px;
+        --height: 45px;
+
+        border: none;
+
+        height: unset;
+        min-height: var(--height);
+        padding: 5px var(--padding-h);
+
+        >.image-circle {
+            flex-shrink: 0;
+            order: -1;
+        }
+
+        >.number {
+            align-items: center;
+            align-self: flex-start;
+            color: var(--color-accent1);
+            display: flex;
+            font-family: @font-medium;
+            font-size: 17px;
+            height: 26px; // TODO
+            justify-content: center;
+            order: -1;
+        }
+
+        >.text {
+            line-height: 1.4;
+            white-space: unset;
+            word-wrap: anywhere;
+            //.text-truncate();
+        }
+
+        >.counter-button {
+            bottom: unset;
+            right: 5px; // TODO
+            top: 50%;
+            .translateY(-50%);
+        }
+
+        &:hover {
+            >.image-circle {
+                .scale(1.1);
+            }
+        }
+
+        &:hover {
+            --backgroundcolor: var(--color-button1);
+        }
+
+        &.selected {
+            --backgroundcolor: var(--color-button2);
+        }
+
+        &:hover,
+        &.selected {
+            --color: var(--color-text4);
+        }
+
+        // Media queries
+
+        .r-max(@break-lg, {
+            --fontsize: 16px;
+        });
+
+        .r-max(@break-sm, {
+            --height: 40px;
+        });
+    }
+};

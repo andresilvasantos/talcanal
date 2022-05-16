@@ -1,0 +1,398 @@
+import appm from 'js/app-manager'
+import { elapsedDateToShortString, stripHtml } from 'js/utils'
+import { timers } from 'js/default-vars'
+
+class {
+    onCreate() {
+        this.state = {
+            chats: [],
+            countChats: 0,
+            fetchingChats: true,
+            idSelection: ''
+        }
+
+        this.filter = ''
+
+        this.accountPinged = this.accountPinged.bind(this)
+        this.chatCreated = this.chatCreated.bind(this)
+        this.chatDeleted = this.chatDeleted.bind(this)
+        this.chatPinged = this.chatPinged.bind(this)
+        this.chatsFetched = this.chatsFetched.bind(this)
+        this.messageSent = this.messageSent.bind(this)
+    }
+
+    onMount() {
+        appm.on('createItemSuccess', this.chatCreated)
+        appm.on('deleteItemSuccess', this.chatDeleted)
+        appm.on('fetchItemsSuccess', this.chatsFetched)
+        appm.on('messageSent', this.messageSent)
+        appm.on('pingAccountSuccess', this.accountPinged)
+        appm.on('pingChatSuccess', this.chatPinged)
+
+        this.fetchChats()
+    }
+
+    onDestroy() {
+        clearTimeout(this.timeoutBetweenFetches)
+
+        appm.off('createItemSuccess', this.chatCreated)
+        appm.off('deleteItemSuccess', this.chatDeleted)
+        appm.off('fetchItemsSuccess', this.chatsFetched)
+        appm.off('messageSent', this.messageSent)
+        appm.off('pingAccountSuccess', this.accountPinged)
+        appm.off('pingChatSuccess', this.chatPinged)
+    }
+
+    // Getters & Setters.
+
+    setData(idPane, args) {
+        if(idPane == 'chat') {
+            const chat = args[0]
+
+            this.state.idSelection = chat.id
+        }
+        else {
+            this.state.idSelection = ''
+        }
+    }
+
+    // Functions.
+
+    accountPinged() {
+        this.updateCountMessagesNew()
+    }
+
+    channelsRequested(newTab = false) {
+        appm.openPage('channels', '', { allowBack: false, newTab })
+    }
+
+    chatCreated(type, idRequest, chat) {
+        if(type != 'chats') {
+            return
+        }
+
+        for(const chatAlreadyCreated of this.state.chats) {
+            if(chatAlreadyCreated.id == chat.id) {
+                return
+            }
+        }
+
+        this.state.chats.push(chat)
+    }
+
+    chatDeleted(type, id) {
+        if(type != 'chats') {
+            return
+        }
+
+        this.fetchChats()
+    }
+
+    chatPinged(data) {
+        for(const chat of this.state.chats) {
+            if(data.idChat == chat.id) {
+                chat.messageLast = data.message
+
+                this.setStateDirty('chats')
+                break
+            }
+        }
+    }
+
+    chatsFetched(idFetch, items, count) {
+        if(idFetch != this.idFetchChats) {
+            return
+        }
+
+        this.state.fetchingChats = false
+        this.state.chats = items
+        this.state.countChats = count
+
+        this.updateCountMessagesNew()
+    }
+
+    createChatRequested() {
+        const self = appm.getUser()
+        const users = [self]
+
+        for(const chat of this.state.chats) {
+            for(const user of chat.users) {
+                if(user.username == self.username) {
+                    continue
+                }
+
+                users.push(user)
+            }
+        }
+
+        appm.showPopup('createChat')
+    }
+
+    fetchChats(updateOnly = false) {
+        if(!updateOnly) {
+            this.state.fetchingChats = true
+
+            this.state.countChats = 0
+            this.state.chats = []
+        }
+
+        if(this.timeoutBetweenFetches) {
+            clearTimeout(this.timeoutBetweenFetches)
+        }
+
+        this.timeoutBetweenFetches = setTimeout(() => {
+            this.idFetchChats = appm.fetchItems(
+                'chats', this.filter, {}, 0, 'update'
+            )
+        }, timers.betweenFetches)
+    }
+
+    messageSent(idSend, idChat, message) {
+        for(const chat of this.state.chats) {
+            if(idChat == chat.id) {
+                chat.messageLast = message
+
+                this.setStateDirty('chats')
+                break
+            }
+        }
+    }
+
+    openChat(chat, newTab) {
+        if(!newTab) {
+            this.state.idSelection = chat.id
+        }
+
+        appm.openPage('chats', 'chat', { allowBack: false, newTab }, chat)
+        appm.addAnalyticsEvent('sidebarChats', 'selectChat')
+    }
+
+    updateCountMessagesNew() {
+        const user = appm.getUser()
+
+        if(!user) {
+            return
+        }
+
+        let newMessages = false
+
+        for(const chat of this.state.chats) {
+            let countNew = 0
+
+            for(const chatCounter of (user.messagesNew || [])) {
+                if(chatCounter.chat == chat._id) {
+                    countNew = chatCounter.count
+
+                    break
+                }
+            }
+
+            if(chat.countNew && chat.countNew != countNew) {
+                newMessages = true
+            }
+
+            chat.countNew = countNew
+        }
+
+        if(newMessages) {
+            this.fetchChats(true)
+        }
+
+        this.setStateDirty('chats')
+    }
+}
+
+$ const getUserPair = (users) => {
+    for(const user of users) {
+        if(user.username != appm.getUser().username) {
+            return user
+        }
+    }
+
+    return null
+}
+
+$ const trChats = appm.tr('chats') || {}
+
+<sidebar-default.sidebar-chats class=input.class title=trChats.title>
+    <!-- <@buttonsBarTitle>
+        <button-icon.light icon='search' tooltip='Procura conversas' />
+    </@buttonsBarTitle> -->
+
+    <div.wrapper-chats>
+        <if(state.fetchingChats)>
+            <icon.loading name='loading' />
+        </if>
+        <else>
+            <for|chat| of=state.chats>
+                $ const selected = state.idSelection == chat.id
+                $ const messageLast = chat.messageLast
+                $ const userPair = getUserPair(chat.users) || {}
+
+                <button-default.button-chat
+                    class=(selected ? 'selected' : '')
+                    on-click('openChat', chat, false)
+                    on-middleClick('openChat', chat, true)
+                >
+                    <image-circle icon='user' image=userPair.image />
+
+                    <div.column>
+                        <div.row>
+                            <span.username>
+                                ${userPair.username}
+                            </span>
+
+                            <if(messageLast)>
+                                <span.time>
+                                    ${elapsedDateToShortString(messageLast.time)}
+                                </span>
+                            </if>
+                        </div>
+
+                        <if(messageLast)>
+                            <div.row>
+                                <span.message-last>
+                                    ${stripHtml(messageLast.text)}
+                                </span>
+
+                                <if(chat.countNew)>
+                                    <div.counter>
+                                        ${chat.countNew}
+                                    </div>
+                                </if>
+                            </div>
+                        </if>
+                    </div>
+                </button-default>
+            </for>
+        </else>
+    </div>
+
+    <button-text.button-newmessage.align-left.bg-transparent
+        icon='plus'
+        text=trChats.buttonCreateChat
+        on-click('createChatRequested')
+    />
+</sidebar-default>
+
+style.less {
+    .sidebar-default.sidebar-chats {
+        --buttonchat-spacing: 10px;
+        //--contents-spacing: 20px;
+        --iconloading-size: 40px;
+        --message-fontsize: 14px;
+        --time-fontsize: 14px;
+        --username-fontsize: 16px;
+
+        >.contents {
+            align-items: unset;
+            //padding: 0;
+
+            >.wrapper-chats {
+                display: flex;
+                flex-direction: column;
+                gap: 2px; // TODO
+
+                >.loading {
+                    align-self: center;
+                    color: var(--color-icon1);
+                    margin: 20px 0;
+                    .size(var(--iconloading-size));
+                    .svg-loading();
+                }
+
+                >.button-chat {
+                    align-items: center;
+                    background-color: transparent;
+                    //border: 1px solid transparent;
+                    border-radius: var(--app-borderradius);
+                    display: flex;
+                    gap: var(--buttonchat-spacing);
+                    padding: 10px var(--app-padding);
+                    position: relative;
+                    .transition(background-color 0.2s ease-out);
+
+                    >.image-circle {
+                        flex-shrink: 0;
+                    }
+
+                    >.column {
+                        display: flex;
+                        flex-direction: column;
+                        flex-grow: 1;
+                        gap: 5px; // TODO
+                        justify-content: space-between;
+                        overflow: hidden;
+                        position: relative;
+
+                        >.row {
+                            display: flex;
+                            gap: 10px; // TODO
+                            justify-content: space-between;
+
+                            >.username {
+                                color: var(--color-text3);
+                                font-family: @font-medium;
+                                font-size: var(--username-fontsize);
+                                .transition(color 0.2s ease-out);
+                            }
+
+                            >.time {
+                                color: var(--color-text1);
+                                font-size: var(--time-fontsize);
+                            }
+
+                            >.message-last {
+                                color: var(--color-text1);
+                                font-size: var(--message-fontsize);
+                                .text-truncate();
+
+                                >.column {
+                                    >.row {
+                                        >.username {
+                                            color: var(--color-text4);
+                                        }
+                                    }
+                                }
+                            }
+
+                            >.counter {
+                                background-color: var(--color-accent1);
+                                border-radius: var(--app-borderradius);
+                                color: var(--color-background1);
+                                font-family: @font-semibold;
+                                font-size: 12px; // TODO
+                                height: 18px; // TODO
+                                line-height: 1;
+                                min-width: 16px; // TODO
+                                padding: 3px 4px; // TODO
+                                .flex-center();
+                            }
+                        }
+                    }
+
+                    &:hover {
+                        background-color: var(--color-button1);
+                        //border-color: var(--color-border1);
+                    }
+
+                    &.selected {
+                        background-color: var(--color-button2);
+                        //border-color: var(--color-border1);
+                    }
+                }
+            }
+
+            //>.button-backtochannels,
+            >.button-newmessage {
+                --fontsize: 15px;
+
+                flex-shrink: 0;
+
+                >.text {
+                    text-transform: uppercase;
+                }
+            }
+        }
+    }
+};

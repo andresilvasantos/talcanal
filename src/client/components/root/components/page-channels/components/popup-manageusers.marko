@@ -1,0 +1,288 @@
+import appm from 'js/app-manager'
+import { processObjectsTr } from 'js/utils'
+
+static const tabs = {
+    public: [{
+        id: 'banned'
+    }],
+    restricted: [{
+        id: 'members'
+    }, {
+        id: 'banned'
+    }],
+    private: [{
+        id: 'requests'
+    }, {
+        id: 'members'
+    }, {
+        id: 'banned'
+    }],
+}
+
+class {
+    onCreate() {
+        this.state = {
+            channel: {},
+            indexTab: 0,
+            status: 0,
+            userSelected: null
+        }
+
+        this.userAccepted = this.userAccepted.bind(this)
+        this.userBanned = this.userBanned.bind(this)
+        this.userInvited = this.userInvited.bind(this)
+    }
+
+    onMount() {
+        this.popupComponent = this.getComponent('popup')
+
+        appm.on('banFromChannelSuccess', this.userBanned)
+        appm.on('inviteToChannelSuccess', this.userInvited)
+        appm.on('replyChannelAccessSuccess', this.userAccepted)
+    }
+
+    onDestroy() {
+        appm.off('banFromChannelSuccess', this.userBanned)
+        appm.off('inviteToChannelSuccess', this.userInvited)
+        appm.off('replyChannelAccessSuccess', this.userAccepted)
+    }
+
+    // Functions.
+
+    acceptRequested() {
+        const user = this.state.userSelected
+
+        if(!user) {
+            return
+        }
+
+        appm.replyChannelAccess(this.state.channel.id, user.username, true)
+    }
+
+    banRequested() {
+        const user = this.state.userSelected
+
+        if(!user) {
+            return
+        }
+
+        appm.banFromChannel(this.state.channel.id, user.username)
+    }
+
+    hide() {
+        this.popupComponent.hide()
+    }
+
+    hidden() {
+        this.state.status = 0
+    }
+
+    inviteRequested() {
+        const user = this.state.userSelected
+
+        if(!user) {
+            return
+        }
+
+        appm.inviteToChannel(this.state.channel.id, user.username)
+    }
+
+    leaveRequested() {
+        const user = this.state.userSelected
+
+        if(!user) {
+            return
+        }
+
+        appm.leaveChannel(this.state.channel.id)
+    }
+
+    profileRequested(newTab) {
+        const user = this.state.userSelected
+
+        if(!user) {
+            return
+        }
+
+        appm.openPage('channels', 'user', { allowBack: true, newTab }, user)
+
+        if(!newTab) {
+            this.hide()
+        }
+    }
+
+    rejectRequested() {
+        const user = this.state.userSelected
+
+        if(!user) {
+            return
+        }
+
+        appm.replyChannelAccess(this.state.channel.id, user.username, false)
+    }
+
+    searchChanged(search) {
+        const tabsComponent = this.getComponent('tabs')
+        const index = tabsComponent.getIndex()
+
+        if(index >= 0) {
+            const tab = tabs[this.state.channel.type] || null
+            const purpose = tab ? tab[index].id : ''
+
+            if(purpose == 'requests') {
+                return
+            }
+
+            this.indexOld = index
+        }
+
+        tabsComponent.setIndex(search.length ? -1 : this.indexOld || 0)
+    }
+
+    show(args) {
+        if(this.popupComponent.isVisible()) {
+            return
+        }
+
+        const channel = args[0] || {}
+
+        this.state.channel = channel
+        this.state.indexTab = 0
+
+        this.popupComponent.show([], { channel: this.state.channel.id })
+
+        if(channel.type == 'private' && !channel.preferences.acceptRequests) {
+            this.state.indexTab = 1
+
+            this.update()
+
+            const tabsComponent = this.getComponent('tabs')
+            tabsComponent.setIndex(1)
+        }
+    }
+
+    tabChanged(index, idTab) {
+        this.state.indexTab = index
+        this.popupComponent.clearFilter()
+    }
+
+    userAccepted(idChannel, username, accepted) {
+        if(this.state.channel.id != idChannel) {
+            return
+        }
+
+        this.popupComponent.userAccepted(username, accepted)
+    }
+
+    userBanned(idChannel, username, banned) {
+        if(idChannel != this.state.channel.id) {
+            return
+        }
+
+        this.popupComponent.userBanned(username, banned)
+    }
+
+    userInvited(idChannel, username, invited) {
+        if(idChannel != this.state.channel.id) {
+            return
+        }
+
+        this.popupComponent.userInvited(username, invited)
+    }
+
+    userSelectionChanged(user) {
+        this.state.userSelected = user
+    }
+}
+
+$ const channel = state.channel || {}
+$ const tab = channel.type ? tabs[channel.type] : null
+$ const purpose = tab ? tab[state.indexTab].id : ''
+$ const trManageUsers = appm.tr('channels.moderation.manageUsers') || {}
+$ const user = state.userSelected
+
+<popup-users.popup-manageusers
+    key='popup'
+    purpose=purpose
+    status=state.status
+    title=trManageUsers.title
+    on-hidden('hidden')
+    on-searchChanged('searchChanged')
+    on-userSelectionChanged('userSelectionChanged')
+>
+    <@afterTitle>
+        <tabs
+            key='tabs'
+            tabs=processObjectsTr(tabs[channel.type], trManageUsers.tabs)
+            on-tabChanged('tabChanged')
+        />
+    </@afterTitle>
+
+    <@controls>
+        <if(purpose == 'requests')>
+            <button-text.special
+                disabled=(!user || user.isMember)
+                icon='userPlus'
+                text='Aceitar'
+                on-click('acceptRequested')
+            />
+
+            <button-text.danger
+                disabled=(!user || user.isMember)
+                icon='bin'
+                text='Rejeitar'
+                on-click('rejectRequested')
+            />
+        </if>
+        <else>
+            <if(channel.type != 'public')>
+                <button-text
+                    class=(!user || user.isMember ? 'danger' : 'special')
+                    disabled=(!user || user.isAdmin || user.isMod || user.isBanned)
+                    icon=(user && user.isMember ? 'userMinus' : 'userPlus')
+                    text=(user && user.isMember ? 'Remover' : 'Convidar')
+                    on-click('inviteRequested')
+                />
+            </if>
+
+            <if(user && user.isMod && appm.isUserSignedIn() && appm.getUser().username == user.username)>
+                <button-text.danger
+                    disabled=user.isAdmin
+                    icon='userMinus'
+                    text='Abandonar'
+                    on-click('leaveRequested')
+                />
+            </if>
+            <else>
+                <button-text
+                    class=(!user ||user.isBanned ? '' : 'danger')
+                    disabled=(!user || user.isAdmin || user.isMod || user.isMember)
+                    icon=(user && user.isBanned ? 'check' : 'block')
+                    text=(user && user.isBanned ? 'Permitir' : 'Banir')
+                    on-click('banRequested')
+                />
+            </else>
+        </else>
+
+        <button-text.special
+            disabled=(!user)
+            icon='eye'
+            text='Perfil'
+            on-click('profileRequested', false)
+            on-middleClick('profileRequested', true)
+        />
+    </@controls>
+</popup-users>
+
+style.less {
+    .popup-manageusers {
+        >.wrapper {
+            >.panel {
+                >.tabs {
+                    border-bottom: 1px solid var(--color-border1);
+                    padding: 0 var(--app-padding);
+                }
+            }
+        }
+    }
+};

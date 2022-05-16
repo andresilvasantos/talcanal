@@ -1,0 +1,117 @@
+import { dateToTime } from 'js/utils'
+
+class {
+    onCreate(input) {
+        this.state = {
+            delivered: false,
+            message: input.message || {}
+        }
+    }
+
+    onInput(input) {
+        this.state.message = input.message || {}
+        this.state.delivered = this.state.message.delivered
+    }
+}
+
+$ const message = state.message || {}
+
+<div.balloon-message class=[input.class, message.self ? 'self' : '']>
+    <text-p.message>
+        $!{message.text}
+    </text-p>
+
+    <div.info>
+        <div.controls>
+            <!-- <button-icon.small.bg-transparent.icon-only.light icon='comment' />
+
+            <if(message.self)>
+                <button-icon.small.bg-transparent.icon-only.light icon='bin' />
+            </if> -->
+        </div>
+
+        <span.time>
+            ${dateToTime(message.time)}
+        </span>
+
+        <if(message.self && !message._id)>
+            <icon.icon-delivered class=(state.delivered ? 'delivered' : '') name='check' />
+        </if>
+    </div>
+</div>
+
+style.less {
+    .balloon-message {
+        --controls-spacing: 5px;
+        --info-spacing: 10px;
+        //--message-fontsize: 16px;
+        --padding: 10px 15px;
+        --time-fontsize: 13px;
+        --icondelivered-size: 14px;
+
+        background-color: var(--color-chat2);
+        border-radius: var(--app-borderradius);
+        display: flex;
+        flex-direction: column;
+        gap: 5px;
+        padding: var(--padding);
+
+        >.message {
+            //font-size: var(--message-fontsize);
+            word-break: break-word;
+            .text-rich(var(--color-text3));
+        }
+
+        >.info {
+            align-items: center;
+            align-self: flex-end;
+            display: flex;
+            gap: var(--info-spacing);
+
+            >.controls {
+                align-items: center;
+                display: flex;
+                gap: var(--controls-spacing);
+                opacity: 0;
+                .transition(opacity 0.2s ease-out);
+            }
+
+            >.time {
+                color: var(--color-text1);
+                font-size: var(--time-fontsize);
+            }
+
+            >.icon-delivered {
+                color: var(--color-icon1);
+                display: flex;
+                .size(var(--icondelivered-size));
+
+                &.delivered {
+                    color: var(--color-link);
+                }
+            }
+        }
+
+        &:hover {
+            >.info {
+                >.controls {
+                    opacity: 1;
+                }
+            }
+        }
+
+        &.self {
+            background-color: var(--color-chat1);
+        }
+
+        // Media queries
+
+        .r-max(@break-ms, {
+            --time-fontsize: 12px;
+        });
+
+        .r-max(@break-xs, {
+            --time-fontsize: 11px;
+        });
+    }
+};

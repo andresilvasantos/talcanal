@@ -1,0 +1,547 @@
+import appm from 'js/app-manager'
+import { archivePostOptions, channelTypes, postTypes, viewModes } from 'js/default-vars'
+import {
+    getIndexFromId,
+    processObjectsTr,
+    tr,
+    validateChannelDescription,
+    validateChannelName
+} from 'js/utils'
+
+class {
+    onCreate() {
+        this.state = {
+            channel: {},
+            showTypePosts: false,
+            status: 0,
+            type: '',
+            user: appm.getUser()
+        }
+
+        this.channelDeleted = this.channelDeleted.bind(this)
+        this.channelUpdated = this.channelUpdated.bind(this)
+        this.updateChannelError = this.updateChannelError.bind(this)
+        this.userUpdated = this.userUpdated.bind(this)
+    }
+
+    onMount() {
+        this.errorMessages = appm.tr('status')
+
+        appm.on('deleteItemSuccess', this.channelDeleted)
+        appm.on('updateItemError', this.updateChannelError)
+        appm.on('updateItemSuccess', this.channelUpdated)
+        appm.on('userUpdated', this.userUpdated)
+    }
+
+    onDestroy() {
+        appm.off('deleteItemSuccess', this.channelDeleted)
+        appm.off('updateItemError', this.updateChannelError)
+        appm.off('updateItemSuccess', this.channelUpdated)
+        appm.off('userUpdated', this.userUpdated)
+    }
+
+    // Getters & Setters
+
+    setData(channel) {
+        const preferences = channel.preferences || {}
+        const moderation = channel.moderation || {}
+
+        const typeComponent = this.getComponent('dropdownType')
+        const nameComponent = this.getComponent('inputName')
+        const imageComponent = this.getComponent('inputImage')
+        const descriptionComponent = this.getComponent('inputDescription')
+        const adultContentComponent = this.getComponent('checkboxAdultContent')
+        const viewModeComponent = this.getComponent('dropdownViewMode')
+        const archiveAfterComponent = this.getComponent('dropdownArchiveAfter')
+        const allowAnyTypePostComponent = this.getComponent('checkboxAllowAnyTypePost')
+        const acceptRequestsComponent = this.getComponent('checkboxAcceptSubscribeRequests')
+        const autoPublishPostsComponent = this.getComponent('checkboxAutoPublishPosts')
+        const rulesComponent = this.getComponent('rules')
+        const tagsComponent = this.getComponent('tags')
+
+        typeComponent.setOption(channel.type)
+        nameComponent.setValue(channel.name)
+        descriptionComponent.setValue((channel.description || '').replace(/<br ?\/?>/g, '\n'))
+        adultContentComponent.setChecked(channel.adultContent)
+        viewModeComponent.setOption(preferences.viewMode)
+        archiveAfterComponent.setOption(preferences.archiveAfter)
+        allowAnyTypePostComponent.setChecked(!preferences.typePostsAllowed.length)
+        autoPublishPostsComponent.setChecked(moderation.autoPublish)
+        rulesComponent.setRules(channel.rules)
+        tagsComponent.setTags(channel.tags)
+
+        this.state.showTypePosts = preferences.typePostsAllowed.length
+
+        if(channel.image && channel.image.length) {
+            imageComponent.setImage(channel.image)
+        }
+
+        // Only visible when private.
+        if(acceptRequestsComponent) {
+            acceptRequestsComponent.setChecked(preferences.acceptRequests)
+        }
+
+        this.state.channel = Object.assign({}, channel)
+        this.state.type = channel.type
+    }
+
+    setStatus(status) {
+        this.state.status = status
+    }
+
+    // Functions.
+
+    banChannelRequested() {
+        appm.banChannel(this.state.channel.id)
+    }
+
+    channelDeleted(type, id) {
+        if(type != 'channels' || id != this.state.channel.id) {
+            return
+        }
+
+        appm.openPage('channels')
+    }
+
+    channelUpdated(type, id, channel) {
+        if(type != 'channels' || id != this.state.channel.id) {
+            return
+        }
+
+        this.state.status = 0
+    }
+
+    deleteChannelRequested() {
+        appm.showPopup('deleteItem', 'channels', this.state.channel.id)
+    }
+
+    imageUploaded(idImage) {
+        if(this.state.status != 1) {
+            return
+        }
+
+        this.data.image = idImage
+
+        appm.updateItem('channels', this.state.channel.id, this.data)
+    }
+
+    reviveChannelRequested() {
+        appm.reviveChannel(this.state.channel.id)
+    }
+
+    submitRequested() {
+        if(this.state.status == 1) {
+            return
+        }
+
+        // Data.
+        this.typeComponent = this.getComponent('dropdownType')
+        this.nameComponent = this.getComponent('inputName')
+        this.imageComponent = this.getComponent('inputImage')
+        this.descriptionComponent = this.getComponent('inputDescription')
+        this.adultContentComponent = this.getComponent('checkboxAdultContent')
+        this.viewModeComponent = this.getComponent('dropdownViewMode')
+        this.archiveAfterComponent = this.getComponent('dropdownArchiveAfter')
+        this.autoPublishPostsComponent = this.getComponent('checkboxAutoPublishPosts')
+        this.allowAnyTypePostComponent = this.getComponent('checkboxAllowAnyTypePost')
+        this.sectionMods = this.getComponent('sectionMods')
+
+        const adultContent = this.adultContentComponent.isChecked()
+        const type = this.typeComponent.getOption().id
+        const name = this.nameComponent.getValue()
+        const description = this.descriptionComponent.getValue().replace(new RegExp('\r?\n','g'), '<br>')
+        const viewMode = this.viewModeComponent.getOption().id
+        const archiveAfter = this.archiveAfterComponent.getOption().id
+        const autoPublishPosts = this.autoPublishPostsComponent.isChecked()
+        const allowAnyTypePost = this.allowAnyTypePostComponent.isChecked()
+        const admins = this.sectionMods.getAdmins()
+        const mods = this.sectionMods.getMods()
+
+        const preferences = this.state.channel.preferences || {}
+        const moderation = this.state.channel.moderation || {}
+        const rules = this.state.channel.rules || []
+        const tags = this.state.channel.tags || []
+        const typePostsAllowed = allowAnyTypePost ? [] : preferences.typePostsAllowed
+
+        let validData = true
+
+        if(!validateChannelDescription(description)) {
+            this.descriptionComponent.setValid(false)
+            validData = false
+        }
+
+        if(name && !validateChannelName(name)) {
+            this.nameComponent.setValid(false, this.errorMessages.invalidNameChannel)
+            validData = false
+        }
+
+        if(!validData) {
+            return
+        }
+
+        this.data = {
+            admins,
+            adultContent,
+            description,
+            name,
+            moderation: {
+                automatic: moderation.automatic,
+                autoPublish: autoPublishPosts,
+            },
+            moderators: mods,
+            preferences: {
+                archiveAfter,
+                typePostsAllowed,
+                viewMode
+            },
+            rules,
+            tags,
+            type
+        }
+
+        if(type == 'private') {
+            this.acceptRequestsComponent = this.getComponent('checkboxAcceptSubscribeRequests')
+
+            this.data.preferences.acceptRequests = this.acceptRequestsComponent.isChecked()
+        }
+
+        this.state.status = 1
+
+        if(this.imageComponent.needsUpload()) {
+            this.imageComponent.upload('square')
+        }
+        else {
+            // Image was removed.
+            if(this.imageComponent.isChanged()) {
+                this.data.image = ''
+            }
+
+            appm.updateItem('channels', this.state.channel.id, this.data)
+        }
+    }
+
+    toggleTypePostAllowed(idType) {
+        const preferences = this.state.channel.preferences || {}
+        const typePostsAllowed = preferences.typePostsAllowed || []
+
+        if(typePostsAllowed.includes(idType)) {
+            typePostsAllowed.splice(typePostsAllowed.indexOf(idType), 1)
+        }
+        else {
+            typePostsAllowed.push(idType)
+        }
+
+        this.setStateDirty('channel')
+        appm.addAnalyticsEvent('channelSettings', 'postTypeChange', this.state.channel.id)
+    }
+
+    toggleTypePostsAllowed(checked) {
+        this.state.showTypePosts = !checked
+        appm.addAnalyticsEvent('channelSettings', 'postTypeChange', this.state.channel.id)
+    }
+
+    typeChanged(index, type) {
+        this.state.type = type
+        appm.addAnalyticsEvent('channelSettings', 'typeChange', `${this.state.channel.id} - ${type}`)
+    }
+
+    updateChannelError(id, error) {
+        if(id != this.state.channel.id) {
+            return
+        }
+
+        this.state.status = -1
+    }
+
+    uploadImageError(error) {
+        if(this.state.status != 1) {
+            return
+        }
+
+        this.state.status = -1
+    }
+
+    userUpdated(user) {
+        this.state.user = user
+
+        this.setStateDirty('user')
+    }
+}
+
+$ const channel = state.channel || {}
+$ const preferences = channel.preferences || {}
+$ const moderation = channel.moderation || {}
+$ const typePostsAllowed = preferences.typePostsAllowed || []
+$ const trChannels = appm.tr('channels') || {}
+$ const user = state.user || {}
+$ const viewModesFinal = [{ id: 'none' }, ...viewModes]
+
+$ const trSettings = trChannels.settings || {}
+$ const trSectionData = trSettings.sectionData || {}
+$ const trSectionPreferences = trSettings.sectionPreferences || {}
+$ const trSectionModeration = trSettings.sectionModeration || {}
+
+<pane-default.pane-channel-settings
+    key='root'
+    allowBack
+    class=input.class
+    title=trSettings.title
+>
+    <@barControls>
+        <button-submit
+            loading=(state.status == 1)
+            text=trSettings.buttonSave
+            on-click('submitRequested')
+        />
+    </@barControls>
+
+    <@contents.settings>
+        <section-settings.data title=trSectionData.title>
+            <div.row>
+                <input-text.input-name
+                    key='inputName'
+                    maxlength=30
+                    noExternalUpdate
+                    placeholder=trSectionData.inputName
+                    text=channel.name
+                />
+
+                <dropdown.dropdown-type
+                    key='dropdownType'
+                    noExternalUpdate
+                    options=processObjectsTr(channelTypes, trChannels.types, 'title')
+                    text=trSectionData.type
+                    on-optionChanged('typeChanged')
+                />
+            </div>
+
+            <div.row>
+                <input-image.small
+                    key='inputImage'
+                    icon='camera'
+                    noExternalUpdate
+                    sufix='sm'
+                    text=trSectionData.inputImage
+                    on-uploaded('imageUploaded')
+                    on-uploadError('uploadImageError')
+                />
+
+                <input-textmulti.input-description
+                    key='inputDescription'
+                    icon='details'
+                    maxlength=300
+                    noExternalUpdate
+                    placeholder=trSectionData.inputDescription
+                    text=(channel.description || '').replace(/<br ?\/?>/g, '\n')
+                />
+            </div>
+
+            <checkbox.checkbox-adultcontent
+                key='checkboxAdultContent'
+                noExternalUpdate
+                text=trSectionData.adultContent
+            >
+                <icon.icon-adults name='circle' />
+            </checkbox>
+        </section-settings>
+
+        <section-settings.preferences title=trSectionPreferences.title>
+            <dropdown.dropdown-viewmode
+                key='dropdownViewMode'
+                index=getIndexFromId(viewModesFinal, preferences.viewMode)
+                noExternalUpdate
+                text=trSectionPreferences.viewMode
+                options=processObjectsTr(viewModesFinal, appm.tr('generic.viewModes'))
+            />
+
+            <dropdown.dropdown-archiveafter
+                key='dropdownArchiveAfter'
+                icon='archive'
+                index=getIndexFromId(archivePostOptions, preferences.archiveAfter)
+                noExternalUpdate
+                text=trSectionPreferences.archiveAfter
+                options=processObjectsTr(archivePostOptions, trSectionPreferences.archiveOptions)
+            />
+
+            <checkbox
+                key='checkboxAllowAnyTypePost'
+                checked=(!typePostsAllowed.length)
+                noExternalUpdate
+                text=trSectionPreferences.allowAnyTypePost
+                on-checked('toggleTypePostsAllowed')
+            />
+
+            <if(state.showTypePosts)>
+                <div.typesallowed-post>
+                    <for|type| of=processObjectsTr(postTypes, trSectionPreferences.postOptions)>
+                        $ const selected = typePostsAllowed.includes(type.id)
+
+                        <button-typepost
+                            class=(selected ? 'selected' : '')
+                            type=type
+                            on-click('toggleTypePostAllowed', type.id)
+                        />
+                    </for>
+                </div>
+            </if>
+
+            <if(state.type == 'private')>
+                <checkbox
+                    key='checkboxAcceptSubscribeRequests'
+                    checked=preferences.acceptRequests
+                    noExternalUpdate
+                    text=trSectionPreferences.acceptSubscribeRequests
+                />
+            </if>
+        </section-settings>
+
+        <settings-rules key='rules' />
+
+        <settings-tags key='tags' />
+
+        <section-settings.moderation title=trSectionModeration.title>
+            <checkbox
+                key='checkboxAutoPublishPosts'
+                checked=moderation.autoPublish
+                text=trSectionModeration.autoPublishPosts
+            />
+
+            <settings-automod configAuto=moderation.automatic trModeration=trSectionModeration />
+        </section-settings>
+
+        <section-mods key='sectionMods' channel=channel trSettings=trSettings />
+
+        <button-submit.big
+            loading=(state.status == 1)
+            text=trSettings.buttonSave
+            on-click('submitRequested')
+        />
+
+        <div.separator />
+
+        <div.controls-danger>
+            <if(channel.status == 'removed')>
+                <button-text.button-deletechannel.special2
+                    icon='sync'
+                    text=trSettings.buttonRevive
+                    on-click('reviveChannelRequested')
+                />
+            </if>
+            <else>
+                <if(user.super && user.superActive)>
+                    $ const isBanned = channel.status == 'banned'
+
+                    <button-text.button-banchannel
+                        class=(isBanned ? 'special2' : 'danger')
+                        icon='skull'
+                        text=(isBanned ? trSettings.buttonUnban : trSettings.buttonBan)
+                        on-click('banChannelRequested')
+                    />
+                </if>
+
+                <button-text.button-deletechannel.danger
+                    icon='bin'
+                    text=trSettings.buttonDelete
+                    on-click('deleteChannelRequested')
+                />
+            </else>
+        </div>
+    </@contents>
+</pane-default>
+
+style.less {
+    .pane-default.pane-channel-settings {
+        --inputimage-size: 120px;
+        --contents-spacing: 50px;
+
+        >.contents {
+            >.section-settings {
+                &.data {
+                    >.contents {
+                        >.dropdown-type {
+                            align-self: flex-start;
+                        }
+
+                        >.row {
+                            display: flex;
+                            flex-wrap: wrap;
+                            gap: var(--contents-spacing); // Var from section-settings
+
+                            >.input-image {
+                                flex-shrink: 0;
+                                .size(var(--inputimage-size));
+                            }
+
+                            >.input-description {
+                                flex-grow: 1;
+                            }
+                        }
+
+                        >.checkbox-adultcontent {
+                            >.wrapper>.icon-adults {
+                                color: var(--color-warning);
+                                display: flex;
+                                .size(20px); // TODO
+                            }
+                        }
+                    }
+                }
+
+                &.preferences {
+                    >.contents {
+                        >.dropdown-viewmode,
+                        >.dropdown-archiveafter {
+                            align-self: flex-start;
+                        }
+
+                        >.typesallowed-post {
+                            display: flex;
+                            gap: var(--controls-spacing);
+                        }
+                    }
+                }
+
+                &.moderation {
+                    >.contents {
+                        .settings-automod {
+                            margin-top: 20px;
+                        }
+                    }
+                }
+            }
+
+            >.button-submit {
+                align-self: center;
+            }
+
+            >.separator {
+                background-color: var(--color-border1);
+                .size(100%, 1px);
+            }
+
+            >.controls-danger {
+                display: flex;
+                flex-wrap: wrap;
+                gap: var(--controls-spacing);
+            }
+        }
+
+        // Media queries.
+
+        .r-max(@break-xs, {
+            >.contents {
+                >.section-settings {
+                    &.data {
+                        >.contents {
+                            >.row {
+                                >.input-name {
+                                    width: 100%;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        });
+    }
+};

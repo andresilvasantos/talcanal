@@ -1,0 +1,182 @@
+import appm from 'js/app-manager'
+
+class {
+    signInRequested() {
+        appm.showPopup('auth')
+        appm.addAnalyticsEvent('quinaWelcome', 'signIn')
+    }
+}
+
+$ const trWelcome = appm.tr('games.quina.welcome') || {}
+
+<div.quina-welcome class=input.class>
+    <quina-bar />
+
+    <div.wrapper>
+        <text-title.text.medium>
+            ${trWelcome.text}
+        </text-title>
+
+        <button-text.button-signin.big
+            text=trWelcome.buttonSignIn
+            on-click('signInRequested')
+        />
+    </div>
+
+    <div.wrapper-tiles>
+        <quina-tile-result.tile-big pinsRight=4 />
+
+        <quina-tile-result.tile-small pinsRight=0 pinsWrong=2 />
+    </div>
+</div>
+
+style.less {
+    .quina-welcome {
+        --tileresult-scale: 1;
+        --wrapper-spacing: 45px;
+
+        align-items: center;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+        padding: 0 var(--app-padding);
+
+        >.wrapper {
+            align-items: center;
+            display: flex;
+            flex-direction: column;
+            gap: var(--wrapper-spacing);
+            padding: var(--app-padding-bigger);
+
+            >.text {
+                color: var(--color-text2);
+            }
+
+            >.button-signin {
+                --bordercolor: var(--color-accent1);
+
+                &:hover {
+                    --backgroundcolor: var(--color-accent1);
+                    --color: var(--color-accentInvert);
+                }
+            }
+        }
+
+        >.wrapper-tiles {
+            flex-grow: 1;
+            position: relative;
+            width: 100%;
+
+            >.quina-tile-result {
+                border-radius: calc(0.15 * var(--tile-size));
+                position: absolute;
+            }
+
+            >.tile-big {
+                --pin-margin: 60px;
+                --pin-size: 88px;
+                --tile-size: 380px;
+
+                border: 6px solid var(--color-border2);
+                right: 15%;
+                top: 50px;
+                z-index: 2;
+                .box-shadow(-20px 20px 30px 0 fade(@color-black, 50));
+                .transform(rotate(-21deg) scale(var(--tileresult-scale)));
+            }
+
+            >.tile-small {
+                --pin-margin: 30px;
+                --pin-size: 44px;
+                --tile-size: 190px;
+
+                border: 3px solid var(--color-border2);
+                top: 300px;
+                left: 25%;
+                .box-shadow(-10px 10px 20px 0 fade(@color-black, 20));
+                .transform(rotate(12deg) scale(var(--tileresult-scale)));
+            }
+        }
+
+        // Media queries.
+
+        .r-max(@break-xl, {
+            >.wrapper-tiles {
+                >.tile-big {
+                    right: 10%;
+                }
+
+                >.tile-small {
+                    left: 20%;
+                }
+            }
+        });
+
+        .r-max(@break-md, {
+            --tileresult-scale: 0.9;
+
+            >.wrapper-tiles {
+                >.tile-big {
+                    border-width: 5px;
+                    top: 40px;
+                    .box-shadow(-15px 15px 25px 0 fade(@color-black, 50));
+                }
+
+                >.tile-small {
+                    border-width: 3px;
+                    top: 240px;
+                }
+            }
+        });
+
+        .r-max(@break-ms, {
+            --tileresult-scale: 0.8;
+
+            >.wrapper-tiles {
+                >.tile-big {
+                    border-width: 4px;
+                    top: 35px;
+                    .box-shadow(-12px 12px 22px 0 fade(@color-black, 50));
+                }
+
+                >.tile-small {
+                    border-width: 3px;
+                    top: 210px;
+                    left: 18%;
+                }
+            }
+        });
+
+        .r-max(@break-sm, {
+            --tileresult-scale: 0.7;
+
+            >.wrapper-tiles {
+                >.tile-big {
+                    right: 6%;
+                    top: 10px;
+                }
+
+                >.tile-small {
+                    top: 190px;
+                    left: 13%;
+                }
+            }
+        });
+
+        .r-max(@break-xs, {
+            --tileresult-scale: 0.6;
+
+            >.wrapper-tiles {
+                >.tile-big {
+                    right: -10%;
+                    top: -10px;
+                }
+
+                >.tile-small {
+                    top: 170px;
+                    left: 2%;
+                }
+            }
+        });
+    }
+};

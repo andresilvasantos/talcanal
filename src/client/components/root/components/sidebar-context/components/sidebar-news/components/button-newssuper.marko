@@ -1,0 +1,161 @@
+import appm from 'js/app-manager'
+
+class {
+    onCreate(input) {
+        this.state = {
+            id: input.id,
+            item: input.item || {}
+        }
+
+        this.menuClosed = this.menuClosed.bind(this)
+    }
+
+    onInput(input) {
+        this.state.id = input.id
+        this.state.item = input.item || {}
+    }
+
+    onMount() {
+        this.rootComponent = this.getComponent('root')
+
+        this.rootComponent.on('menuClosed', this.menuClosed)
+    }
+
+    // Functions.
+
+    createCategoryRequested() {
+        appm.showPopup('newsCategory')
+
+        this.rootComponent.closeMenu()
+    }
+
+    createSourceRequested() {
+        appm.showPopup('newsSource')
+
+        this.rootComponent.closeMenu()
+    }
+
+    deleteItemRequested() {
+        const id = this.state.id
+
+        appm.showPopup('deleteItem', `news${id.charAt(0).toUpperCase() + id.slice(1)}`, this.state.item.id)
+
+        this.rootComponent.closeMenu()
+    }
+
+    deleteNewsRequested() {
+        let id
+
+        if(this.state.id == 'source') {
+            id = this.state.item.id
+        }
+
+        appm.showPopup('deleteItem', 'news', id)
+
+        this.rootComponent.closeMenu()
+    }
+
+    editItemRequested() {
+        appm.showPopup(`news${this.state.id}`, this.state.item)
+
+        this.rootComponent.closeMenu()
+    }
+
+    fetchMoreNewsRequested() {
+        let id
+
+        if(this.state.id == 'source') {
+            id = this.state.item.id
+        }
+
+        appm.fetchMoreNews(id)
+
+        this.rootComponent.closeMenu()
+    }
+
+    menuClosed() {
+        this.getComponent('buttonMain').getEl().classList.remove('selected')
+    }
+
+    showMenu() {
+        this.getComponent('buttonMain').getEl().classList.add('selected')
+        this.rootComponent.showMenu()
+
+        appm.addAnalyticsEvent('buttonChannelsMod', 'showMenu')
+    }
+}
+
+<button-menu.button-newssuper key='root' class=input.class>
+    <@button>
+        <button-text.medium.bg-transparent.align-left
+            key='buttonMain'
+            icon='key'
+            text='Super'
+            on-click('showMenu')
+        />
+    </@button>
+
+    <@menu>
+        <button-text.medium.align-left.bg-transparent
+            icon='news'
+            text='Criar jornal'
+            on-click('createSourceRequested')
+        />
+
+        <button-text.medium.align-left.bg-transparent
+            icon='folder'
+            text='Criar categoria'
+            on-click('createCategoryRequested')
+        />
+
+        <if(['', 'all', 'source'].includes(state.id))>
+            <button-text.medium.align-left.bg-transparent
+                icon='sync'
+                text='Refrescar notícias'
+                on-click('fetchMoreNewsRequested')
+            />
+        </if>
+
+        <if(state.id == 'source' || state.id == 'category')>
+            <button-text.medium.align-left.bg-transparent
+                icon='pencil'
+                text='Editar'
+                on-click('editItemRequested')
+            />
+
+            <if(state.id == 'source')>
+                <button-text.medium.align-left.bg-transparent.danger
+                    icon='bin'
+                    text='Eliminar jornal'
+                    on-click('deleteItemRequested')
+                />
+            </if>
+            <else>
+                <button-text.medium.align-left.bg-transparent.danger
+                    icon='bin'
+                    text='Eliminar categoria'
+                    on-click('deleteItemRequested')
+                />
+            </else>
+        </if>
+
+        <if(['', 'all', 'source'].includes(state.id))>
+            <button-text.medium.align-left.bg-transparent.danger
+                icon='bin'
+                text='Eliminar notícias'
+                on-click('deleteNewsRequested')
+            />
+        </if>
+    </@menu>
+</button-menu>
+
+style.less {
+    .button-newssuper {
+        >.menu {
+            >.button-text {
+                border-radius: 0;
+                border: none;
+            }
+        }
+    }
+};

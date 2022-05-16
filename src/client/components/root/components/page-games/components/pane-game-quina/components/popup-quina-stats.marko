@@ -1,0 +1,593 @@
+import appm from 'js/app-manager'
+import quinam from 'js/quina-manager'
+import { abbreviateNumber, updateThemeCss } from 'js/utils'
+import { gameSettings } from 'js/quina-vars'
+
+class {
+    onCreate() {
+        this.state = {
+            counters: quinam.getCountersGlobal() || {},
+            global: false,
+            type: 'all',
+            user: appm.getUser()
+        }
+    }
+
+    onMount() {
+        this.popupComponent = this.getComponent('popup')
+
+        updateThemeCss(quinam.getThemeProperties(), this.popupComponent.getEl())
+    }
+
+    // Getters & Setters.
+
+    // Functions.
+
+    changeType(type) {
+        this.state.type = type
+
+        appm.addAnalyticsEvent('quinaStats', 'changeType', this.state.type)
+    }
+
+    hide() {
+        if(!this.visible) {
+            return
+        }
+
+        this.popupComponent.hide()
+    }
+
+    hidden() {
+        this.visible = false
+    }
+
+    show(args) {
+        if(this.visible) {
+            return
+        }
+
+        this.visible = true
+
+        this.popupComponent.show()
+    }
+
+    toggleGlobal() {
+        this.state.global = !this.state.global
+
+        appm.addAnalyticsEvent('quinaStats', 'toggleGlobal', this.state.global)
+    }
+}
+
+$ const calculateAttemptsDist = (type, plays) => {
+    const attempts = []
+    const maxAttempts = type == 'easy' ? gameSettings.maxAttemptsEasyMode : gameSettings.maxAttempts
+    let max = 1
+
+    for(let i = 0; i < maxAttempts + 1; ++i) {
+        attempts.push({ count: 0 })
+    }
+
+    for(const play of plays) {
+        if(!play.completed) {
+            continue
+        }
+
+        if((type == 'easy' && !play.easyMode) || (type == 'normal' && play.easyMode)) {
+            continue
+        }
+
+        let index
+
+        if(play.victory) {
+            index = play.attempts.length - 1
+        }
+        else {
+            index = attempts.length - 1
+        }
+
+        ++attempts[index].count
+
+        if(attempts[index].count > max) {
+            max = attempts[index].count
+        }
+    }
+
+    for(const attempt of attempts) {
+        attempt.percentage = Math.ceil(attempt.count / max * 100)
+    }
+
+    return attempts
+}
+
+$ const calculateAttemptsDistGlobal = (type, attemptsGlobal) => {
+    let attempts = []
+
+    switch(type) {
+        case 'all':
+            for(const [index, attempt] of attemptsGlobal.normal.entries()) {
+                if(index >= gameSettings.maxAttempts) {
+                    break
+                }
+
+                attempts.push({ ...attempt })
+            }
+
+            for(const [index, attempt] of attemptsGlobal.easy.entries()) {
+                if(index >= gameSettings.maxAttemptsEasyMode) {
+                    break
+                }
+
+                attempts[index].count += attempt.count
+            }
+
+
+            break
+        case 'normal':
+            attempts = [...attemptsGlobal.normal]
+            attempts.pop()
+            break
+        case 'easy':
+            attempts = [...attemptsGlobal.easy]
+            attempts.pop()
+            break
+    }
+
+    let max = 1
+
+    for(const attempt of attempts) {
+        if(attempt.count > max) {
+            max = attempt.count
+        }
+    }
+
+    for(const attempt of attempts) {
+        attempt.percentage = Math.ceil(attempt.count / max * 100)
+    }
+
+    return attempts
+}
+
+$ const calculateAverage = (type, plays) => {
+    let average = 0
+    let count = 0
+
+    for(const play of plays) {
+        if(!play.completed) {
+            continue
+        }
+
+        if((type == 'easy' && !play.easyMode) || (type == 'normal' && play.easyMode)) {
+            continue
+        }
+
+        ++count
+        average += play.attempts.length
+    }
+
+    return count == 0 ? 0 : average / count
+}
+
+$ const calculateAverageGlobal = (type, attemptsGlobal) => {
+    let average = 0
+    let count = 0
+    const attempts = attemptsGlobal[type]
+
+    for(const [index, attempt] of attempts.entries()) {
+        count += attempt.count
+        average += (index + 1) * attempt.count
+    }
+
+    return count == 0 ? 0 : average / count
+}
+
+$ const calculateCompleted = (type, plays) => {
+    let completed = 0
+
+    for(const play of plays) {
+        if(!play.completed) {
+            continue
+        }
+
+        if((type == 'easy' && !play.easyMode) || (type == 'normal' && play.easyMode)) {
+            continue
+        }
+
+        ++completed
+    }
+
+    return completed
+}
+
+$ const calculateGamesGlobal = (type, counters) => {
+    let count = 0
+
+    switch(type) {
+        case 'all':
+            count = counters.plays
+            break
+        case 'normal':
+        case 'easy':
+            for(const attempt of counters.attemptsDistribution[type]) {
+                count += attempt.count
+            }
+            break
+    }
+
+    return count
+}
+
+$ const calculateVictories = (type, plays) => {
+    const completedPlays = calculateCompleted(type, plays)
+
+    if(!completedPlays) {
+        return 0
+    }
+
+    let wins = 0
+
+    for(const play of plays) {
+        if(!play.completed || !play.victory) {
+            continue
+        }
+
+        if((type == 'easy' && !play.easyMode) || (type == 'normal' && play.easyMode)) {
+            continue
+        }
+
+        ++wins
+    }
+
+    return Math.ceil((wins / completedPlays) * 100)
+}
+
+$ const calculateVictoriesGlobal = (type, counters) => {
+    let countPlays = 0
+    let countVictories = 0
+
+    switch(type) {
+        case 'all':
+            countPlays = counters.plays
+            countVictories = counters.victories
+            break
+        case 'normal':
+        case 'easy':
+            const attempts = counters.attemptsDistribution[type]
+
+            for(const [index, attempt] of attempts.entries()) {
+                countPlays += attempt.count
+
+                if(index >= attempts.length - 1) {
+                    continue
+                }
+
+                countVictories += attempt.count
+            }
+            break
+    }
+
+    return countPlays ? Math.ceil(countVictories / countPlays * 100) : 0
+}
+
+$ const plays = quinam.getPlays() || []
+$ const trStats = appm.tr('games.quina.stats') || {}
+$ const trTypes = trStats.types || {}
+
+$ const challengesCompleted = calculateCompleted(state.type, plays)
+$ const victoriesPercentage = calculateVictories(state.type, plays)
+$ const attemptsDistribution = (
+    state.global ?
+    calculateAttemptsDistGlobal(state.type, state.counters.attemptsDistribution) :
+    calculateAttemptsDist(state.type, plays)
+)
+
+<macro|{ count, name }| name='counter'>
+    <div.counter>
+        <span.count>
+            ${count}
+        </span>
+
+        <text-p.name.small>
+            ${name}
+        </text-p>
+    </div>
+</macro>
+
+<popup.popup-quina-stats.align-top
+    key='popup'
+    class=input.class
+    title=(state.global ? trStats.titleAll : trStats.title)
+    on-hidden('hidden')
+>
+    <@controls>
+        <button-icon.button-statstype
+            icon=(state.global ? 'user' : 'globe')
+            tooltip=(state.global ? trStats.tooltipTypeUser : trStats.tooltipTypeAll)
+            on-click('toggleGlobal')
+        />
+    </@controls>
+
+    <@form>
+        <div.toggles-type>
+            <for|type| of=['all', 'normal', 'easy']>
+                $ const selected = type == state.type
+
+                <button-text.special
+                    class=(selected ? 'selected' : '')
+                    text=trTypes[type]
+                    on-click('changeType', type)
+                />
+            </for>
+        </div>
+
+        <div.counters>
+            <counter
+                count=abbreviateNumber(
+                    state.global ?
+                    calculateGamesGlobal(state.type, state.counters) :
+                    challengesCompleted
+                )
+                name=trStats.games
+            />
+
+            <counter
+                count=(
+                    state.global ?
+                    calculateVictoriesGlobal(state.type, state.counters) :
+                    victoriesPercentage
+                )
+                name=trStats.victories
+            />
+
+            <if(state.global)>
+                <if(state.type == 'all')>
+                    $ const easyMode = (
+                        state.counters.plays ? Math.ceil(state.counters.easyMode / state.counters.plays * 100) : 0
+                    )
+
+                    <counter count=abbreviateNumber(state.counters.users) name=trStats.users />
+
+                    <counter count=easyMode name=trStats.easyMode />
+                </if>
+                <else>
+                    $ const average = calculateAverageGlobal(state.type, state.counters.attemptsDistribution)
+
+                    <counter count=average.toFixed(1) name=trStats.average />
+                </else>
+            </if>
+            <else>
+                <if(state.type == 'all')>
+                    $ const streak = quinam.getStreakCurrent()
+                    $ const streakBest = quinam.getStreakBest()
+
+                    <counter count=streak name=trStats.streak />
+
+                    <counter count=streakBest name=trStats.streakBest />
+                </if>
+                <else>
+                    $ const average = calculateAverage(state.type, plays)
+
+                    <counter count=average.toFixed(1) name=trStats.average />
+                </else>
+            </else>
+        </div>
+
+        <div.attempts-distribution>
+            <span.title>
+                ${trStats.attemptsDistribution}
+            </span>
+
+            <div.wrapper-attempts>
+                $ const maxAttempts = (
+                    state.type == 'easy' ? gameSettings.maxAttemptsEasyMode : gameSettings.maxAttempts
+                )
+                <!-- $ const countAttempts = state.global ? maxAttempts - 1 : maxAttempts -->
+
+                <for|attempt, index| of=attemptsDistribution>
+                    $ const death = index == maxAttempts
+
+                    <div.attempt class=(death ? 'death' : '')>
+                        <span.number>
+                            ${death ? '💀' : index + 1}
+                        </span>
+
+                        <div.wrapper-bar>
+                            <div.bar
+                                class=(attempt.count > 0 ? 'filled' : '')
+                                style=`width: ${attempt.percentage}%`
+                            >
+                                <span.count>
+                                    ${abbreviateNumber(attempt.count)}
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                </for>
+            </div>
+        </div>
+    </@form>
+</popup>
+
+style.less {
+    .popup-quina-stats {
+        --attemptsdist-attempt-spacing: 15px;
+        --attemptsdist-attempt-height: 35px;
+        --attemptsdist-bar-minwidth: 65px;
+        --attemptsdist-bar-padding: 0 15px;
+        --attemptsdist-bars-spacing: 6px;
+        --attemptsdist-count-fontsize: 20px;
+        --attemptsdist-number-fontsize: 20px;
+        --attemptsdist-number-width: 25px;
+        --attemptsdist-spacing: 30px;
+        --attemptsdist-title-fontsize: 30px;
+        --counter-fontsize: 50px;
+        --counter-width: 130px;
+        --counters-spacing: 20px;
+
+        >.wrapper>.panel>.form {
+            >.toggles-type {
+                align-items: center;
+                align-self: center;
+                border: 1px solid var(--color-border1);
+                border-radius: var(--app-borderradius);
+                display: flex;
+                overflow: hidden;
+
+                >.button-text {
+                    border: none;
+                    border-radius: 0;
+                    height: calc(var(--height) - 4px);
+
+                    &:not(:first-child) {
+                        border-left: 1px solid var(--color-border1);
+                    }
+
+                    &.selected {
+                        --backgroundcolor: var(--color-special);
+                        --color: var(--color-accentInvert);
+                    }
+                }
+            }
+
+            >.counters {
+                display: flex;
+                gap: var(--counters-spacing);
+                justify-content: center;
+
+                >.counter {
+                    align-items: center;
+                    display: flex;
+                    flex-direction: column;
+                    width: var(--counter-width);
+
+                    >.count {
+                        color: var(--color-text4);
+                        font-family: @font-bold;
+                        font-size: var(--counter-fontsize);
+                    }
+
+                    >.name {
+                        color: var(--color-text2);
+                        text-align: center;
+                    }
+                }
+            }
+
+            >.attempts-distribution {
+                display: flex;
+                flex-direction: column;
+                gap: var(--attemptsdist-spacing);
+
+                >.title {
+                    color: var(--color-text3);
+                    font-family: @font-semibold;
+                    font-size: var(--attemptsdist-title-fontsize);
+                    text-align: center;
+                }
+
+                >.wrapper-attempts {
+                    display: flex;
+                    flex-direction: column;
+                    gap: var(--attemptsdist-bars-spacing);
+
+                    >.attempt {
+                        align-items: center;
+                        display: flex;
+                        gap: var(--attemptsdist-attempt-spacing);
+                        height: var(--attemptsdist-attempt-height);
+
+                        >.number {
+                            color: var(--color-text4);
+                            font-family: @font-medium;
+                            font-size: var(--attemptsdist-number-fontsize);
+                            text-align: right;
+                            width: var(--attemptsdist-number-width);
+                        }
+
+                        >.wrapper-bar {
+                            flex-grow: 1;
+                            height: 100%;
+
+                            >.bar {
+                                align-items: center;
+                                background-color: var(--color-background2);
+                                border: 1px solid var(--color-border1);
+                                border-radius: var(--app-borderradius);
+                                display: flex;
+                                height: 100%;
+                                justify-content: flex-end;
+                                min-width: var(--attemptsdist-bar-minwidth);
+                                padding: var(--attemptsdist-bar-padding);
+                                .transition(width 0.2s ease-out);
+
+                                >.count {
+                                    color: var(--color-text2);
+                                    font-family: @font-medium;
+                                    font-size: var(--attemptsdist-count-fontsize);
+                                }
+
+                                &.filled {
+                                    background-color: var(--color-accent1);
+
+                                    >.count {
+                                        color: var(--color-accentinvert);
+                                    }
+                                }
+                            }
+                        }
+
+                        &.death {
+                            >.wrapper-bar {
+                                >.bar {
+                                    &.filled {
+                                        background-color: var(--color-accent2);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Media queries.
+
+        .r-max(@break-ms, {
+            --attemptsdist-attempt-height: 28px;
+            --attemptsdist-bar-minwidth: 60px;
+            --attemptsdist-count-fontsize: 18px;
+            --attemptsdist-number-fontsize: 18px;
+            --attemptsdist-spacing: 25px;
+            --attemptsdist-title-fontsize: 26px;
+            --counter-fontsize: 40px;
+            --counter-width: 90px;
+        });
+
+        .r-max(@break-sm, {
+            --attemptsdist-bar-padding: 0 10px;
+        });
+
+        .r-max(@break-xs, {
+            --attemptsdist-attempt-spacing: 10px;
+            --attemptsdist-attempt-height: 20px;
+            --attemptsdist-bar-minwidth: 40px;
+            --attemptsdist-bar-padding: 0 5px;
+            --attemptsdist-bars-spacing: 4px;
+            --attemptsdist-count-fontsize: 14px;
+            --attemptsdist-number-fontsize: 14px;
+            --attemptsdist-number-width: 20px;
+            --attemptsdist-spacing: 15px;
+            --attemptsdist-title-fontsize: 22px;
+            --counter-fontsize: 26px;
+            --counter-width: 60px;
+            --counters-spacing: 15px;
+
+            >.wrapper>.panel>.form {
+                >.toggles-type {
+                    >.button-text {
+                        --padding-h: 10px;
+                    }
+                }
+            }
+        });
+    }
+};

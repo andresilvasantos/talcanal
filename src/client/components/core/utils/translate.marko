@@ -1,0 +1,25 @@
+import { tr } from '~/client/js/utils'
+
+class {
+    onCreate(input, out) {
+        this.state = {
+            translation: ''
+        }
+
+        this.state.translation = tr(out.global, input.keyname)
+    }
+
+    onInput(input) {
+        if(this.mounted) {
+            this.state.translation = tr(this, input.keyname)
+        }
+    }
+
+    onMount() {
+        this.mounted = true
+    }
+}
+
+<span class=input.class>
+    $!{state.translation}
+</span>

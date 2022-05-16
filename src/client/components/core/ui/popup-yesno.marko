@@ -1,0 +1,91 @@
+import appm from 'js/app-manager'
+
+class {
+    onMount() {
+        this.popupComponent = this.getComponent('popup')
+    }
+
+    hide() {
+        this.popupComponent.hide()
+    }
+
+    keyPressed(event) {
+        if(event.keyCode == 27) {
+            return this.hide()
+        }
+
+        this.emit('keyPressed', event)
+    }
+
+    show() {
+        this.popupComponent.show()
+    }
+}
+
+<popup.popup-yesno
+    key='popup'
+    class=input.class
+    title=input.title
+    on-hidden('emit', 'hidden')
+    on-keyPressed('keyPressed')
+>
+    <div.wrapper>
+        <if(input.text)>
+            <text-p.text.big>
+                ${input.text}
+            </text-p>
+        </if>
+
+        <${data.renderBody} />
+
+        <div.controls>
+            <button-submit.big
+                class=(input.dangerAction ? 'danger' : '')
+                icon=(input.iconConfirm || 'check')
+                loading=(input.status == 1)
+                small
+                text=input.textButtonSubmit
+                on-click('emit', 'submitRequested')
+            />
+
+            <button-text.button-cancel.big.strong
+                icon=(input.iconCancel || 'close')
+                text=input.textButtonCancel
+                on-click('hide')
+            />
+        </div>
+    </div>
+</popup>
+
+style.less {
+    .popup.popup-yesno {
+        //--panel-width: 550px;
+        --wrapper-spacing: 40px;
+
+        >.wrapper {
+            >.panel {
+                max-width: 550px; // TODO
+
+                >.wrapper {
+                    display: flex;
+                    flex-direction: column;
+                    gap: var(--wrapper-spacing);
+                    padding: var(--app-padding-bigger);
+
+                    >.text {
+                        color: var(--color-text4);
+                    }
+
+                    >.controls {
+                        gap: var(--controls-spacing-big);
+                        .flex-center();
+
+                        >.button-cancel {
+                            --icon-size: 16px;
+                        }
+                    }
+                }
+            }
+        }
+    }
+};

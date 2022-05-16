@@ -1,0 +1,153 @@
+import appm from 'js/app-manager'
+
+class {
+    backRequested() {
+        appm.previousPage()
+    }
+
+    instructionsRequested() {
+        appm.showPopup('quina-instructions')
+        appm.addAnalyticsEvent('quina', 'instructions')
+    }
+
+    settingsRequested() {
+        appm.showPopup('quina-settings', this.userPreferences)
+        appm.addAnalyticsEvent('quina', 'settings')
+    }
+
+    statsRequested() {
+        appm.showPopup('quina-stats')
+        appm.addAnalyticsEvent('quina', 'stats')
+    }
+}
+
+$ const trGame = appm.tr('games.quina') || {}
+$ const trTooltips = trGame.tooltips || {}
+
+<div.quina-bar class=input.class>
+    <div.controls>
+        <button-icon.button-back.bg-transparent
+            icon='arrowLong'
+            iconRotation=180
+            on-click('backRequested')
+        />
+
+        <if(input.ready)>
+            <quina-button-navigation
+                disabled=input.disableNavigation
+                maxNumberChallenge=input.maxNumberChallenge
+                numberChallenge=input.numberChallenge
+                icon='hashtag'
+                tooltip=trTooltips.changeChallenge
+                on-challengeRequested('emit', 'challengeRequested')
+                on-nextChallengeRequested('emit', 'nextChallengeRequested')
+                on-previousChallengeRequested('emit', 'previousChallengeRequested')
+            />
+        </if>
+    </div>
+
+    <div.wrapper-logo>
+        <icon.logo name='logoQuina' />
+
+        <if(input.ready)>
+            <span.board-number>
+                #${input.numberChallenge} ${input.easyMode ? '🍼' : ''}
+            </span>
+        </if>
+    </div>
+
+    <div.controls>
+        <button-icon
+            icon='question'
+            tooltip=trTooltips.instructions
+            on-click('instructionsRequested')
+        />
+
+        <if(input.ready)>
+            <button-icon
+                icon='stats'
+                tooltip=trTooltips.stats
+                on-click('statsRequested')
+            />
+
+            <button-icon
+                icon='settings'
+                tooltip=trTooltips.settings
+                on-click('settingsRequested')
+            />
+        </if>
+    </div>
+</div>
+
+style.less {
+    .quina-bar {
+        --boardnumber-fontsize: 24px;
+        --logo-height: 30px;
+        --wrapperlogo-spacing: 5px;
+
+        align-items: center;
+        display: flex;
+        justify-content: space-between;
+        //padding: 0 var(--app-padding);
+        position: relative;
+        .size(100%, var(--barpane-height));
+
+        >.controls {
+            align-items: center;
+            display: flex;
+            gap: var(--controls-spacing);
+
+            >.button-back {
+                --icon-size: calc(var(--size) * 0.8);
+            }
+        }
+
+        >.wrapper-logo {
+            align-items: baseline;
+            display: flex;
+            gap: var(--wrapperlogo-spacing);
+            .absolute-center();
+
+            >.logo {
+                color: var(--color-text4);
+                height: var(--logo-height);
+            }
+
+            >.board-number {
+                color: var(--color-text3);
+                font-family: @font-medium;
+                font-size: var(--boardnumber-fontsize);
+                line-height: 1;
+            }
+        }
+
+        // Media queries.
+
+        .r-max(@break-lg, {
+            --boardnumber-fontsize: 22px;
+            --logo-height: 27px;
+        });
+
+        .r-max(@break-md, {
+            --boardnumber-fontsize: 20px;
+            --logo-height: 25px;
+        });
+
+        .r-max(@break-sm, {
+            >.wrapper-logo {
+                align-items: center;
+                flex-direction: column;
+
+                >.board-number {
+                    position: absolute;
+                    top: calc(100% + 5px);
+                }
+            }
+        });
+
+        .r-max(@break-xs, {
+            --boardnumber-fontsize: 15px;
+            --logo-height: 18px;
+        });
+    }
+};

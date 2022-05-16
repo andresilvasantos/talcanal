@@ -1,0 +1,516 @@
+import appm from 'js/app-manager'
+import animm from 'js/anim-manager'
+import { getCookie, isMobile, setCookie, setCookiesSecure, updateThemeCss } from 'js/utils'
+import { metadataFromPage, pageFromUrl } from 'js/composer'
+
+class {
+    onCreate(input, out) {
+        this.state = {
+            cookiesConsent: true,
+            sidebarVisible: true
+        }
+
+        setCookiesSecure(out.global.environment !== 'development')
+        appm.setChannelsPopular(out.global.channelsPopular)
+        appm.setEnvironment(out.global.environment)
+        appm.setNewsCategories(out.global.newsCategories)
+        appm.setNewsSources(out.global.newsSources)
+        appm.setTranslation(out.global.translation)
+
+        this.info = input.info || null
+        this.idPage = input.page || 'channels'
+        this.idPane = input.pane || ''
+        this.pageArgs = input.data || null
+        this.user = out.global.loggedUser
+
+        this.pageChanged = this.pageChanged.bind(this)
+        this.popupHidden = this.popupHidden.bind(this)
+        this.popupVisible = this.popupVisible.bind(this)
+        this.themeChanged = this.themeChanged.bind(this)
+        this.toggleSidebar = this.toggleSidebar.bind(this)
+    }
+
+    onMount() {
+        this.root = this.getEl('root')
+        this.popups = this.getComponent('popups')
+
+        // Only set user on mount so app-manager is being called client side.
+        appm.setUser(this.user)
+
+        this.state.cookiesConsent = getCookie('cookiesConsent')
+
+        // Read cookie theme, only if no user.
+        if(!appm.isUserSignedIn()) {
+            const theme = getCookie('theme')
+
+            if(theme.length) {
+                appm.setTheme(theme)
+            }
+            else {
+                appm.setTheme(appm.getTheme())
+            }
+        }
+        else if(!this.state.cookiesConsent) {
+            this.hideCookies()
+        }
+
+        // Listen to window back page.
+        window.onpopstate = () => {
+            if(this.popups.isVisible()) {
+                this.popups.hidePopup()
+
+                const dataUrl = metadataFromPage(this.idPage, this.idPane, this.pageArgs, appm)
+
+                if(dataUrl) {
+                    appm.addBrowserHistory(dataUrl.path, dataUrl.title, true)
+                }
+            }
+            else if(appm.hasPreviousPage()) {
+                appm.previousPage(true)
+                appm.addAnalyticsEvent('browser', 'back')
+            }
+            else {
+                this.navigateSessionHistoryRequest()
+            }
+        }
+
+        window.onbeforeunload = () => {
+            appm.stopPings()
+        }
+
+        // TODO should we stop pings for chats and randomChats?
+        document.addEventListener('visibilitychange', () => {
+            if(document.hidden) {
+                if(appm.isUserSignedIn()) {
+                    appm.stopPingAccount()
+                }
+            }
+            else {
+                if(appm.isUserSignedIn()) {
+                    appm.startPingAccount()
+                }
+            }
+        })
+
+        // Hide sidebar when resize to mobile.
+        const debounce = (cb) => () => window.requestAnimationFrame(cb)
+
+        this.handleResize = debounce(() => {
+            if(this.state.sidebarVisible && isMobile()) {
+                this.toggleSidebar()
+            }
+        })
+
+        appm.on('pageChanged', this.pageChanged)
+        appm.on('popupHiding', this.popupHidden)
+        appm.on('popupVisible', this.popupVisible)
+        appm.on('themeChanged', this.themeChanged)
+        appm.on('toggleSidebar', this.toggleSidebar)
+        document.addEventListener('scroll', appm.scrolling)
+        window.addEventListener('resize', appm.resize, true)
+
+        updateThemeCss(appm.getThemeProperties())
+
+        // Use this flag to avoid changing window history on the first load.
+        this.firstPage = true
+        appm.openPage(this.idPage, this.idPane, false, this.pageArgs)
+
+        this.state.sidebarVisible = !(getCookie('sidebarHidden') == 'true') && !isMobile()
+        appm.setSidebarVisible(this.state.sidebarVisible)
+        this.animateSidebar(true)
+
+        if(appm.isUserSignedIn()) {
+            if(['activated', 'recovered', 'newEmail'].includes(this.info)) {
+                appm.showPopup(this.info)
+                //appm.addBrowserHistory('/', '', true)
+            }
+        }
+        else {
+            if(this.info == 'authRequired') {
+                appm.showPopup('auth')
+            }
+        }
+    }
+
+    onDestroy() {
+        appm.off('pageChanged', this.pageChanged)
+        appm.off('popupHiding', this.popupHidden)
+        appm.off('popupVisible', this.popupVisible)
+        appm.off('themeChanged', this.themeChanged)
+        appm.off('toggleSidebar', this.toggleSidebar)
+        document.removeEventListener('scroll', appm.scrolling)
+        window.removeEventListener('resize', appm.resize, true)
+        appm.destroy()
+    }
+
+    // Functions.
+
+    animateSidebar(noAnim = false) {
+        if(isMobile() && this.state.sidebarVisible) {
+            document.body.style.overflow = 'hidden'
+        }
+
+        const duration = noAnim ? 0 : (isMobile() ? 0.6 : 0.4)
+
+        if(!this.state.sidebarVisible) {
+            document.body.style.overflow = 'hidden scroll'
+
+            animm.add(this.root, {
+                '--sidebar-translatex': '-100%',
+                '--sidebaroverlay-opacity': 0,
+                duration,
+                easeOut: 'quart'
+            }, () => {
+                this.root.classList.add('sidebar-hidden')
+            })
+        }
+        else {
+            this.root.classList.remove('sidebar-hidden')
+
+            animm.add(this.root, {
+                '--sidebar-translatex': '0%',
+                '--sidebaroverlay-opacity': 1,
+                duration,
+                easeOut: 'quart'
+            })
+        }
+    }
+
+    closeSidebar() {
+        if(this.state.sidebarVisible) {
+            this.toggleSidebar()
+        }
+    }
+
+    hideCookies() {
+        this.state.cookiesConsent = true
+        setCookie('cookiesConsent', true)
+
+        appm.addAnalyticsEvent('cookies', 'consent')
+    }
+
+    navigateSessionHistoryRequest() {
+        const dataPage = pageFromUrl(location.pathname, appm)
+
+        if(!dataPage) {
+            return window.open(location.href, '_self')
+        }
+
+        this.firstPage = true
+
+        appm.openPage(dataPage.idPage, dataPage.idPane, dataPage.back, ...(dataPage.args || []))
+    }
+
+    popupHidden() {
+        document.body.style.overflow = 'hidden scroll'
+
+        window.scrollTo(0, this.scrollPosOld)
+        this.root.classList.remove('popup-visible')
+    }
+
+    popupVisible() {
+        this.scrollPosOld = window.scrollY
+        document.body.style.overflow = 'hidden'
+
+        this.root.classList.add('popup-visible')
+    }
+
+    pageChanged(idPage, idPane, args, movingBack, allowBack, browserRequest) {
+        if(this.popups.isVisible()) {
+            this.popups.hidePopup()
+        }
+
+        const changeHistory = !this.firstPage
+
+        this.firstPage = false
+        this.idPage = idPage
+        this.idPane = idPane
+        this.pageArgs = args
+
+        if(idPage == 'error') {
+            return
+        }
+
+        if(!browserRequest) {
+            const dataUrl = metadataFromPage(idPage, idPane, args, appm)
+
+            if(dataUrl) {
+                appm.addBrowserHistory(dataUrl.path, dataUrl.title, changeHistory)
+            }
+        }
+
+        if(this.state.sidebarVisible && isMobile()) {
+            this.toggleSidebar()
+        }
+    }
+
+    splashHiding() {
+        this.getEl('wrapperPage').style.opacity = 1
+    }
+
+    themeChanged(theme) {
+        setCookie('theme', theme)
+        updateThemeCss(appm.getThemeProperties())
+    }
+
+    toggleSidebar() {
+        this.state.sidebarVisible = !this.state.sidebarVisible
+
+        if(!isMobile()) {
+            setCookie('sidebarHidden', !this.state.sidebarVisible)
+        }
+
+        this.animateSidebar()
+        appm.setSidebarVisible(this.state.sidebarVisible)
+        appm.addAnalyticsEvent('sidebar', 'toggle', this.state.sidebarVisible)
+    }
+}
+
+<div.composer key='root'>
+    <button-default.button-linkdummy link newTab />
+
+    <div.wrapper-page key='wrapperPage'>
+        <breakpoint-condition break='md'>
+            <div.sidebar-overlay on-click('closeSidebar') />
+        </breakpoint-condition>
+
+        <div.wrapper-sidebar>
+            <navbar />
+
+            <sidebar-context />
+        </div>
+
+        <stacker-pages />
+    </div>
+
+    <if(!state.cookiesConsent)>
+        <disclaimer-cookies
+            on-hideCookies('hideCookies')
+            on-privacyRequested('pageRequested', 'privacy')
+        />
+    </if>
+
+    <app-notifications />
+
+    <tooltip />
+
+    <popups key='popups' />
+
+    <screen-splash on-hiding('splashHiding') />
+</div>
+
+style.less {
+    .composer {
+        --app-borderradius: 6px;
+        --app-borderradius2: 12px;
+        --app-borderradius3: 18px;
+        --app-padding: 15px;
+        --app-padding-bigger: 40px 50px;
+        --barpane-height: 70px;
+        --controls-spacing: 10px;
+        --controls-spacing-big: 20px;
+        --controls-spacing-medium: 15px;
+        --cookies-margin: 30px;
+        --cookies-width: 350px;
+        --navbar-width: 70px;
+        --notifications-top: calc(var(--barpane-height) * 0.85);
+        --notifications-width: unset;
+        --page-width: 840px;
+        --sidebar-translatex: 0;
+        --sidebar-width: 280px;
+        --sidebaroverlay-opacity: 1;
+
+        background-color: var(--color-background1);
+        align-items: center;
+        display: flex;
+        flex-direction: column;
+        min-height: 100vh;
+
+        >.button-linkdummy {
+            display: none;
+        }
+
+        >.wrapper-page {
+            display: flex;
+            flex-grow: 1;
+            justify-content: center;
+            opacity: 0;
+            position: relative;
+
+            >.sidebar-overlay {
+                background-color: rgba(var(--color-background1-rgb), 0.5);
+                opacity: var(--sidebaroverlay-opacity);
+                .fixed-fill(6);
+            }
+
+            >.wrapper-sidebar {
+                opacity: var(--sidebaroverlay-opacity);
+                position: absolute;
+                right: 100%;
+                .size(calc(var(--navbar-width) + var(--sidebar-width)), 100%);
+
+                >.navbar {
+                    bottom: 0;
+                    left: 0;
+                    position: fixed;
+                    top: 0;
+                    width: var(--navbar-width);
+                    .scroll-invisible();
+                    .translateX(var(--sidebar-translatex));
+                }
+
+                >.sidebar {
+                    bottom: 0;
+                    position: fixed;
+                    top: 0;
+                    width: var(--sidebar-width);
+                    .scroll-invisible();
+                    .translateX(calc(var(--sidebar-translatex) + var(--navbar-width)));
+                }
+            }
+
+            >.stacker-pages {
+                display: flex;
+                justify-content: center;
+                width: var(--page-width);
+            }
+        }
+
+        >.disclaimer-cookies {
+            bottom: var(--cookies-margin);
+            position: fixed;
+            right: var(--cookies-margin);
+            width: var(--cookies-width);
+            z-index: 2;
+        }
+
+        >.app-notifications {
+            top: var(--notifications-top);
+            position: fixed;
+            left: 50%;
+            width: var(--notifications-width);
+            z-index: 10;
+            .translateX(-50%);
+        }
+
+        >.screen-splash {
+            .fixed-fill(10);
+        }
+
+        &.sidebar-hidden {
+            >.wrapper-page {
+                >.sidebar-overlay {
+                    display: none;
+                }
+
+                >.wrapper-sidebar {
+                    display: none;
+                }
+            }
+        }
+
+        // Media queries
+
+        .r-max(@break-xxl, {
+            align-items: flex-start;
+
+            >.wrapper-page {
+                >.wrapper-sidebar {
+                    position: relative;
+
+                    >.sidebar {
+                        left: 0;
+                    }
+                }
+            }
+
+            &.sidebar-hidden {
+                align-items: center;
+            }
+        });
+
+        .r-max(@break-xl, {
+            --page-width: 750px;
+            --sidebar-width: 270px;
+        });
+
+        .r-max(@break-lg, {
+            --barpane-height: 65px;
+            --page-width: 730px;
+            --sidebar-width: 250px;
+        });
+
+        .r-max(@break-md, {
+            --app-padding-bigger: 35px 45px;
+            --barpane-height: 60px;
+
+            align-items: center;
+
+            >.wrapper-page {
+                >.wrapper-sidebar {
+                    left: 0;
+                    opacity: 1;
+                    position: fixed;
+                    right: unset;
+                    z-index: 6;
+
+                    .translateX(calc(var(--sidebar-translatex)));
+
+                    >.sidebar {
+                        border-right: 1px solid var(--color-border1);
+                    }
+
+                    >.navbar {
+                        .translateX(0);
+                    }
+
+                    >.sidebar {
+                        .translateX(var(--navbar-width));
+                    }
+                }
+
+
+            }
+        });
+
+        .r-max(@break-ms, {
+            --controls-spacing: 8px;
+            --controls-spacing-big: 15px;
+            --controls-spacing-medium: 12px;
+            --navbar-width: 65px;
+            --page-width: 100%;
+
+            >.wrapper-page {
+                width: 100%;
+
+                >.stacker-pages {
+                    width: 100%;
+                }
+            }
+        });
+
+        .r-max(@break-sm, {
+            --app-padding-bigger: 30px 40px;
+            --controls-spacing: 5px;
+            --controls-spacing-big: 15px;
+            --controls-spacing-medium: 10px;
+            --navbar-width: 60px;
+            --notifications-width: calc(100% - var(--app-padding) * 2);
+        });
+
+        .r-max(@break-xs, {
+            --app-padding: 10px;
+            --app-padding-bigger: 20px;
+            --barpane-height: 50px;
+            --controls-spacing-big: 12px;
+            --cookies-margin: var(--app-padding);
+            --cookies-width: calc(100% - 2 * var(--cookies-margin));
+
+            >.disclaimer-cookies {
+                left: 50%;
+                right: unset;
+                .translateX(-50%);
+            }
+        });
+    }
+};

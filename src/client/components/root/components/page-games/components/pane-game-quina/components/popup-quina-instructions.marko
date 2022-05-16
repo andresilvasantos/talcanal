@@ -1,0 +1,230 @@
+import appm from 'js/app-manager'
+import quinam from 'js/quina-manager'
+import { updateThemeCss } from 'js/utils'
+
+class {
+    onCreate() {
+        this.state = {
+            firstTime: false
+        }
+    }
+
+    onMount() {
+        this.popupComponent = this.getComponent('popup')
+
+        updateThemeCss(quinam.getThemeProperties(), this.popupComponent.getEl())
+    }
+
+    // Getters & Setters.
+
+    // Functions.
+
+    hide() {
+        if(!this.visible) {
+            return
+        }
+
+        this.popupComponent.hide()
+    }
+
+    hidden() {
+        this.visible = false
+    }
+
+    show(args) {
+        if(this.visible) {
+            return
+        }
+
+        this.visible = true
+        this.state.firstTime = args.length && args[0]
+
+        this.popupComponent.show()
+    }
+}
+
+$ const trInstructions = appm.tr('games.quina.instructions') || {}
+$ const trExample = trInstructions.example || {}
+
+<macro|{ word, explanation }| name='example'>
+    $ const letters = word.text
+    $ const pinsRight = word.pinsRight || 0
+    $ const pinsWrong = word.pinsWrong || 0
+    $ const lettersRight = word.lettersRight || []
+    $ const lettersWrong = word.lettersWrong || []
+    $ const isCorrect = pinsRight == 5
+
+    <div.example>
+        <div.tiles>
+            <for|index| from=0 to=4>
+                $ const mark = (
+                    lettersWrong.includes(index) ? 1 :
+                    lettersRight.includes(index) ? 2 :
+                    0
+                )
+
+                <quina-button-tile
+                    mark=(isCorrect ? 2 : mark)
+                    marksValidated=isCorrect
+                    noTouch
+                    letter=letters.charAt(index)
+                />
+            </for>
+
+            <quina-tile-result pinsRight=pinsRight pinsWrong=pinsWrong />
+        </div>
+
+        <text-p.explanation>
+            ${explanation}
+        </text-p>
+    </div>
+</macro>
+
+<popup.popup-quina-instructions.align-top
+    key='popup'
+    class=input.class
+    title=(state.firstTime ? 'QUINA' : trInstructions.title)
+    on-hidden('hidden')
+>
+    <@form>
+        <text-p.text>
+            $!{trInstructions.text}
+        </text-p>
+
+        <div.examples>
+            <span.title>
+                ${trExample.title}
+            </span>
+
+            <example
+                word={ text: 'noite' }
+                explanation=trExample[String(1)]
+            />
+
+            <example
+                word={ text: 'fácil', pinsWrong: 2 }
+                explanation=trExample[String(2)]
+            />
+
+            <example
+                word={ text: 'lagar', pinsRight: 4 }
+                explanation=trExample[String(3)]
+            />
+
+            <example
+                word={ text: 'lagar', pinsRight: 4, lettersRight: [0, 2, 3, 4] }
+                explanation=trExample[String(4)]
+            />
+
+            <example
+                word={ text: 'lugar', pinsRight: 5 }
+                explanation=trExample[String(5)]
+            />
+        </div>
+
+        <text-p.text>
+            $!{trInstructions.notes}
+        </text-p>
+
+        <div.separator />
+
+        <text-p.inspiration.small>
+            ${trInstructions.inspiration}
+        </text-p>
+    </@form>
+</popup>
+
+style.less {
+    .popup-quina-instructions {
+        --example-spacing: 20px;
+        --example-tiles-spacing: 10px;
+        --examples-spacing: 35px;
+        --examples-title-fontsize: 35px;
+        --pin-margin: 8px;
+        --pin-size: 13px;
+        --tile-letter-fontsize: 30px;
+        --tile-size: 60px;
+
+        >.wrapper>.panel>.form {
+            >.text {
+                color: var(--color-text4);
+            }
+
+            >.examples {
+                align-items: center;
+                display: flex;
+                flex-direction: column;
+                gap: var(--examples-spacing);
+
+                >.title {
+                    color: var(--color-text3);
+                    font-family: @font-semibold;
+                    font-size: var(--examples-title-fontsize);
+                }
+
+                >.example {
+                    align-items: center;
+                    display: flex;
+                    flex-direction: column;
+                    gap: var(--example-spacing);
+
+                    >.tiles {
+                        display: flex;
+                        gap: var(--example-tiles-spacing);
+
+                        /*>.button-tile {
+                            pointer-events: none;
+                        }*/
+                    }
+
+                    >.explanation {
+                        color: var(--color-text3);
+                        text-align: center;
+                    }
+                }
+            }
+
+            >.separator {
+                background-color: var(--color-border1);
+                .size(100%, 1px);
+            }
+
+            >.inspiration {
+                color: var(--color-text2);
+            }
+        }
+
+        // Media queries.
+
+        .r-max(@break-sm, {
+            --example-tiles-spacing: 8px;
+            --examples-spacing: 30px;
+            --examples-title-fontsize: 30px;
+            --pin-margin: 7px;
+            --pin-size: 11px;
+            --tile-letter-fontsize: 25px;
+            --tile-size: 50px;
+        });
+
+        .r-max(@break-xs, {
+            --example-spacing: 15px;
+            --example-tiles-spacing: 5px;
+            --examples-spacing: 25px;
+            --examples-title-fontsize: 20px;
+            --pin-margin: 6px;
+            --pin-size: 9px;
+            --tile-letter-fontsize: 20px;
+            --tile-size: 40px;
+        });
+
+        .r-max(@break-xxs, {
+            --example-tiles-spacing: 5px;
+            --examples-spacing: 20px;
+            --examples-title-fontsize: 18px;
+            --pin-margin: 5px;
+            --pin-size: 8px;
+            --tile-letter-fontsize: 18px;
+            --tile-size: 35px;
+        });
+    }
+};

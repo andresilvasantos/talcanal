@@ -1,0 +1,118 @@
+import { urls } from 'js/default-vars'
+
+<!doctype html>
+<html>
+<head>
+    $ const translation = out.global.translation || {}
+    $ const trMetadata = translation.metadata || {}
+    $ const title = trMetadata.title
+    $ const description = input.description ? input.description : trMetadata.description
+    $ const fullTitle = input.title ? `${input.title} / ${title}` : title
+    $ const ogImageUrl = input.ogImage ? input.ogImage : `${urls.domain}/assets/images/og-image.jpg`
+
+    <!-- Meta data -->
+
+    <meta charset='utf-8' />
+
+    <title>
+        ${fullTitle}
+    </title>
+    <meta name='description' content=description />
+    <meta name='keywords' content='' />
+
+    <meta name='twitter:card' value='summary_large_image' />
+    <meta name='twitter:title' content=fullTitle />
+    <meta name='twitter:description' content=description />
+    <meta name='twitter:creator' content='' />
+    <meta name='twitter:image' content=ogImageUrl />
+
+    <meta property='og:title' content=fullTitle />
+    <meta property='og:site_name' content=title />
+    <meta property='og:type' content='website' />
+    <!-- <meta property='og:url' content=urls.domain /> -->
+    <meta property='og:image' content=ogImageUrl />
+    <meta property='og:image:url' content=ogImageUrl />
+    <meta property='og:description' content=description />
+
+    <meta
+        name='viewport'
+        content='width=device-width, initial-scale=1, minimum-scale=1.0, maximum-scale=1.0, user-scalable=no'
+    />
+    <meta viewport= 'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no' mobileAppIOS= true>
+    <meta name='mobile-web-app-capable'  content= 'yes'>
+    <meta name='full-screen'  content='yes'>
+    <meta name='browsermode'  content='application'>
+
+    <!-- Fonts -->
+
+    <!-- <link
+        href='https://fonts.googleapis.com/css?family=Open+Sans:400,600,700'
+        rel='stylesheet'
+    > -->
+
+    <!-- WebApp Icons -->
+
+    <link
+        href='/assets/images/favicon/favicon.ico'
+        rel='shortcut icon'
+        type='image/x-icon'
+    >
+    <link
+        href='/assets/images/favicon/favicon.ico'
+        rel='icon'
+        type='image/x-icon'
+    >
+    <link
+        href='/assets/images/favicon/apple-touch-icon.png'
+        rel='apple-touch-icon'
+        sizes='180x180'
+    >
+    <link
+        href='/assets/images/favicon/favicon-16x16.png'
+        rel='icon'
+        sizes='16x16'
+        type='image/png'
+    >
+    <link
+        href='/assets/images/favicon/favicon-32x32.png'
+        rel='icon'
+        sizes='32x32'
+        type='image/png'
+    >
+    <link
+        href='/assets/images/favicon/site.webmanifest'
+        rel='manifest'
+    >
+    <link rel='mask-icon' href='/assets/images/favicon/safari-pinned-tab.svg' color='#1b1b1b'>
+    <meta name='msapplication-TileColor' content='#ffffff'>
+    <meta name='theme-color' content='#ffffff'>
+
+    <!-- <link> tags to include optimized CSS URLs will be included below: -->
+    <${data.styles}/>
+
+    <link rel='stylesheet' href='/css/style.min.css' />
+</head>
+<body>
+    <${data.body}/>
+
+    <!-- <script> tags to include optimized JS URLs will be included below: -->
+    <${data.scripts}/>
+
+    <script>
+        // Set og:url
+        const link = document.createElement('meta')
+        link.setAttribute('property', 'og:url')
+        link.content = document.location
+        document.getElementsByTagName('head')[0].appendChild(link)
+
+        // Initialize lazySizes config.
+        window.lazySizesConfig = window.lazySizesConfig || {}
+        window.lazySizesConfig.loadMode = 1
+        window.lazySizesConfig.loadHidden = false
+
+        console.log('ICÓNICA', '©' + (new Date()).getFullYear())
+    </script>
+
+    <script src='/js/lazysizes.min.js' />
+</body>
+</html>

@@ -1,0 +1,76 @@
+import appm from 'js/app-manager'
+
+<div.panel-auth class=input.class>
+    <div.wrapper-image>
+        <image.banner.cover
+            src=`/assets/images/auth/${input.idImageBanner}.jpg`
+        />
+    </div>
+
+    <form.wrapper>
+        <if(input.text)>
+            <span.heading>
+                $!{input.text}
+            </span>
+        </if>
+
+        <${data.renderBody} />
+    </form>
+</div>
+
+style.less {
+    .panel-auth {
+        --heading-fontsize: 20px;
+        --image-height: unset;
+        --image-width: 280px;
+        --inputs-spacing: 10px;
+        --wrapper-spacing: 40px;
+
+        display: flex;
+
+        >.wrapper-image {
+            flex-shrink: 0;
+            position: relative;
+            .size(var(--image-width), var(--image-height));
+
+            >.banner {
+                .absolute-fill();
+            }
+        }
+
+        >.wrapper {
+            align-items: flex-start;
+            display: flex;
+            flex-direction: column;
+            gap: var(--wrapper-spacing);
+            padding: var(--app-padding-bigger);
+            width: 100%;
+
+            >.heading {
+                color: var(--color-text2);
+                font-size: var(--heading-fontsize);
+            }
+        }
+
+        // Media queries
+
+        .r-max(@break-ms, {
+            flex-direction: column;
+
+            --heading-fontsize: 19px;
+            --image-height: 200px;
+            --image-width: 100%;
+            --wrapper-spacing: 30px;
+        });
+
+        .r-max(@break-sm, {
+            --heading-fontsize: 18px;
+            --wrapper-spacing: 20px;
+        });
+
+        .r-max(@break-xs, {
+            --heading-fontsize: 17px;
+            --wrapper-spacing: 15px;
+        });
+    }
+};

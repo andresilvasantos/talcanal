@@ -1,0 +1,63 @@
+import appm from 'js/app-manager'
+
+class {
+    // Functions.
+
+    gameRequested(idGame, newTab = false) {
+        appm.openPage('games', idGame, { allowBack: true, newTab })
+    }
+}
+
+$ const trGames = appm.tr('games') || {}
+
+<pane-default.pane-games class=input.class icon='gamepad' title=trGames.title>
+    <@contents>
+        <for|idGame| of=['quina']>
+            <!-- <dynamic
+                cEvents=['click']
+                cName=`card-game-${idGame}`
+                on-click('gameRequested', idGame, false)
+                on-middleClick('gameRequested', idGame, true)
+            /> -->
+
+            <button-default.card-game on-click('gameRequested', 'quina', false)>
+                <image.cover src=`/assets/images/games/${idGame}.jpg` />
+            </button-default>
+        </for>
+    </@contents>
+</pane-default>
+
+style.less {
+    .pane-games {
+        --cardgame-height: 330px;
+        --title-fontsize: 55px;
+
+        >.contents {
+            >.card-game {
+                height: var(--cardgame-height);
+
+                >.image {
+                    .size(100%);
+                }
+            }
+        }
+
+        // Media queries.
+
+        .r-max(@break-md, {
+            --cardgame-height: 300px;
+        });
+
+        .r-max(@break-ms, {
+            --cardgame-height: 260px;
+        });
+
+        .r-max(@break-sm, {
+            --cardgame-height: 215px;
+        });
+
+        .r-max(@break-xs, {
+            --cardgame-height: 160px;
+        });
+    }
+};

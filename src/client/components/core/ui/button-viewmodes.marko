@@ -1,0 +1,85 @@
+import appm from 'js/app-manager'
+import { viewModes } from 'js/default-vars'
+
+class {
+    onCreate(input) {
+        this.state = {
+            index: input.index || 0,
+            modes: input.modes || viewModes[0],
+        }
+    }
+
+    onInput(input) {
+        if(!input.noExternalUpdate) {
+            this.state.modes = input.modes || viewModes[0]
+
+            if(input.hasOwnProperty('index')) {
+                this.setIndex(input.index)
+            }
+
+            if(this.mounted) {
+                this.setStateDirty('modes')
+            }
+        }
+    }
+
+    onMount() {
+        this.mounted = true
+    }
+
+    // Getters & Setters.
+
+    getIndex() {
+        return this.state.index
+    }
+
+    getOption() {
+        return this.state.modes[this.state.index]
+    }
+
+    setIndex(index) {
+        if(index < 0 || index >= this.state.modes.length) {
+            return
+        }
+
+        this.state.index = index
+    }
+
+    // Functions.
+
+    nextViewMode() {
+        let index = this.state.index
+
+        ++index
+
+        if(index >= this.state.modes.length) {
+            index = 0
+        }
+
+        this.state.index = index
+
+        this.emit('viewModeChanged', this.state.index, this.state.modes[this.state.index].id)
+    }
+}
+
+$ const getNextViewMode = (index, modes) => {
+    ++index
+
+    if(index >= modes.length) {
+        index = 0
+    }
+
+    return modes[index]
+}
+
+$ const viewMode = state.modes.length ? state.modes[state.index] : {}
+$ const viewModeNext = state.modes.length ? getNextViewMode(state.index, state.modes) : {}
+$ const trViewModes = appm.tr('generic.viewModes') || {}
+$ const trTooltips = appm.tr('generic.tooltips') || {}
+
+<button-icon.button-viewmodes
+    class=input.class
+    icon=viewModeNext.icon
+    tooltip=`${trTooltips.viewMode} ${trViewModes[viewModeNext.id]}`
+    on-click('nextViewMode')
+/>

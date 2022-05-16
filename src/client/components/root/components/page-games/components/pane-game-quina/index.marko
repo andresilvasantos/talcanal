@@ -1,0 +1,87 @@
+import appm from 'js/app-manager'
+import quinam from 'js/quina-manager'
+import { updateThemeCss } from 'js/utils'
+
+class {
+    onCreate() {
+        this.state = {
+            user: appm.getUser()
+        }
+
+        this.themeChanged = this.themeChanged.bind(this)
+        this.userChanged = this.userChanged.bind(this)
+    }
+
+    onMount() {
+        this.contents = this.getComponent('root').getEl('contents')
+
+        const daltonicMode = this.state.user ? this.state.user.preferences.games.quina.daltonicMode : false
+        quinam.setDaltonicMode(daltonicMode)
+
+        quinam.processTheme()
+        updateThemeCss(quinam.getThemeProperties(), this.contents)
+
+        appm.on('themeChanged', this.themeChanged)
+        appm.on('userChanged', this.userChanged)
+    }
+
+    onDestroy() {
+        appm.off('themeChanged', this.themeChanged)
+        appm.off('userChanged', this.userChanged)
+    }
+
+    // Getters & Setters.
+
+    setData(args) {
+        if(args) {
+            quinam.setDataUser(args.dataUser)
+            quinam.setCountersGlobal(args.counters)
+            quinam.setLastNumberChallenge(args.lastNumberChallenge)
+            quinam.setTimeNextChallenge(args.timeNextChallenge)
+
+            quinam.emit('loadInfoSuccess')
+        }
+        else if(appm.isUserSignedIn()) {
+            quinam.loadInfo()
+        }
+    }
+
+    // Functions.
+
+    themeChanged(theme) {
+        quinam.processTheme()
+        updateThemeCss(quinam.getThemeProperties(), this.contents)
+    }
+
+    userChanged(user) {
+        this.state.user = user
+
+        if(user) {
+            quinam.loadInfo()
+        }
+    }
+}
+
+<pane-default.pane-game-quina class=input.class key='root' noBar>
+    <@contents.list>
+        <if(state.user)>
+            <quina-screen-board key='screenBoard' maxNumberChallenge=state.maxNumberChallenge />
+        </if>
+        <else>
+            <quina-welcome />
+        </else>
+    </@contents>
+</pane-default>
+
+style.less {
+    .pane-game-quina {
+        --padding-bottom: 0;
+
+        >.contents {
+            >.quina-screen-board,
+            >.quina-welcome {
+                flex-grow: 1;
+            }
+        }
+    }
+};

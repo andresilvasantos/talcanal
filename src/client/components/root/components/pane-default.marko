@@ -1,0 +1,356 @@
+import appm from 'js/app-manager'
+
+class {
+    onCreate(input) {
+        this.state = {
+            allowBack: input.allowBack,
+            scrollInverted: input.scrollInverted,
+            showButtonTop: false
+        }
+    }
+
+    // Getters & Setters
+
+    setAllowBack(allowBack) {
+        this.state.allowBack = allowBack
+    }
+
+    // Functions.
+
+    backRequested() {
+        appm.previousPage()
+        appm.addAnalyticsEvent('pane', 'back')
+    }
+
+    handleScroll() {
+        if(this.forceHideButtonTop) {
+            return
+        }
+
+        const scrollY = window.scrollY
+
+        if(this.state.scrollInverted) {
+            const heightPane = this.getEl().offsetHeight
+
+            this.state.showButtonTop = heightPane - (scrollY + window.innerHeight) > 500
+        }
+        else {
+            this.state.showButtonTop = scrollY > 500
+        }
+    }
+
+    scrollToTop() {
+        this.state.showButtonTop = false
+        this.forceHideButtonTop = true
+
+        setTimeout(() => {
+            this.forceHideButtonTop = false
+        }, 1500)
+
+        if(this.state.scrollInverted) {
+            const heightPane = this.getEl().offsetHeight
+
+            window.scrollTo({ top: heightPane - window.innerHeight, behavior: 'smooth' })
+        }
+        else {
+            window.scrollTo({ top: 0, behavior: 'smooth' })
+        }
+
+        appm.addAnalyticsEvent('pane', 'scrollToTop')
+    }
+}
+
+<div.pane-default class=input.class>
+    <bar-header
+        disableRefresh=input.disableRefresh
+        idPage=input.idPage
+        on-refreshRequested('emit', 'refreshRequested')
+    />
+
+    <if(!input.noBar)>
+        <div.bar class=(data.barExtension ? 'no-border' : '')>
+            <div.wrapper-title>
+                <if(state.allowBack || input.allowBack)>
+                    <button-icon.big.icon-only.bg-transparent
+                        icon='arrowLong'
+                        iconRotation=180
+                        on-click('backRequested')
+                    />
+                </if>
+
+                <if(data.barTitleCustom)>
+                    <${data.barTitleCustom} />
+                </if>
+                <else>
+                    <if(input.icon)>
+                        <icon name=input.icon />
+                    </if>
+
+                    <span.title>
+                        ${input.title}
+                    </span>
+                </else>
+            </div>
+
+            <if(input.breakBarMobile)>
+                <breakpoint-condition break='ms' min>
+                    <div.controls>
+                        <${data.barControls} />
+                    </div>
+                </breakpoint-condition>
+            </if>
+            <else>
+                <div.controls>
+                    <${data.barControls} />
+                </div>
+            </else>
+        </div>
+    </if>
+
+    <if(input.breakBarMobile)>
+        <breakpoint-condition break='ms'>
+            <if(data.barControls)>
+                <div.bar-nonsticky>
+                    <div.controls>
+                        <${data.barControls} />
+                    </div>
+
+                    <${data.barNonSticky} />
+                </div>
+            </if>
+
+            <@else>
+                <if(data.barNonSticky)>
+                    <div.bar-nonsticky>
+                        <${data.barNonSticky} />
+                    </div>
+                </if>
+            </@else>
+        </breakpoint-condition>
+    </if>
+    <else>
+        <if(data.barNonSticky)>
+            <div.bar-nonsticky>
+                <${data.barNonSticky} />
+            </div>
+        </if>
+    </else>
+
+    <if(data.barExtension)>
+        <div.bar-extension>
+            <${data.barExtension} />
+        </div>
+    </if>
+
+    <div.contents key='contents' class=(data.contents ? data.contents.class : '')>
+        <${data.contents} />
+    </div>
+
+    <div.wrapper-footer class=(state.scrollInverted ? 'scroll-inverted' : '')>
+        <${data.footer} />
+
+        <if(state.showButtonTop)>
+            <button-text.button-top
+                icon='arrowTo'
+                iconRotation=(state.scrollInverted ? 90 : -90)
+                text=(state.scrollInverted ? 'Fundo' : 'Topo')
+                on-click('scrollToTop')
+            />
+        </if>
+    </div>
+
+    <${data.footerNonSticky} />
+</div>
+
+style.less {
+    .pane-default {
+        --bar-icon-size: 32px;
+        --bar-title-fontsize: 22px;
+        --bar-wrappertitle-spacing: 15px;
+        --barextension-spacing: 0;
+        --buttontop-margin: 15px;
+        --grid-count: 3;
+        --grid-spacing: 1px;
+        --padding-bottom: 70px;
+        --settings-spacing: 40px;
+
+        background-color: var(--color-background2);
+        border-left: 1px solid var(--color-border1);
+        border-right: 1px solid var(--color-border1);
+        display: flex;
+        flex-direction: column;
+        position: relative;
+
+        >.bar-header {
+            background-color: var(--color-background2);
+            height: var(--barpane-height);
+            position: sticky;
+            top: 0;
+            z-index: 4;
+        }
+
+        >.bar {
+            align-items: center;
+            background-color: var(--color-background2);
+            border-bottom: 1px solid var(--color-border1);
+            display: flex;
+            flex-shrink: 0;
+            height: var(--barpane-height);
+            justify-content: space-between;
+            padding: 0 var(--app-padding);
+            position: sticky;
+            top: var(--barpane-height);
+            z-index: 3;
+
+            >.wrapper-title {
+                align-items: center;
+                display: flex;
+                gap: var(--bar-wrappertitle-spacing);
+
+                >.icon {
+                    color: var(--color-icon2);
+                    .size(var(--bar-icon-size));
+                }
+
+                >.title {
+                    color: var(--color-text3);
+                    font-family: @font-medium;
+                    font-size: var(--bar-title-fontsize);
+                }
+            }
+
+            >.controls {
+                align-items: center;
+                display: flex;
+                gap: var(--controls-spacing);
+            }
+
+            &.no-border {
+                border-bottom: none;
+            }
+        }
+
+        >.bar-nonsticky {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+
+            &:empty {
+                display: none;
+            }
+
+            >.controls {
+                align-items: center;
+                display: flex;
+                gap: var(--controls-spacing);
+            }
+        }
+
+        >.bar-extension {
+            //align-items: center;
+            background-color: var(--color-background2);
+            border-bottom: 1px solid var(--color-border1);
+            display: flex;
+            gap: 20px;
+            height: var(--barpane-height);
+            justify-content: space-between;
+            padding: 0 var(--app-padding);
+            position: sticky;
+            top: calc(var(--barpane-height) * 2);
+            z-index: 2;
+        }
+
+        >.contents {
+            flex-grow: 1;
+            padding-bottom: var(--padding-bottom);
+
+            &.list,
+            &.expanded {
+                display: flex;
+                flex-direction: column;
+            }
+
+            &.grid {
+                grid-auto-rows: min-content;
+                .grid(var(--grid-count), var(--grid-spacing), var(--grid-spacing), minmax(0, 1fr));
+            }
+
+            &.center {
+                .flex-center(column);
+            }
+
+            &.settings {
+                display: flex;
+                flex-direction: column;
+                gap: var(--settings-spacing);
+                padding: var(--app-padding-bigger);
+            }
+        }
+
+        >.wrapper-footer {
+            bottom: 0;
+            position: sticky;
+            width: 100%;
+            z-index: 2;
+
+            >.button-top {
+                --backgroundcolor: var(--color-background2);
+
+                bottom: var(--buttontop-margin);
+                position: absolute;
+                right: var(--buttontop-margin);
+
+                &:hover {
+                    --backgroundcolor: var(--color-button1);
+                }
+            }
+
+            &.scroll-inverted {
+                bottom: unset;
+                order: -1;
+                top: calc(var(--barpane-height) * 2);
+
+                >.button-top {
+                    bottom: unset;
+                    top: var(--buttontop-margin);
+                }
+            }
+        }
+
+        // Media queries.
+
+        .r-max(@break-xl, {
+            --grid-count: 2;
+        });
+
+        .r-max(@break-lg, {
+            --bar-icon-size: 28px;
+            --bar-title-fontsize: 20px;
+            --bar-wrappertitle-spacing: 10px;
+        });
+
+        .r-max(@break-md, {
+            --barpane-height: 60px;
+            --bar-icon-size: 22px;
+            --bar-title-fontsize: 19px;
+        });
+
+        .r-max(@break-ms, {
+            --bar-icon-size: 20px;
+            --bar-title-fontsize: 18px;
+
+            border: none;
+        });
+
+        .r-max(@break-sm, {
+            --grid-count: 1;
+        });
+
+        .r-max(@break-xs, {
+            --barpane-height: 50px;
+            --bar-icon-size: 20px;
+            --bar-title-fontsize: 18px;
+            --bar-wrappertitle-spacing: 8px;
+        });
+    }
+};
