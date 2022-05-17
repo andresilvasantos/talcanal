@@ -727,7 +727,7 @@ $ const comments = state.comments || []
 $ const creator = post.creator || {}
 $ const creatorRemoved = creator.status == 'removed'
 $ const user = appm.isUserSignedIn() ? state.user : null
-$ const isSuper = user.super && user.superActive
+$ const isSuper = user && user.super && user.superActive
 $ const isMod = user && (
     (channel.admins && channel.admins.includes(appm.getUser()._id)) ||
     (channel.moderators && channel.moderators.includes(appm.getUser()._id)) ||
